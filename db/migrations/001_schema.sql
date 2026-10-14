@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS patients (
     identification_type VARCHAR(10) NOT NULL CHECK (identification_type IN ('SA_ID', 'PASSPORT')),
     full_name VARCHAR(150) NOT NULL CHECK (char_length(trim(full_name)) BETWEEN 2 AND 150),
     date_of_birth DATE NOT NULL,
-    contact_no VARCHAR(16) NOT NULL CHECK (contact_no ~ '^\\+[1-9][0-9]{7,14}$'),
+    contact_no VARCHAR(16) NOT NULL CHECK (contact_no ~ '^\+[1-9][0-9]{7,14}$'),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS clinic_staff (
     role VARCHAR(20) NOT NULL CHECK (role IN ('RECEPTION', 'NURSE', 'DOCTOR', 'ADMIN')),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     must_reset_password BOOLEAN NOT NULL DEFAULT TRUE,
-    contact_no VARCHAR(16) NULL CHECK (contact_no IS NULL OR contact_no ~ '^\\+[1-9][0-9]{7,14}$'),
+    contact_no VARCHAR(16) NULL CHECK (contact_no IS NULL OR contact_no ~ '^\+[1-9][0-9]{7,14}$'),
     employee_id VARCHAR(50) NULL,
     extra_permissions TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
