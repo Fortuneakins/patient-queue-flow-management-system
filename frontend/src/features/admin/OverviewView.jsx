@@ -1,0 +1,6 @@
+import { Card, EmptyState, Badge } from '../../components/ui';
+
+export default function OverviewView({ overview, performance }) {
+  const cards=[['Waiting',overview?.waiting??0],['In consultation',overview?.in_consultation??0],['Discharged today',overview?.discharged_today??0],['Tier 1 discharged',overview?.discharged_tier_1??0]];
+  return <div className="space-y-5"><Card className="p-6"><div className="grid grid-cols-2 gap-3 md:grid-cols-4">{cards.map(([label,value])=><div key={label} className="rounded-2xl border border-stone-200 p-4"><div className="text-xs text-stone-400">{label}</div><div className="mt-1 font-display text-3xl font-bold">{value}</div></div>)}</div></Card><Card className="overflow-hidden"><div className="border-b border-stone-100 p-5"><h2 className="font-display text-base font-bold">Discharges by staff today</h2></div>{performance.map(item=><div key={item.staff_id} className="flex items-center justify-between border-b border-stone-100 p-4 last:border-0"><span className="font-semibold">{item.username}</span><Badge tone="teal">{item.discharged_today} discharged</Badge></div>)}{!performance.length&&<EmptyState title="No discharge activity" message="Completed consultations will appear here."/>}</Card></div>;
+}

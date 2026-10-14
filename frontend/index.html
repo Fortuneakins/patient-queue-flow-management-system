@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0c5b52" />
+    <meta name="description" content="RMSH Patient Queue and Flow Management — accessible outpatient queue, triage and clinical workflow tools." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>RMSH Clinical System — Patient Queue &amp; Flow</title>
+    <script>
+      try {
+        const preferences = JSON.parse(localStorage.getItem('pqfms_display_preferences') || 'null');
+        const root = document.documentElement;
+        if (preferences && typeof preferences === 'object') {
+          if (preferences.theme === 'dark' || preferences.theme === 'light') root.dataset.theme = preferences.theme;
+          if (preferences.contrast === 'high' || preferences.contrast === 'standard') root.dataset.contrast = preferences.contrast;
+          root.dataset.targets = preferences.largeTargets ? 'large' : 'standard';
+          if (preferences.motion === 'reduced') root.dataset.motion = 'reduced';
+          const scale = { standard: 100, large: 112, larger: 124, largest: 136 }[preferences.textSize] || 100;
+          root.style.fontSize = scale + '%';
+        }
+      } catch { /* Preferences are optional; the default interface remains available. */ }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

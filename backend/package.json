@@ -1,0 +1,29 @@
+{
+  "name": "pqfms-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "REST API for the Patient Queue and Flow Management System (PQFMS).",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "lint": "eslint .",
+    "test": "node --test tests/unit/*.test.js",
+    "test:integration": "RUN_DB_TESTS=1 node --test tests/integration/*.test.js",
+    "verify": "npm run lint && npm test"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.22.0",
+    "socket.io": "^4.8.3",
+    "twilio": "^6.0.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4"
+  }
+}

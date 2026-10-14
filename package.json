@@ -1,0 +1,20 @@
+{
+  "name": "pqfms",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Patient Queue and Flow Management System for outpatient queue and patient-flow operations.",
+  "scripts": {
+    "start:backend": "npm --prefix backend start",
+    "start:analytics": "python -m analytics_service.app",
+    "start:frontend": "npm --prefix frontend run dev",
+    "verify:backend": "npm --prefix backend run verify",
+    "verify:frontend": "npm --prefix frontend run lint",
+    "verify": "npm run verify:backend && npm run verify:frontend",
+    "install:all": "npm --prefix backend ci && npm --prefix frontend ci && python -m pip install -r analytics_service/requirements.txt",
+    "lint": "npm run verify:backend && npm run verify:frontend",
+    "test:analytics": "python -m pytest -q analytics_service/tests",
+    "test:all": "npm --prefix backend test && npm run test:analytics",
+    "build:frontend": "npm --prefix frontend run build",
+    "load-test": "node tests/load/run.js"
+  }
+}

@@ -1,0 +1,104 @@
+openapi: 3.0.3
+info:
+  title: PQFMS API
+  version: 1.0.0
+  description: REST API for the Patient Queue and Flow Management System academic prototype.
+servers:
+  - url: http://localhost:5000
+paths:
+  /api/health/live:
+    get:
+      summary: Liveness probe
+      responses:
+        '200': {description: Service is alive}
+  /api/auth/login:
+    post:
+      summary: Staff login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: {type: string}
+                password: {type: string, format: password}
+      responses:
+        '200': {description: Authenticated}
+        '401': {description: Invalid credentials}
+        '403': {description: Deactivated account}
+        '429': {description: Rate limited}
+  /api/queue/public:
+    get:
+      summary: Public queue status
+      responses:
+        '200': {description: Public operational queue data}
+  /api/queue/check-in:
+    post:
+      summary: Kiosk self check-in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identification_number, symptoms]
+              properties:
+                identification_number: {type: string, minLength: 4, maxLength: 20}
+                symptoms: {type: string, minLength: 1, maxLength: 500}
+      responses:
+        '201': {description: Visit created}
+        '409': {description: Patient already has an active visit}
+        '429': {description: Rate limited}
+  /api/patients:
+    get:
+      summary: Search patient directory
+      security: [{bearerAuth: []}]
+      responses: {'200': {description: Patient records}}
+    post:
+      summary: Register a patient
+      security: [{bearerAuth: []}]
+      responses: {'201': {description: Patient created}}
+  /api/queue/{queue_id}/priority:
+    put:
+      summary: Assign triage tier
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: queue_id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Triage updated}
+        '403': {description: Role not permitted}
+        '409': {description: Visit not in Waiting state}
+  /api/queue/{queue_id}/call:
+    put:
+      summary: Call patient to room
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: queue_id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Visit moved to In-Consultation}
+        '403': {description: Doctor role required}
+        '409': {description: Invalid current state}
+  /api/queue/{queue_id}/notes:
+    put:
+      summary: Save consultation notes
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: queue_id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Notes saved}
+  /api/queue/{queue_id}/discharge:
+    put:
+      summary: Discharge patient
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: queue_id, in: path, required: true, schema: {type: integer}}
+      responses:
+        '200': {description: Visit discharged}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
