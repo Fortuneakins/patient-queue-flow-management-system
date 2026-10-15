@@ -76,7 +76,13 @@ if (!dbConfigured) {
       assert.equal(admin.response.status, 200);
       assert.equal(admin.body.model_version, 'flowtwin-1.0.0');
 
-      const nurseResources = await request('/api/intelligence/resources', { headers: auth(tokens.nurse) });
+      const nursePathways = await request('/api/intelligence/pathways', { headers: auth(tokens.nurse) });
+      assert.equal(nursePathways.response.status, 200);
+      assert.ok(nursePathways.body.some(pathway => pathway.pathway_code === 'OPD_STANDARD'));
+      const nurseVisits = await request('/api/intelligence/active-visits', { headers: auth(tokens.nurse) });
+      assert.equal(nurseVisits.response.status, 200);
+      assert.ok(Array.isArray(nurseVisits.body));
+            const nurseResources = await request('/api/intelligence/resources', { headers: auth(tokens.nurse) });
       assert.equal(nurseResources.response.status, 200);
       const nurseReferrals = await request('/api/intelligence/referrals', { headers: auth(tokens.nurse) });
       assert.equal(nurseReferrals.response.status, 200);
