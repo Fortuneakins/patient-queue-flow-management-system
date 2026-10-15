@@ -51,12 +51,12 @@ async function handleInboundCommand({ from, body, messageSid }) {
 
   return withTransaction(async client => {
     const receipt = await client.query(
-      "INSERT INTO twilio_inbound_command_receipts(message_sid, command) VALUES ($1,$2) ON CONFLICT (message_sid) DO NOTHING RETURNING message_sid",
+      "INSERT INTO twilio_inbound_command_receipts(message_sid, sms_command) VALUES ($1,$2) ON CONFLICT (message_sid) DO NOTHING RETURNING message_sid",
       [sid, command]
     );
     if (!receipt.rows[0]) {
-      const existing = await client.query('SELECT command, result_code FROM twilio_inbound_command_receipts WHERE message_sid=$1', [sid]);
-      if (!existing.rows[0] || existing.rows[0].command !== command) {
+      const existing = await client.query('SELECT sms_command, result_code FROM twilio_inbound_command_receipts WHERE message_sid=$1', [sid]);
+      if (!existing.rows[0] || existing.rows[0].sms_command !== command) {
         return { message: 'This message could not be processed again. Please contact clinic reception if you need help.' };
       }
       const messages = {
