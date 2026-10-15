@@ -1,6 +1,6 @@
 'use strict';
 
-const { query, withTransaction } = require('../db/pool');
+const { withTransaction } = require('../db/pool');
 
 const STOP_COMMANDS = new Set(['STOP', 'STOP ALL', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT', 'OPTOUT']);
 const START_COMMANDS = new Set(['START', 'YES', 'UNSTOP']);
