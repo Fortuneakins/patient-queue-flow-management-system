@@ -96,6 +96,379 @@ paths:
         - {name: queue_id, in: path, required: true, schema: {type: integer}}
       responses:
         '200': {description: Visit discharged}
+
+  /api/intelligence/overview:
+    get:
+      summary: Operational intelligence overview
+      description: Admin only.
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Queue and resource counts, event totals and model metadata}
+        '401': {description: Not authenticated}
+        '403': {description: Admin role required}
+  /api/intelligence/events:
+    get:
+      summary: Read operational event log
+      description: Admin only; event metadata deliberately excludes clinical note contents and contact numbers.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 200}}
+        - {name: event_type, in: query, required: false, schema: {type: string, maxLength: 60}}
+      responses:
+        '200': {description: Append-only operational events}
+        '403': {description: Admin role required}
+  /api/intelligence/active-visits:
+    get:
+      summary: Active visit snapshot for authorised clinic staff
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Active visit identifiers, ticket numbers, patient names and elapsed wait}
+        '403': {description: Nurse, Doctor or Admin role required}
+  /api/intelligence/pathways:
+    get:
+      summary: List configured CareGraph pathways
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Pathways and ordered stage definitions}
+    post:
+      summary: Create a CareGraph pathway
+      description: Admin only.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pathway_code, name, stages]
+              properties:
+                pathway_code: {type: string, minLength: 3, maxLength: 40}
+                name: {type: string, minLength: 3, maxLength: 120}
+                description: {type: string, maxLength: 800}
+                stages: {type: array, minItems: 2, maxItems: 15, items: {type: object}}
+      responses:
+        '201': {description: Pathway created}
+        '403': {description: Admin role required}
+  /api/intelligence/journeys/{queue_id}:
+    get:
+      summary: Get a visit's CareGraph journey
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: queue_id, in: path, required: true, schema: {type: integer, minimum: 1}}
+      responses:
+        '200': {description: Assigned pathway and stage progress}
+        '404': {description: Visit not found}
+  /api/intelligence/journeys/{queue_id}/assign:
+    post:
+      summary: Assign or replace a visit's pathway
+      description: Admin only; started pathway progress cannot be replaced.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: queue_id, in: path, required: true, schema: {type: integer, minimum: 1}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pathway_id]
+              properties:
+                pathway_id: {type: integer, minimum: 1}
+      responses:
+        '200': {description: Pathway assigned}
+        '403': {description: Admin role required}
+        '409': {description: Pathway progress prevents replacement}
+  /api/intelligence/journeys/{queue_id}/stages/{stage_id}:
+    patch:
+      summary: Update an assigned CareGraph stage
+      description: The stage's required role and progression rules are enforced server-side.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: queue_id, in: path, required: true, schema: {type: integer, minimum: 1}}
+        - {name: stage_id, in: path, required: true, schema: {type: integer, minimum: 1}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: {type: string, enum: [READY, IN_PROGRESS, COMPLETED, BLOCKED]}
+                block_reason: {type: string, maxLength: 300}
+      responses:
+        '200': {description: Stage updated}
+        '403': {description: Role not permitted for this stage}
+        '409': {description: Invalid stage transition}
+  /api/intelligence/resources:
+    get:
+      summary: List clinic resources and current status
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Resource registry}
+    post:
+      summary: Create a clinic resource
+      description: Admin only.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resource_code, name, resource_type]
+              properties:
+                resource_code: {type: string, minLength: 2, maxLength: 40}
+                name: {type: string, minLength: 2, maxLength: 120}
+                resource_type: {type: string, enum: [ROOM, EQUIPMENT, SERVICE, SUPPLY]}
+                capacity: {type: integer, minimum: 1, maximum: 100}
+                location_label: {type: string, maxLength: 120}
+                notes: {type: string, maxLength: 500}
+      responses:
+        '201': {description: Resource created}
+        '403': {description: Admin role required}
+  /api/intelligence/resources/{resource_id}/status:
+    put:
+      summary: Change a resource availability state
+      description: Admin only.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: resource_id, in: path, required: true, schema: {type: integer, minimum: 1}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: {type: string, enum: [AVAILABLE, LIMITED, UNAVAILABLE]}
+      responses:
+        '200': {description: Resource state updated}
+        '403': {description: Admin role required}
+  /api/intelligence/offline-sync:
+    post:
+      summary: Synchronise offline resource status operations
+      description: Admin only. Supports resource status updates only, not offline patient registration or clinical actions.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operations]
+              properties:
+                operations:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: object
+                    required: [idempotency_key, operation_type, resource_id, status]
+                    properties:
+                      idempotency_key: {type: string, format: uuid}
+                      operation_type: {type: string, enum: [RESOURCE_STATUS]}
+                      resource_id: {type: integer, minimum: 1}
+                      status: {type: string, enum: [AVAILABLE, LIMITED, UNAVAILABLE]}
+      responses:
+        '200': {description: Idempotent sync result}
+        '409': {description: Idempotency key reused for a different operation}
+  /api/intelligence/simulations:
+    get:
+      summary: List recent FlowTwin simulations
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 100}}
+      responses:
+        '200': {description: Stored baseline/scenario simulations}
+    post:
+      summary: Run a FlowTwin scenario
+      description: Admin only; scenarios do not change queue state or clinical priority.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: string, maxLength: 120}
+                horizon_minutes: {type: integer, minimum: 30, maximum: 240}
+                extra_arrivals: {type: integer, minimum: 0, maximum: 200}
+                additional_stations: {type: integer, minimum: 0, maximum: 8}
+                station_loss: {type: integer, minimum: 0, maximum: 8}
+                doctor_delay_minutes: {type: integer, minimum: 0, maximum: 180}
+                seed: {type: integer, minimum: 1, maximum: 2147483647}
+      responses:
+        '201': {description: Scenario result stored}
+        '403': {description: Admin role required}
+  /api/intelligence/benchmarks:
+    get:
+      summary: List synthetic reference profiles
+      description: Profiles are synthetic examples, not measured clinic benchmarks.
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Synthetic reference profiles}
+  /api/intelligence/synthetic-lab/run:
+    post:
+      summary: Run a synthetic clinic batch
+      description: Admin only; synthetic outputs are not historical clinic data.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                replications: {type: integer, minimum: 1, maximum: 200}
+                hours: {type: integer, minimum: 4, maximum: 12}
+                arrivals_per_hour: {type: integer, minimum: 0, maximum: 60}
+                servers: {type: integer, minimum: 1, maximum: 20}
+                mean_service_minutes: {type: number, minimum: 3, maximum: 90}
+                seed: {type: integer, minimum: 1, maximum: 2147483647}
+      responses:
+        '201': {description: Synthetic batch summary stored}
+  /api/intelligence/forecasts:
+    post:
+      summary: Record tier wait estimates against the active queue snapshot
+      description: Admin only. Client estimates are recorded as supplied; clients must use the analytics service result.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tier_estimates]
+              properties:
+                horizon_minutes: {type: integer, minimum: 1, maximum: 1440}
+                tier_estimates:
+                  type: object
+                  required: ['1', '2', '3', '4']
+                  properties:
+                    '1': {type: number, minimum: 0}
+                    '2': {type: number, minimum: 0}
+                    '3': {type: number, minimum: 0}
+                    '4': {type: number, minimum: 0}
+      responses:
+        '201': {description: Forecast recorded and linked to waiting visit IDs}
+  /api/intelligence/forecasts/truth:
+    get:
+      summary: Compare recorded estimates with observed queue-to-call wait
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Forecast truth ledger and mean absolute error}
+  /api/intelligence/fairness:
+    get:
+      summary: Review delay metrics by clinician-assigned priority tier
+      description: Operational monitoring only; does not determine clinical fairness or change triage tier.
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Tier-level queue-to-call metrics and overdue waits}
+  /api/intelligence/referrals:
+    get:
+      summary: List local referral workflow records
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: status, in: query, required: false, schema: {type: string, enum: [REQUESTED, ACKNOWLEDGED, IN_PROGRESS, COMPLETED, CANCELLED]}}
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 200}}
+      responses:
+        '200': {description: Local referral workflow records}
+    post:
+      summary: Create a local referral record
+      description: Doctor/Admin only; no external facility receives the referral.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [patient_id, referred_to, reason]
+              properties:
+                patient_id: {type: integer, minimum: 1}
+                queue_id: {type: integer, minimum: 1, nullable: true}
+                referred_to: {type: string, minLength: 2, maxLength: 160}
+                reason: {type: string, minLength: 3, maxLength: 1000}
+                due_at: {type: string, format: date-time, nullable: true}
+      responses:
+        '201': {description: Referral created}
+        '403': {description: Doctor/Admin role required}
+  /api/intelligence/referrals/{referral_id}:
+    patch:
+      summary: Update a local referral state
+      description: Doctor/Admin only; state transitions are validated server-side.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: referral_id, in: path, required: true, schema: {type: integer, minimum: 1}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: {type: string, enum: [REQUESTED, ACKNOWLEDGED, IN_PROGRESS, COMPLETED, CANCELLED]}
+                acknowledgement_note: {type: string, maxLength: 500}
+      responses:
+        '200': {description: Referral updated}
+        '403': {description: Doctor/Admin role required}
+        '409': {description: Invalid referral transition}
+  /api/intelligence/contact-preferences/{patient_id}:
+    get:
+      summary: Read a patient's contact preferences
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: patient_id, in: path, required: true, schema: {type: integer, minimum: 1}}
+      responses:
+        '200': {description: Contact preferences or safe unconfigured defaults}
+    put:
+      summary: Save patient contact preferences and consent
+      description: Reception/Admin only. Consent must be explicitly recorded before messages may be sent.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: patient_id, in: path, required: true, schema: {type: integer, minimum: 1}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preferred_language_code: {type: string, enum: [en, af, zu, xh, st, tn, nso, ts, ss, ve, nr]}
+                preferred_channel: {type: string, enum: [NONE, SMS, VOICE]}
+                contact_consent: {type: boolean}
+                consent_confirmed: {type: boolean}
+                consent_method: {type: string}
+                consent_version: {type: string, maxLength: 30}
+      responses:
+        '200': {description: Preferences updated}
+        '403': {description: Role not permitted or consent missing}
+  /api/intelligence/contact-preferences/{patient_id}/send-update:
+    post:
+      summary: Send a consented operational SMS
+      description: Reception/Admin only. Five attempts per staff account per minute; successful sends trigger a two-minute patient cooldown. SMS provider must be enabled and configured. Wait estimates come from the analytics service, not the client.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: patient_id, in: path, required: true, schema: {type: integer, minimum: 1}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [template_code]
+              properties:
+                template_code: {type: string, enum: [WAIT_ESTIMATE, SERVICE_DELAY]}
+      responses:
+        '200': {description: Communication attempt logged}
+        '403': {description: Explicit SMS consent required}
+        '429': {description: Rate limited or patient cooldown active}
+        '503': {description: Required wait estimate unavailable; no message sent}
+
 components:
   securitySchemes:
     bearerAuth:
