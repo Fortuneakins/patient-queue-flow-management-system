@@ -154,9 +154,9 @@ async function updateJourneyStage(queueId, stageId, input, actorStaffId, actorRo
       if (predecessors.rows[0].incomplete > 0) throw httpError('Complete all required earlier stages before progressing.', 409);
     }
     const updated = await client.query(
-      "UPDATE queue_pathway_progress SET status = $1, block_reason = $2, " +
-      "started_at = CASE WHEN $1 = 'IN_PROGRESS' AND started_at IS NULL THEN NOW() WHEN $1 = 'READY' THEN NULL ELSE started_at END, " +
-      "completed_at = CASE WHEN $1 = 'COMPLETED' THEN NOW() ELSE NULL END, updated_by_staff_id = $3, updated_at = NOW() " +
+      "UPDATE queue_pathway_progress SET status = $1::varchar(20), block_reason = $2, " +
+      "started_at = CASE WHEN $1::varchar(20) = 'IN_PROGRESS' AND started_at IS NULL THEN NOW() WHEN $1 = 'READY' THEN NULL ELSE started_at END, " +
+      "completed_at = CASE WHEN $1::varchar(20) = 'COMPLETED' THEN NOW() ELSE NULL END, updated_by_staff_id = $3, updated_at = NOW() " +
       'WHERE progress_id = $4 RETURNING progress_id, queue_id, stage_id, status, block_reason, started_at, completed_at, updated_at',
       [status, status === 'BLOCKED' ? reason : null, actorStaffId, row.progress_id]
     );

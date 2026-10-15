@@ -22,7 +22,7 @@ if (!dbConfigured) {
   const forecastIds = [];
   const tokens = {};
 
-  function passportId(suffix) { return `TEST${Date.now().toString().slice(-8)}${suffix}`.slice(0, 15); }
+  function passportId(suffix) { return `TEST${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}${suffix}`.slice(0, 15); }
   async function request(path, options = {}) {
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
     const response = await fetch(baseUrl + path, { ...options, headers });

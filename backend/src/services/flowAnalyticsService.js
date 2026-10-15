@@ -137,8 +137,8 @@ async function recordForecast(input, actorStaffId) {
 }
 async function getForecastTruth(limit = 20) {
   await query(
-    'UPDATE flow_forecast_samples s SET actual_wait_minutes = GREATEST(0, ROUND((EXTRACT(EPOCH FROM (q.called_at - q.queued_at)) / 60.0)::numeric, 2)), observed_at = q.called_at ' +
-    "FROM queue_entries q WHERE s.queue_id = q.queue_id AND s.actual_wait_minutes IS NULL AND q.called_at IS NOT NULL AND q.called_at >= q.queued_at"
+    'UPDATE flow_forecast_samples s SET actual_wait_minutes = GREATEST(0, ROUND((EXTRACT(EPOCH FROM (q.called_at - s.created_at)) / 60.0)::numeric, 2)), observed_at = q.called_at ' +
+    "FROM queue_entries q WHERE s.queue_id = q.queue_id AND s.actual_wait_minutes IS NULL AND q.called_at IS NOT NULL AND q.called_at >= s.created_at"
   );
   const safeLimit = Math.max(1, Math.min(100, Number(limit) || 20));
   const result = await query(

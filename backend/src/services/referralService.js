@@ -50,7 +50,7 @@ async function updateReferral(referralId, input, actorStaffId) {
     const transitions = { REQUESTED:['REQUESTED','ACKNOWLEDGED','CANCELLED'], ACKNOWLEDGED:['ACKNOWLEDGED','IN_PROGRESS','CANCELLED'], IN_PROGRESS:['IN_PROGRESS','COMPLETED','CANCELLED'], COMPLETED:['COMPLETED'], CANCELLED:['CANCELLED'] };
     if (!transitions[current.status].includes(status)) throw err('The requested referral status transition is not permitted.', 409);
     const updated = await client.query(
-      "UPDATE care_referrals SET status=$1,acknowledgement_note=$2,updated_by_staff_id=$3,updated_at=NOW(),completed_at=CASE WHEN $1='COMPLETED' THEN NOW() ELSE completed_at END WHERE referral_id=$4 RETURNING referral_id,patient_id,queue_id,referred_to,reason,status,due_at,acknowledgement_note,updated_at,completed_at",
+      "UPDATE care_referrals SET status=$1::varchar(20),acknowledgement_note=$2,updated_by_staff_id=$3,updated_at=NOW(),completed_at=CASE WHEN $1::varchar(20)='COMPLETED' THEN NOW() ELSE completed_at END WHERE referral_id=$4 RETURNING referral_id,patient_id,queue_id,referred_to,reason,status,due_at,acknowledgement_note,updated_at,completed_at",
       [status, note, actorStaffId, referralIdNum]);
     await appendOperationalEvent(client, { eventType:'REFERRAL_STATUS_CHANGED', entityType:'CARE_REFERRAL', entityId:referralIdNum, actorStaffId, fromState:current.status, toState:status, metadata:{ acknowledgement_note_present:Boolean(note) } });
     return updated.rows[0];
