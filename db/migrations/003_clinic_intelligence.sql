@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS care_pathway_stages (
     stage_order SMALLINT NOT NULL CHECK (stage_order BETWEEN 1 AND 50),
     stage_code VARCHAR(40) NOT NULL,
     stage_name VARCHAR(120) NOT NULL,
+    depends_on_stage_codes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     required_resource_tags TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     is_required BOOLEAN NOT NULL DEFAULT TRUE,
     UNIQUE (template_id, stage_order),
@@ -238,14 +239,14 @@ INSERT INTO care_pathway_templates(name, description, is_active)
 VALUES ('Standard outpatient journey', 'Operational stage tracking for a standard outpatient visit. This template does not determine clinical triage or treatment.', TRUE)
 ON CONFLICT (name) DO NOTHING;
 
-INSERT INTO care_pathway_stages(template_id, stage_order, stage_code, stage_name, required_resource_tags, is_required)
-SELECT t.template_id, stages.stage_order, stages.stage_code, stages.stage_name, stages.required_resource_tags, TRUE
+INSERT INTO care_pathway_stages(template_id, stage_order, stage_code, stage_name, depends_on_stage_codes, required_resource_tags, is_required)
+SELECT t.template_id, stages.stage_order, stages.stage_code, stages.stage_name, stages.depends_on_stage_codes, stages.required_resource_tags, TRUE
 FROM care_pathway_templates t
 CROSS JOIN (VALUES
-  (1::SMALLINT, 'TRIAGE', 'Clinical triage', ARRAY['triage']::TEXT[]),
-  (2::SMALLINT, 'CONSULTATION', 'Consultation', ARRAY['consultation']::TEXT[]),
-  (3::SMALLINT, 'DISCHARGE', 'Discharge and next steps', ARRAY['registration']::TEXT[])
-) AS stages(stage_order, stage_code, stage_name, required_resource_tags)
+  (1::SMALLINT, 'TRIAGE', 'Clinical triage', ARRAY[]::TEXT[], ARRAY['triage']::TEXT[]),
+  (2::SMALLINT, 'CONSULTATION', 'Consultation', ARRAY['TRIAGE']::TEXT[], ARRAY['consultation']::TEXT[]),
+  (3::SMALLINT, 'DISCHARGE', 'Discharge and next steps', ARRAY['CONSULTATION']::TEXT[], ARRAY['registration']::TEXT[])
+) AS stages(stage_order, stage_code, stage_name, depends_on_stage_codes, required_resource_tags)
 WHERE t.name = 'Standard outpatient journey'
 ON CONFLICT (template_id, stage_code) DO NOTHING;
 

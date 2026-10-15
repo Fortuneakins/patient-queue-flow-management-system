@@ -190,7 +190,7 @@ async function listActiveQueue() {
 
 async function listPathways() {
   const result = await query(
-    "SELECT t.template_id, t.name, t.description, t.is_active, COALESCE((SELECT jsonb_agg(jsonb_build_object('stage_id', s.stage_id, 'stage_order', s.stage_order, 'stage_code', s.stage_code, 'stage_name', s.stage_name, 'required_resource_tags', s.required_resource_tags, 'is_required', s.is_required) ORDER BY s.stage_order) FROM care_pathway_stages s WHERE s.template_id = t.template_id), '[]'::jsonb) AS stages FROM care_pathway_templates t WHERE t.is_active = TRUE ORDER BY t.name"
+    "SELECT t.template_id, t.name, t.description, t.is_active, COALESCE((SELECT jsonb_agg(jsonb_build_object('stage_id', s.stage_id, 'stage_order', s.stage_order, 'stage_code', s.stage_code, 'stage_name', s.stage_name, 'depends_on_stage_codes', s.depends_on_stage_codes, 'required_resource_tags', s.required_resource_tags, 'is_required', s.is_required) ORDER BY s.stage_order) FROM care_pathway_stages s WHERE s.template_id = t.template_id), '[]'::jsonb) AS stages FROM care_pathway_templates t WHERE t.is_active = TRUE ORDER BY t.name"
   );
   return result.rows;
 }
@@ -206,11 +206,24 @@ async function createPathwayTemplate(input, actorStaffId) {
     if (!/^[A-Z][A-Z0-9_]{0,39}$/.test(code)) throw badRequest('Stage ' + (index + 1) + ' has an invalid stage_code.');
     const stageName = text(stage?.stage_name, 'stages[' + (index + 1) + '].stage_name', 120);
     const tags = safeTags(stage?.required_resource_tags || []) || [];
+    const dependencies = stage?.depends_on_stage_codes === undefined ? [] : stage.depends_on_stage_codes;
+    if (!Array.isArray(dependencies) || dependencies.length > 50) throw badRequest('depends_on_stage_codes must be an array with at most 50 stage codes.');
+    const normalizedDependencies = [...new Set(dependencies.map(value => String(value).trim().toUpperCase()))];
+    if (normalizedDependencies.some(value => !/^[A-Z][A-Z0-9_]{0,39}$/.test(value))) throw badRequest('Dependency stage codes must use letters, numbers or underscores.');
+    if (normalizedDependencies.includes(code)) throw badRequest('A stage cannot depend on itself.');
     const required = stage?.is_required === undefined ? true : stage.is_required;
     if (typeof required !== 'boolean') throw badRequest('is_required must be true or false for every stage.');
-    return { stage_order: index + 1, stage_code: code, stage_name: stageName, required_resource_tags: tags, is_required: required };
+    return { stage_order: index + 1, stage_code: code, stage_name: stageName, depends_on_stage_codes: normalizedDependencies, required_resource_tags: tags, is_required: required };
   });
+  const codeToOrder = new Map(stages.map(stage => [stage.stage_code, stage.stage_order]));
   if (new Set(stages.map(stage => stage.stage_code)).size !== stages.length) throw badRequest('Stage codes must be unique within a pathway template.');
+  for (const stage of stages) {
+    for (const dependency of stage.depends_on_stage_codes) {
+      const dependencyOrder = codeToOrder.get(dependency);
+      if (dependencyOrder === undefined) throw badRequest('Stage ' + stage.stage_code + ' depends on unknown stage ' + dependency + '.');
+      if (dependencyOrder >= stage.stage_order) throw badRequest('Stage dependencies must refer to earlier stages in the template; this also prevents dependency cycles.');
+    }
+  }
   try {
     return await withTransaction(async client => {
       const inserted = await client.query(
@@ -219,8 +232,8 @@ async function createPathwayTemplate(input, actorStaffId) {
       );
       for (const stage of stages) {
         await client.query(
-          'INSERT INTO care_pathway_stages(template_id, stage_order, stage_code, stage_name, required_resource_tags, is_required) VALUES ($1,$2,$3,$4,$5,$6)',
-          [inserted.rows[0].template_id, stage.stage_order, stage.stage_code, stage.stage_name, stage.required_resource_tags, stage.is_required]
+          'INSERT INTO care_pathway_stages(template_id, stage_order, stage_code, stage_name, depends_on_stage_codes, required_resource_tags, is_required) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+          [inserted.rows[0].template_id, stage.stage_order, stage.stage_code, stage.stage_name, stage.depends_on_stage_codes, stage.required_resource_tags, stage.is_required]
         );
       }
       await recordEvent(client, { eventType: 'pathway_template_created', entityType: 'care_pathway_template', entityId: inserted.rows[0].template_id, actorStaffId, details: { stage_count: stages.length, stage_codes: stages.map(stage => stage.stage_code) } });
@@ -234,7 +247,7 @@ async function createPathwayTemplate(input, actorStaffId) {
 
 async function listPathwayInstances() {
   const result = await query(
-    "SELECT i.instance_id, i.queue_id, q.ticket_number, q.status AS queue_status, i.template_id, t.name AS template_name, i.status, i.created_at, i.completed_at, COALESCE((SELECT jsonb_agg(jsonb_build_object('instance_stage_id', x.instance_stage_id, 'stage_id', s.stage_id, 'stage_order', s.stage_order, 'stage_code', s.stage_code, 'stage_name', s.stage_name, 'required_resource_tags', s.required_resource_tags, 'status', x.status, 'started_at', x.started_at, 'completed_at', x.completed_at, 'is_required', s.is_required) ORDER BY s.stage_order) FROM care_pathway_instance_stages x JOIN care_pathway_stages s ON s.stage_id = x.stage_id WHERE x.instance_id = i.instance_id), '[]'::jsonb) AS stages FROM care_pathway_instances i JOIN queue_entries q ON q.queue_id=i.queue_id JOIN care_pathway_templates t ON t.template_id=i.template_id ORDER BY i.created_at DESC LIMIT 100"
+    "SELECT i.instance_id, i.queue_id, q.ticket_number, q.status AS queue_status, i.template_id, t.name AS template_name, i.status, i.created_at, i.completed_at, COALESCE((SELECT jsonb_agg(jsonb_build_object('instance_stage_id', x.instance_stage_id, 'stage_id', s.stage_id, 'stage_order', s.stage_order, 'stage_code', s.stage_code, 'stage_name', s.stage_name, 'depends_on_stage_codes', s.depends_on_stage_codes, 'required_resource_tags', s.required_resource_tags, 'status', x.status, 'started_at', x.started_at, 'completed_at', x.completed_at, 'is_required', s.is_required) ORDER BY s.stage_order) FROM care_pathway_instance_stages x JOIN care_pathway_stages s ON s.stage_id = x.stage_id WHERE x.instance_id = i.instance_id), '[]'::jsonb) AS stages FROM care_pathway_instances i JOIN queue_entries q ON q.queue_id=i.queue_id JOIN care_pathway_templates t ON t.template_id=i.template_id ORDER BY i.created_at DESC LIMIT 100"
   );
   return result.rows;
 }
@@ -275,11 +288,11 @@ async function updatePathwayStage({ instanceId, instanceStageId, status, actorSt
     if (current.instance_status !== 'IN_PROGRESS') throw badRequest('This pathway is not active.', 409);
     if (target === 'IN_PROGRESS' && !['PENDING', 'BLOCKED'].includes(current.status)) throw badRequest('Only a pending or blocked stage can be started.', 409);
     if (target === 'COMPLETED' && current.status !== 'IN_PROGRESS') throw badRequest('Start a stage before marking it complete.', 409);
-    const predecessors = await client.query(
-      "SELECT COUNT(*)::int AS incomplete FROM care_pathway_instance_stages x JOIN care_pathway_stages s ON s.stage_id=x.stage_id WHERE x.instance_id=$1 AND s.stage_order < $2 AND s.is_required=TRUE AND x.status <> 'COMPLETED'",
-      [iid, current.stage_order]
+    const pendingDependencies = await client.query(
+      "SELECT COUNT(*)::int AS incomplete FROM care_pathway_stages dependency JOIN care_pathway_instance_stages dependency_state ON dependency_state.stage_id=dependency.stage_id AND dependency_state.instance_id=$1 WHERE dependency.template_id=(SELECT template_id FROM care_pathway_instances WHERE instance_id=$1) AND dependency.stage_code = ANY($2::TEXT[]) AND dependency_state.status <> 'COMPLETED'",
+      [iid, current.depends_on_stage_codes || []]
     );
-    if (Number(predecessors.rows[0].incomplete) > 0) throw badRequest('Complete all required earlier stages before progressing this stage.', 409);
+    if (Number(pendingDependencies.rows[0].incomplete) > 0) throw badRequest('Complete all declared dependency stages before progressing this stage.', 409);
     if (target === 'IN_PROGRESS' && current.required_resource_tags?.length) {
       const available = await client.query(
         "SELECT COALESCE(SUM(capacity), 0)::int AS capacity FROM clinic_resources WHERE status = 'AVAILABLE' AND service_tags && $1::TEXT[]",

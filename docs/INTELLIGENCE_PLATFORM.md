@@ -5,7 +5,7 @@ This change introduces the first integrated foundation for Clinic Intelligence o
 ## Implemented in this tranche
 
 - **Flight Recorder:** database-triggered, append-only, non-identifying events for queue check-in, priority changes and visit lifecycle changes, plus events for resources, pathways, referrals, scenarios and offline operational observations. The admin timeline filters by date and expands non-identifying event details.
-- **CareGraph foundation:** admins can create ordered pathway templates; stage dependencies are enforced per visit, and a stage becomes BLOCKED when no available resource matches its required tags. Starting a stage checks its required resource tags; a missing available resource marks it BLOCKED and creates an event for review.
+- **CareGraph foundation:** admins can create ordered pathway templates with explicit directed dependencies; dependencies must refer to earlier stages to prevent cycles, and a stage becomes BLOCKED when no available resource matches its required tags. Starting a stage checks its required resource tags; a missing available resource marks it BLOCKED and creates an event for review.
 - **Resource Dependency Twin foundation:** resource inventory with service tags, capacity, availability states and administrative event tracking.
 - **FlowTwin:** repeatable discrete-event capacity simulation comparing a no-outage baseline with a proposed station-capacity change and/or initial service outage. It displays warnings when the proposed station count exceeds registered available resources or scheduled doctor coverage.
 - **Synthetic Clinic Laboratory:** repeatable synthetic scenario generation. Synthetic outcomes are clearly labelled and are not represented as real patient data.
