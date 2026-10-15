@@ -1,0 +1,47 @@
+const express = require('express');
+const { authenticate, authorizeRoles, requireReadyPassword } = require('../middleware/authenticate');
+const overview = require('../services/intelligenceOverviewService');
+const pathways = require('../services/carePathwayService');
+const resources = require('../services/resourceService');
+const offline = require('../services/offlineSyncService');
+const flow = require('../services/flowAnalyticsService');
+const referrals = require('../services/referralService');
+const contacts = require('../services/contactService');
+const { createRateLimiter } = require('../utils/rateLimit');
+const router = express.Router();
+router.use(authenticate, requireReadyPassword);
+const admin = authorizeRoles('ADMIN');
+const clinical = authorizeRoles('ADMIN','NURSE','DOCTOR');
+const careTeam = authorizeRoles('ADMIN','RECEPTION','NURSE','DOCTOR');
+const communicationLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 5, keyGenerator: req => String(req.user?.staff_id || req.ip) });
+const endpoint = (handler, status = 200) => async (req, res, next) => {
+  try { res.status(status).json(await handler(req, res)); } catch (error) { next(error); }
+};
+
+router.get('/overview', admin, endpoint(() => overview.getOverview()));
+router.get('/events', admin, endpoint(req => overview.listEvents({ limit: req.query.limit, eventType: req.query.event_type })));
+router.get('/active-visits', clinical, endpoint(() => overview.listActiveVisits()));
+router.get('/pathways', clinical, endpoint(() => pathways.listPathways()));
+router.post('/pathways', admin, endpoint(req => pathways.createPathway(req.body || {}, req.user.staff_id), 201));
+router.get('/journeys/:queue_id', careTeam, endpoint(req => pathways.getJourney(req.params.queue_id)));
+router.post('/journeys/:queue_id/assign', admin, endpoint(req => pathways.assignPathway(req.params.queue_id, req.body?.pathway_id, req.user.staff_id)));
+router.patch('/journeys/:queue_id/stages/:stage_id', careTeam, endpoint(req => pathways.updateJourneyStage(req.params.queue_id, req.params.stage_id, req.body || {}, req.user.staff_id, req.user.role)));
+router.get('/resources', clinical, endpoint(() => resources.listResources()));
+router.post('/resources', admin, endpoint(req => resources.createResource(req.body || {}, req.user.staff_id), 201));
+router.put('/resources/:resource_id/status', admin, endpoint(req => resources.updateResourceStatus(req.params.resource_id, req.body?.status, req.user.staff_id)));
+router.post('/offline-sync', admin, endpoint(req => offline.syncOfflineOperations(req.user.staff_id, req.body?.operations)));
+router.post('/simulations', admin, endpoint(req => flow.runScenario(req.body || {}, req.user.staff_id), 201));
+router.get('/simulations', admin, endpoint(req => flow.listSimulations(req.query.limit)));
+router.get('/benchmarks', admin, endpoint(() => flow.listBenchmarkProfiles()));
+router.post('/synthetic-lab/run', admin, endpoint(req => flow.runLab(req.body || {}, req.user.staff_id), 201));
+router.post('/forecasts', admin, endpoint(req => flow.recordForecast(req.body || {}, req.user.staff_id), 201));
+router.get('/forecasts/truth', admin, endpoint(req => flow.getForecastTruth(req.query.limit)));
+router.get('/fairness', admin, endpoint(() => flow.fairnessMetrics()));
+router.get('/referrals', clinical, endpoint(req => referrals.listReferrals({ status: req.query.status, limit: req.query.limit })));
+router.post('/referrals', authorizeRoles('ADMIN','DOCTOR'), endpoint(req => referrals.createReferral(req.body || {}, req.user.staff_id), 201));
+router.patch('/referrals/:referral_id', authorizeRoles('ADMIN','DOCTOR'), endpoint(req => referrals.updateReferral(req.params.referral_id, req.body || {}, req.user.staff_id)));
+router.get('/contact-preferences/:patient_id', authorizeRoles('ADMIN','RECEPTION','NURSE','DOCTOR'), endpoint(req => contacts.getContactPreferences(req.params.patient_id)));
+router.put('/contact-preferences/:patient_id', authorizeRoles('ADMIN','RECEPTION'), endpoint(req => contacts.updateContactPreferences(req.params.patient_id, req.body || {}, req.user.staff_id)));
+router.post('/contact-preferences/:patient_id/send-update', authorizeRoles('ADMIN','RECEPTION'), communicationLimiter, endpoint(req => contacts.sendAccessUpdate(req.params.patient_id, req.body || {}, req.user.staff_id)));
+
+module.exports = router;

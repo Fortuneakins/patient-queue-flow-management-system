@@ -61,3 +61,16 @@ The API is a JSON REST service on port 5000. All protected routes require `Autho
 `GET /api/shifts/on-duty` — internal service-to-service endpoint protected by `X-Internal-Service-Token`.
 
 The Flask analytics service exposes `GET /api/predict`, returning estimates for tiers 1–4 plus `degraded` and staffing metadata.
+
+
+## Clinic Intelligence (feature branch)
+
+The authenticated `/api/intelligence` surface adds the Clinic Intelligence workflows. Every route also requires a password-ready staff account.
+
+- **Admin-only oversight:** `GET /overview`, `GET /events`, simulation runs/history, benchmark profiles, synthetic lab, forecast capture/truth and fairness metrics.
+- **CareGraph:** `GET /pathways`, `POST /pathways` (Admin), `GET /journeys/:queue_id`, `POST /journeys/:queue_id/assign` (Admin), and `PATCH /journeys/:queue_id/stages/:stage_id` (role-checked stage progression).
+- **Resource status:** `GET /resources` for Nurse/Doctor/Admin; resource creation, status changes and `POST /offline-sync` are Admin-only. Offline sync accepts resource-status operations only and requires UUID idempotency keys.
+- **Referral Relay:** `GET /referrals` for Nurse/Doctor/Admin; create and update are Doctor/Admin-only.
+- **Access Bridge:** `GET /contact-preferences/:patient_id` for authorised staff; save preferences and send the two operational SMS templates are Reception/Admin-only. Sending requires recorded SMS consent, is throttled, and requires a configured Twilio provider to deliver. Wait estimates are obtained from the analytics service by the backend; client-supplied estimates are not trusted.
+
+See [Clinic Intelligence implementation notes](../CLINIC_INTELLIGENCE.md) for the full access matrix, data-handling boundaries, model assumptions and non-production limitations.

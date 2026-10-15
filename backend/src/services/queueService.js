@@ -2,6 +2,7 @@ const { query, withTransaction } = require('../db/pool');
 const { allocateDailyTicket } = require('./ticketService');
 const { validateSymptoms, validateTier } = require('../utils/validation');
 const { sendCallNotification } = require('./smsService');
+const { appendOperationalEvent } = require('./operationalEventService');
 
 const PUBLIC_QUEUE_SELECT = `
   SELECT q.queue_id, q.ticket_number, q.status, q.priority_level, q.queued_at
@@ -36,10 +37,32 @@ async function checkIn({ patientId, identificationNumber, symptoms, requestedTic
          RETURNING queue_id, patient_id, ticket_date, ticket_number, status, priority_level, symptoms, queued_at`,
         [resolvedPatientId, ticketDate, ticketNumber, cleanSymptoms]
       );
-      return { duplicate: false, visit: result.rows[0] };
+      const visit = result.rows[0];
+      const pathway = await client.query("SELECT pathway_id FROM care_pathways WHERE pathway_code = $1 AND is_active = TRUE LIMIT 1", ['OPD_STANDARD']);
+      if (pathway.rows[0]) {
+        const pathwayId = pathway.rows[0].pathway_id;
+        await client.query('UPDATE queue_entries SET care_pathway_id = $1 WHERE queue_id = $2', [pathwayId, visit.queue_id]);
+        await client.query(
+          "INSERT INTO queue_pathway_progress (queue_id, stage_id, status, started_at, completed_at) " +
+          "SELECT $1, stage_id, CASE WHEN sequence_no = 1 THEN 'COMPLETED' WHEN sequence_no = 2 THEN 'READY' ELSE 'PENDING' END, " +
+          "CASE WHEN sequence_no = 1 THEN NOW() ELSE NULL END, CASE WHEN sequence_no = 1 THEN NOW() ELSE NULL END " +
+          "FROM care_pathway_stages WHERE pathway_id = $2 ON CONFLICT (queue_id, stage_id) DO NOTHING",
+          [visit.queue_id, pathwayId]
+        );
+        await appendOperationalEvent(client, { eventType: 'CARE_PATHWAY_ASSIGNED', entityType: 'QUEUE_VISIT', entityId: visit.queue_id, toState: 'OPD_STANDARD', metadata: { pathway_id: pathwayId, registration_stage_precompleted: true } });
+        visit.care_pathway_id = pathwayId;
+      }
+      await appendOperationalEvent(client, {
+        eventType: 'VISIT_CHECKED_IN',
+        entityType: 'QUEUE_VISIT',
+        entityId: visit.queue_id,
+        toState: 'Waiting',
+        metadata: { ticket_number: ticketNumber }
+      });
+      return { duplicate: false, visit };
     } catch (error) {
       if (error.code === '23505') {
-        const raceTicket = await getActiveTicket(client, patientId);
+        const raceTicket = await getActiveTicket(client, resolvedPatientId);
         if (raceTicket) return { duplicate: true, ticket_number: raceTicket };
       }
       throw error;
@@ -88,70 +111,117 @@ async function findActiveForHistory() {
 async function setPriority(queueId, tier, staffId) {
   const priority = validateTier(tier);
   if (!priority) throw Object.assign(new Error('Priority tier must be an integer from 1 to 4.'), { status: 400 });
-  const result = await query(
-    `UPDATE queue_entries SET priority_level = $1, triaged_by_staff_id = $2, triaged_at = NOW()
-     WHERE queue_id = $3 AND status = 'Waiting'
-     RETURNING queue_id, ticket_number, status, priority_level, symptoms, queued_at, triaged_by_staff_id, triaged_at`,
-    [priority, staffId, queueId]
-  );
-  if (!result.rows[0]) {
-    const check = await query('SELECT status FROM queue_entries WHERE queue_id = $1', [queueId]);
-    if (!check.rows[0]) throw Object.assign(new Error('Queue entry not found.'), { status: 404 });
-    throw Object.assign(new Error('Priority can only be changed while the visit is Waiting.'), { status: 409 });
-  }
-  return result.rows[0];
+  return withTransaction(async client => {
+    const result = await client.query(
+      `UPDATE queue_entries SET priority_level = $1, triaged_by_staff_id = $2, triaged_at = NOW()
+       WHERE queue_id = $3 AND status = 'Waiting'
+       RETURNING queue_id, ticket_number, status, priority_level, symptoms, queued_at, triaged_by_staff_id, triaged_at`,
+      [priority, staffId, queueId]
+    );
+    if (!result.rows[0]) {
+      const check = await client.query('SELECT status FROM queue_entries WHERE queue_id = $1', [queueId]);
+      if (!check.rows[0]) throw Object.assign(new Error('Queue entry not found.'), { status: 404 });
+      throw Object.assign(new Error('Priority can only be changed while the visit is Waiting.'), { status: 409 });
+    }
+    await appendOperationalEvent(client, {
+      eventType: 'VISIT_TRIAGED',
+      entityType: 'QUEUE_VISIT',
+      entityId: result.rows[0].queue_id,
+      actorStaffId: staffId,
+      toState: 'Waiting',
+      metadata: { priority_level: priority }
+    });
+    return result.rows[0];
+  });
 }
 
 async function callToRoom(queueId, staffId) {
-  const result = await query(
-    `UPDATE queue_entries
-     SET status = 'In-Consultation', called_by_staff_id = $1, called_at = NOW()
-     WHERE queue_id = $2 AND status = 'Waiting'
-     RETURNING queue_id, patient_id, ticket_number, status, priority_level, symptoms, queued_at, called_by_staff_id, called_at`,
-    [staffId, queueId]
-  );
-  if (!result.rows[0]) {
-    const check = await query('SELECT status FROM queue_entries WHERE queue_id = $1', [queueId]);
-    if (!check.rows[0]) throw Object.assign(new Error('Queue entry not found.'), { status: 404 });
-    throw Object.assign(new Error('Only a Waiting patient can be called to a room.'), { status: 409 });
-  }
-  const patient = await query('SELECT contact_no FROM patients WHERE patient_id = $1', [result.rows[0].patient_id]);
+  const visit = await withTransaction(async client => {
+    const result = await client.query(
+      `UPDATE queue_entries
+       SET status = 'In-Consultation', called_by_staff_id = $1, called_at = NOW()
+       WHERE queue_id = $2 AND status = 'Waiting'
+       RETURNING queue_id, patient_id, ticket_number, status, priority_level, symptoms, queued_at, called_by_staff_id, called_at`,
+      [staffId, queueId]
+    );
+    if (!result.rows[0]) {
+      const check = await client.query('SELECT status FROM queue_entries WHERE queue_id = $1', [queueId]);
+      if (!check.rows[0]) throw Object.assign(new Error('Queue entry not found.'), { status: 404 });
+      throw Object.assign(new Error('Only a Waiting patient can be called to a room.'), { status: 409 });
+    }
+    await appendOperationalEvent(client, {
+      eventType: 'CONSULTATION_STARTED',
+      entityType: 'QUEUE_VISIT',
+      entityId: result.rows[0].queue_id,
+      actorStaffId: staffId,
+      fromState: 'Waiting',
+      toState: 'In-Consultation',
+      metadata: { priority_level: result.rows[0].priority_level }
+    });
+    return result.rows[0];
+  });
+  const patient = await query('SELECT contact_no FROM patients WHERE patient_id = $1', [visit.patient_id]);
   let sms = { sent: false, skipped: true };
   try {
-    sms = await sendCallNotification({ to: patient.rows[0]?.contact_no, ticketNumber: result.rows[0].ticket_number });
+    sms = await sendCallNotification({ to: patient.rows[0]?.contact_no, ticketNumber: visit.ticket_number });
   } catch (error) {
     console.error('[SMS] Notification failed:', error.message);
     sms = { sent: false, skipped: false, error: error.message };
   }
-  return { ...result.rows[0], sms_sent: sms.sent, sms_skipped: sms.skipped, sms_error: sms.error || null };
+  return { ...visit, sms_sent: sms.sent, sms_skipped: sms.skipped, sms_error: sms.error || null };
 }
 
-async function saveNotes(queueId, notes, _staffId) {
+async function saveNotes(queueId, notes, staffId) {
   const doctorNotes = String(notes ?? '').trim();
   if (doctorNotes.length > 5000) throw Object.assign(new Error('Consultation notes may not exceed 5000 characters.'), { status: 400 });
-  const result = await query(`UPDATE queue_entries SET doctor_notes = $1 WHERE queue_id = $2 AND status = 'In-Consultation' RETURNING queue_id, doctor_notes`, [doctorNotes, queueId]);
-  if (!result.rows[0]) {
-    const check = await query('SELECT status FROM queue_entries WHERE queue_id = $1', [queueId]);
-    if (!check.rows[0]) throw Object.assign(new Error('Queue entry not found.'), { status: 404 });
-    throw Object.assign(new Error('Consultation notes can only be edited while the visit is In-Consultation.'), { status: 409 });
-  }
-  return result.rows[0];
+  return withTransaction(async client => {
+    const result = await client.query(
+      `UPDATE queue_entries SET doctor_notes = $1 WHERE queue_id = $2 AND status = 'In-Consultation'
+       RETURNING queue_id, doctor_notes`,
+      [doctorNotes, queueId]
+    );
+    if (!result.rows[0]) {
+      const check = await client.query('SELECT status FROM queue_entries WHERE queue_id = $1', [queueId]);
+      if (!check.rows[0]) throw Object.assign(new Error('Queue entry not found.'), { status: 404 });
+      throw Object.assign(new Error('Consultation notes can only be edited while the visit is In-Consultation.'), { status: 409 });
+    }
+    await appendOperationalEvent(client, {
+      eventType: 'CONSULTATION_NOTE_SAVED',
+      entityType: 'QUEUE_VISIT',
+      entityId: result.rows[0].queue_id,
+      actorStaffId: staffId,
+      toState: 'In-Consultation',
+      metadata: { note_length: doctorNotes.length }
+    });
+    return result.rows[0];
+  });
 }
 
 async function discharge(queueId, staffId) {
-  const result = await query(
-    `UPDATE queue_entries
-     SET status = 'Discharged', discharged_by_staff_id = $1, discharged_at = NOW()
-     WHERE queue_id = $2 AND status = 'In-Consultation'
-     RETURNING queue_id, ticket_number, status, priority_level, queued_at, called_at, discharged_by_staff_id, discharged_at`,
-    [staffId, queueId]
-  );
-  if (!result.rows[0]) {
-    const check = await query('SELECT status FROM queue_entries WHERE queue_id = $1', [queueId]);
-    if (!check.rows[0]) throw Object.assign(new Error('Queue entry not found.'), { status: 404 });
-    throw Object.assign(new Error('Only an In-Consultation patient can be discharged.'), { status: 409 });
-  }
-  return result.rows[0];
+  return withTransaction(async client => {
+    const result = await client.query(
+      `UPDATE queue_entries
+       SET status = 'Discharged', discharged_by_staff_id = $1, discharged_at = NOW()
+       WHERE queue_id = $2 AND status = 'In-Consultation'
+       RETURNING queue_id, ticket_number, status, priority_level, queued_at, called_at, discharged_by_staff_id, discharged_at`,
+      [staffId, queueId]
+    );
+    if (!result.rows[0]) {
+      const check = await client.query('SELECT status FROM queue_entries WHERE queue_id = $1', [queueId]);
+      if (!check.rows[0]) throw Object.assign(new Error('Queue entry not found.'), { status: 404 });
+      throw Object.assign(new Error('Only an In-Consultation patient can be discharged.'), { status: 409 });
+    }
+    await appendOperationalEvent(client, {
+      eventType: 'VISIT_DISCHARGED',
+      entityType: 'QUEUE_VISIT',
+      entityId: result.rows[0].queue_id,
+      actorStaffId: staffId,
+      fromState: 'In-Consultation',
+      toState: 'Discharged',
+      metadata: { priority_level: result.rows[0].priority_level }
+    });
+    return result.rows[0];
+  });
 }
 
 async function history({ identificationNumber, role, limit = 50, offset = 0 }) {
