@@ -165,15 +165,28 @@ export default function ClinicIntelligenceView({ token }) {
     }
   };
 
-  const addOfflineIncident = () => execute(async () => {
-    await enqueueOperationalObservation('OPERATIONAL_INCIDENT_RECORDED', { incident_code: incidentCode });
-    setOutbox(await listOperationalOutbox());
-  }, 'Operational observation saved locally. Sync it when the server is reachable.');
+  const saveLocalObservation = async (operation, successMessage) => {
+    setWorking(true);
+    setError('');
+    setNotice('');
+    try {
+      await operation();
+      setOutbox(await listOperationalOutbox());
+      setNotice(successMessage);
+    } catch (operationError) {
+      setError(messageFor(operationError));
+    } finally {
+      setWorking(false);
+    }
+  };
 
-  const addResourceObservation = () => execute(async () => {
+  const addOfflineIncident = () => saveLocalObservation(async () => {
+    await enqueueOperationalObservation('OPERATIONAL_INCIDENT_RECORDED', { incident_code: incidentCode });
+  }, 'Operational incident saved in this browser. It has not been sent to the server yet.');
+
+  const addResourceObservation = () => saveLocalObservation(async () => {
     await enqueueOperationalObservation('RESOURCE_STATUS_OBSERVED', { resource_id: Number(observedResource.resource_id), observed_status: observedResource.observed_status });
-    setOutbox(await listOperationalOutbox());
-  }, 'Resource observation saved locally for later sync.');
+  }, 'Resource observation saved locally. It has not changed the authoritative server status.');
 
   const syncOutbox = () => execute(async () => {
     const pending = await listOperationalOutbox();
