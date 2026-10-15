@@ -79,8 +79,21 @@ export default function ClinicIntelligenceView({ token }) {
       setData({ summary: results[0], events: results[1], resources: results[2], queue: results[3], pathways: results[4], instances: results[5], fairness: results[6], referrals: results[7], forecasts: results[8], simulations: results[9], receipts: results[10] });
       setReplayIndex(Math.max(0, results[1].length - 1));
       setOutbox(results[11]);
+      try {
+        const safeResources = results[2].map(({ resource_id, resource_name, resource_type, status, capacity, service_tags, is_critical }) => ({ resource_id, resource_name, resource_type, status, capacity, service_tags, is_critical }));
+        localStorage.setItem('pqfms-intelligence-resources-v1', JSON.stringify(safeResources));
+      } catch {
+        // The live view remains usable if browser storage is unavailable.
+      }
       setError('');
     } catch (loadError) {
+      try {
+        const cached = JSON.parse(localStorage.getItem('pqfms-intelligence-resources-v1') || '[]');
+        if (Array.isArray(cached)) setData(current => ({ ...current, resources: cached }));
+      } catch {
+        // The offline screen still allows incident capture without a cached inventory.
+      }
+      setOutbox(await listOperationalOutbox().catch(() => []));
       setError(messageFor(loadError));
     } finally {
       if (!quiet) setLoading(false);

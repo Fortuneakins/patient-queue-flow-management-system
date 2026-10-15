@@ -28,14 +28,29 @@ async function withStore(mode, action) {
   });
 }
 
-export function enqueueOperationalObservation(eventType, payload) {
+export async function enqueueOperationalObservation(eventType, payload) {
   const safeTypes = ['OPERATIONAL_INCIDENT_RECORDED', 'RESOURCE_STATUS_OBSERVED'];
-  if (!safeTypes.includes(eventType)) return Promise.reject(new Error('This offline action is not permitted.'));
-  const safePayload = eventType === 'OPERATIONAL_INCIDENT_RECORDED'
-    ? { incident_code: String(payload?.incident_code || '') }
-    : { resource_id: Number(payload?.resource_id), observed_status: String(payload?.observed_status || '') };
+  if (!safeTypes.includes(eventType)) throw new Error('This offline action is not permitted.');
+
+  let safePayload;
+  if (eventType === 'OPERATIONAL_INCIDENT_RECORDED') {
+    const incident = String(payload?.incident_code || '').toUpperCase();
+    const allowedIncidents = ['NETWORK_UNAVAILABLE', 'POWER_DISRUPTION', 'MANUAL_WORKFLOW_STARTED', 'RESOURCE_UNAVAILABLE', 'SERVICE_UNAVAILABLE'];
+    if (!allowedIncidents.includes(incident)) throw new Error('Choose a supported operational incident.');
+    safePayload = { incident_code: incident };
+  } else {
+    const resourceId = Number(payload?.resource_id);
+    const status = String(payload?.observed_status || '').toUpperCase();
+    if (!Number.isSafeInteger(resourceId) || resourceId < 1) throw new Error('A valid resource ID is required.');
+    if (!['AVAILABLE', 'LIMITED', 'UNAVAILABLE', 'MAINTENANCE'].includes(status)) throw new Error('Choose a supported resource status.');
+    safePayload = { resource_id: resourceId, observed_status: status };
+  }
+
+  const pending = await listOperationalOutbox();
+  if (pending.length >= 1000) throw new Error('The local outbox has reached 1,000 observations. Sync pending records before adding more.');
+  if (!globalThis.crypto?.randomUUID) throw new Error('Secure unique IDs are unavailable in this browser; use a supported HTTPS or localhost browser context.');
   return withStore('readwrite', store => store.put({
-    client_event_id: crypto.randomUUID(),
+    client_event_id: globalThis.crypto.randomUUID(),
     event_type: eventType,
     payload: safePayload,
     queued_at: new Date().toISOString()
