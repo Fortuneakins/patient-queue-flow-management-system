@@ -66,7 +66,7 @@ async function sendAccessUpdate(patientId, input, actorStaffId) {
   let result;
   try {
     result = await smsService.sendAccessUpdate({ to:patient.contact_no, templateCode:template, waitMinutes:wait, language:patient.preferred_language_code });
-  } catch (error) {
+  } catch (_error) {
     result = { status:'FAILED', reason:'provider-error' };
   }
   const status = ['SENT','SKIPPED','FAILED'].includes(result.status) ? result.status : 'FAILED';

@@ -49,7 +49,7 @@ async function listActiveVisits() {
     "SELECT queue_id, ticket_number, status, priority_level, queued_at, " +
     "ROUND((EXTRACT(EPOCH FROM (NOW() - queued_at)) / 60.0)::numeric, 1) AS elapsed_wait_minutes " +
     "FROM queue_entries WHERE status IN ('Waiting','In-Consultation') " +
-    'ORDER BY CASE WHEN status = 'In-Consultation' THEN 0 ELSE 1 END, COALESCE(priority_level,4), queued_at'
+    "ORDER BY CASE WHEN status = 'In-Consultation' THEN 0 ELSE 1 END, COALESCE(priority_level,4), queued_at"
   );
   return result.rows;
 }
