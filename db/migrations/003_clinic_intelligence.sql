@@ -249,4 +249,13 @@ CROSS JOIN (VALUES
 WHERE t.name = 'Standard outpatient journey'
 ON CONFLICT (template_id, stage_code) DO NOTHING;
 
+CREATE TABLE IF NOT EXISTS twilio_inbound_command_receipts (
+    message_sid VARCHAR(40) PRIMARY KEY CHECK (message_sid ~ '^SM[0-9a-fA-F]{32}),
+    command VARCHAR(8) NOT NULL CHECK (command IN ('STOP', 'START')),
+    result_code VARCHAR(40) NOT NULL DEFAULT 'PROCESSING'
+      CHECK (result_code IN ('PROCESSING', 'CONSENT_WITHDRAWN', 'CONSENT_GRANTED', 'NO_MATCH', 'AMBIGUOUS_PHONE')),
+    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    processed_at TIMESTAMPTZ NULL
+);
+
 COMMIT;

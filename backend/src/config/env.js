@@ -36,6 +36,7 @@ module.exports = {
   TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID || '',
   TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN || '',
   TWILIO_PHONE_NUMBER: process.env.TWILIO_PHONE_NUMBER || '',
+  TWILIO_WEBHOOK_URL: process.env.TWILIO_WEBHOOK_URL || '',
   ANALYTICS_URL: process.env.ANALYTICS_URL || 'http://localhost:5001',
   STAFFED_STATIONS: Math.max(1, Number(process.env.STAFFED_STATIONS || 1))
 };

@@ -28,4 +28,13 @@ async function sendWaitEstimate({ to, estimatedWaitMinutes }) {
   });
 }
 
-module.exports = { sendCallNotification, sendWaitEstimate };
+function verifyInboundWebhookSignature({ signature, params }) {
+  if (!env.SMS_ENABLED || !env.TWILIO_AUTH_TOKEN || !env.TWILIO_WEBHOOK_URL || !signature || !params) return false;
+  try {
+    return twilio.validateRequest(env.TWILIO_AUTH_TOKEN, signature, env.TWILIO_WEBHOOK_URL, params);
+  } catch {
+    return false;
+  }
+}
+
+module.exports = { sendCallNotification, sendWaitEstimate, verifyInboundWebhookSignature };
