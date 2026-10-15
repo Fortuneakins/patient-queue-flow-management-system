@@ -35,7 +35,7 @@ The outbox is local browser storage and covers resource statuses only. It is not
 
 ### Prediction truth and safety review
 
-A forecast capture stores per-tier estimates against the current waiting-visit snapshot. Once a visit has a first-call timestamp, the ledger compares the remaining time from forecast capture until first call with the captured per-tier estimate and reports mean absolute error. The review panel also displays sample sizes, completed-visit elapsed time by tier, and currently waiting visits past an operational threshold.
+A forecast capture stores per-tier estimates against the current waiting-visit snapshot. Once a visit has a first-call timestamp, the ledger compares the remaining time from forecast capture until first call with the captured per-tier estimate and reports mean absolute error. The review panel also displays sample sizes, queue-to-first-call wait among completed visits by tier, and currently waiting visits past an operational threshold.
 
 These are operational monitoring indicators. They cannot prove the model is clinically accurate, unbiased or fair; low sample counts and patient complexity must be considered. The module must not automatically change clinical priority.
 
