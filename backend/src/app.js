@@ -10,6 +10,7 @@ const queueRoutes = require('./routes/queue.routes');
 const historyRoutes = require('./routes/history.routes');
 const shiftRoutes = require('./routes/shift.routes');
 const healthRoutes = require('./routes/health.routes');
+const intelligenceRoutes = require('./routes/intelligence.routes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -35,6 +36,7 @@ app.use('/api/patients', patientRoutes);
 app.use('/api/queue', queueRoutes);
 app.use('/api/history', historyRoutes);
 app.use('/api/shifts', shiftRoutes);
+app.use('/api/intelligence', intelligenceRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

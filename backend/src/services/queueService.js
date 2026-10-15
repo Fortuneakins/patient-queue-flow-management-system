@@ -115,15 +115,20 @@ async function callToRoom(queueId, staffId) {
     if (!check.rows[0]) throw Object.assign(new Error('Queue entry not found.'), { status: 404 });
     throw Object.assign(new Error('Only a Waiting patient can be called to a room.'), { status: 409 });
   }
-  const patient = await query('SELECT contact_no FROM patients WHERE patient_id = $1', [result.rows[0].patient_id]);
-  let sms = { sent: false, skipped: true };
-  try {
-    sms = await sendCallNotification({ to: patient.rows[0]?.contact_no, ticketNumber: result.rows[0].ticket_number });
-  } catch (error) {
-    console.error('[SMS] Notification failed:', error.message);
-    sms = { sent: false, skipped: false, error: error.message };
+  const patient = await query(
+    "SELECT p.contact_no, pref.opted_in AS sms_opted_in FROM patients p LEFT JOIN patient_contact_preferences pref ON pref.patient_id = p.patient_id AND pref.channel = 'SMS' WHERE p.patient_id = $1",
+    [result.rows[0].patient_id]
+  );
+  let sms = { sent: false, skipped: true, reason: 'consent-not-recorded' };
+  if (patient.rows[0]?.sms_opted_in === true) {
+    try {
+      sms = await sendCallNotification({ to: patient.rows[0]?.contact_no, ticketNumber: result.rows[0].ticket_number });
+    } catch (error) {
+      console.error('[SMS] Notification failed:', error.message);
+      sms = { sent: false, skipped: false, error: 'provider-error' };
+    }
   }
-  return { ...result.rows[0], sms_sent: sms.sent, sms_skipped: sms.skipped, sms_error: sms.error || null };
+  return { ...result.rows[0], sms_sent: sms.sent, sms_skipped: sms.skipped, sms_skip_reason: sms.reason || null, sms_error: sms.error || null };
 }
 
 async function saveNotes(queueId, notes, _staffId) {

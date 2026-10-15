@@ -28,7 +28,8 @@ function safeTags(value) {
   });
 }
 function recordEvent(db, event) {
-  return db.query(
+  const execute = typeof db === 'function' ? db : db.query.bind(db);
+  return execute(
     'INSERT INTO operational_events(event_type, entity_type, entity_id, queue_id, actor_staff_id, event_source, details) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)',
     [event.eventType, event.entityType, String(event.entityId), event.queueId || null, event.actorStaffId || null, event.source || 'STAFF', JSON.stringify(event.details || {})]
   );
