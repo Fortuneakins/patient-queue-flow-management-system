@@ -206,6 +206,14 @@ if (!dbConfigured) {
     assert.equal(message.response.status, 200, JSON.stringify(message.body));
     assert.equal(message.body.delivery_status, 'SKIPPED', 'CI has SMS disabled; no provider message should be sent');
 
+    const noEstimateMessage = await request('/api/intelligence/contact-preferences/' + patientId + '/send-update', {
+      method: 'POST', headers: auth(tokens.reception),
+      body: JSON.stringify({ template_code: 'WAIT_ESTIMATE', wait_minutes: 9999 })
+    });
+    assert.equal(noEstimateMessage.response.status, 200);
+    assert.equal(noEstimateMessage.body.delivery_status, 'SKIPPED');
+    assert.equal(noEstimateMessage.body.estimated_wait_minutes, null, 'the client-supplied wait must not be treated as a trusted estimate');
+
     const events = await request('/api/intelligence/events?limit=100', { headers: auth(tokens.admin) });
     assert.equal(events.response.status, 200);
     assert.ok(events.body.some(event => event.event_type === 'VISIT_CHECKED_IN'));

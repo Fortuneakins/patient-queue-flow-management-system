@@ -26,7 +26,7 @@ export default function ClinicIntelligenceView({ token, currentUser }) {
   const selected = sections.find(section => section.id === active) || sections[0];
   let panel;
   if (active === 'flow') panel = <FlowTwinPanel token={token} />;
-  else if (active === 'journeys') panel = <CareGraphPanel token={token} />;
+  else if (active === 'journeys') panel = <CareGraphPanel token={token} canManage={true} />;
   else if (active === 'resources') panel = <ResourcesPanel token={token} currentUser={currentUser} />;
   else if (active === 'learning') panel = <LearningPanel token={token} />;
   else if (active === 'lab') panel = <SyntheticLabPanel token={token} />;

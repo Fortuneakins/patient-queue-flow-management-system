@@ -11,6 +11,9 @@ import ReceptionWorkspace from './features/reception/ReceptionWorkspace';
 import NurseWorkspace from './features/nurse/NurseWorkspace';
 import DoctorWorkspace from './features/doctor/DoctorWorkspace';
 import AdminWorkspace from './features/admin/AdminWorkspace';
+import CareGraphPanel from './features/admin/intelligence/CareGraphPanel';
+import ReferralRelayPanel from './features/admin/intelligence/ReferralRelayPanel';
+import AccessBridgePanel from './features/admin/intelligence/AccessBridgePanel';
 import StaffDirectoryView from './features/shared/StaffDirectoryView';
 import { useIdleLogout, usePQFMS } from './hooks/usePQFMS';
 import { displayRole } from './utils/format';
@@ -35,15 +38,15 @@ function readPreferences() {
 }
 
 const ROLE_TABS = {
-  RECEPTION: [['register', 'Register Patient'], ['directory', 'Patient Directory']],
-  NURSE: [['triage', 'Triage Board'], ['directory', 'Patient Directory'], ['history', 'Patient History']],
-  DOCTOR: [['roster', 'Consultation Roster'], ['directory', 'Patient Directory'], ['history', 'Patient History'], ['overview', 'Today’s Overview']],
+  RECEPTION: [['register', 'Register Patient'], ['directory', 'Patient Directory'], ['accessBridge', 'Access Bridge']],
+  NURSE: [['triage', 'Triage Board'], ['careGraph', 'CareGraph'], ['directory', 'Patient Directory'], ['history', 'Patient History']],
+  DOCTOR: [['roster', 'Consultation Roster'], ['careGraph', 'CareGraph'], ['referrals', 'Referral Relay'], ['directory', 'Patient Directory'], ['history', 'Patient History'], ['overview', 'Today’s Overview']],
   ADMIN: [['overview', 'Overview'], ['intelligence', 'Clinic Intelligence'], ['log', 'Discharge Log'], ['history', 'Patient History'], ['staff', 'Staff Management'], ['shifts', 'Scheduling'], ['directory', 'Staff Directory']]
 };
 
 const TAB_ICONS = {
   register: 'user', directory: 'users', triage: 'shield', history: 'history',
-  roster: 'calendar', overview: 'chart', log: 'history', staff: 'users', shifts: 'calendar', staffDirectory: 'users', intelligence: 'chart'
+  roster: 'calendar', overview: 'chart', log: 'history', staff: 'users', shifts: 'calendar', staffDirectory: 'users', intelligence: 'chart', careGraph: 'layout', referrals: 'arrow', accessBridge: 'volume'
 };
 
 function WorkspaceShell({ user, activeTab, setActiveTab, onLogout, onChangePassword, children }) {
@@ -180,7 +183,13 @@ function App() {
           : <AdminWorkspace {...common} activeTab={activeTab} currentUser={user} token={state.token} staff={state.staff} shifts={state.shifts} overview={state.overview} history={state.history} dischargeLog={state.dischargeLog} performance={state.staffPerformance} onRefreshStaff={state.refreshStaff} onRefreshShifts={state.refreshShifts} onRefreshOverview={state.refreshOverview} onRefreshPerformance={state.refreshPerformance} onRefreshHistory={state.refreshHistory} onCreateStaff={state.createStaff} onUpdateStatus={state.updateStaffStatus} onUpdatePermission={state.updatePermission} onLoginHistory={state.getLoginHistory} onCreateShift={state.createShift} onDeleteShift={state.deleteShift} />;
     const finalRoleView = activeTab === 'staffDirectory' && user.role !== 'ADMIN' && user.extra_permissions?.includes('VIEW_STAFF_DIRECTORY')
       ? <StaffDirectoryView staff={state.staff} />
-      : roleView;
+      : activeTab === 'careGraph' && ['NURSE', 'DOCTOR'].includes(user.role)
+        ? <CareGraphPanel token={state.token} />
+        : activeTab === 'referrals' && user.role === 'DOCTOR'
+          ? <ReferralRelayPanel token={state.token} />
+          : activeTab === 'accessBridge' && user.role === 'RECEPTION'
+            ? <AccessBridgePanel token={state.token} />
+            : roleView;
     content = <WorkspaceShell user={user} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => { state.logout(); setMode('KIOSK'); }} onChangePassword={() => setPasswordModal({ forced: false })}>{finalRoleView}</WorkspaceShell>;
   }
 

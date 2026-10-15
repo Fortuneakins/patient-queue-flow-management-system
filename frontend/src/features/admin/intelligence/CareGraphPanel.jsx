@@ -8,7 +8,7 @@ function defaultRole(index) { return ['RECEPTION', 'NURSE', 'DOCTOR', 'DOCTOR'][
 function defaultResource(index) { return index === 1 ? 'SERVICE' : index === 2 ? 'ROOM' : null; }
 const stageTone = status => ({ COMPLETED: 'green', READY: 'teal', IN_PROGRESS: 'orange', BLOCKED: 'red', PENDING: 'neutral' }[status] || 'neutral');
 
-export default function CareGraphPanel({ token }) {
+export default function CareGraphPanel({ token, canManage = false }) {
   const [pathways, setPathways] = useState([]);
   const [visits, setVisits] = useState([]);
   const [queueId, setQueueId] = useState('');
@@ -80,8 +80,8 @@ export default function CareGraphPanel({ token }) {
           {!pathways.length && <EmptyState title="No pathways found" message="Run database migrations 003 and later to initialise the clinic intelligence schema."/>}
         </div>
       </Card>
-      <div className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
-        <Card className="p-5">
+      <div className={canManage ? "grid gap-5 xl:grid-cols-[0.8fr_1.2fr]" : "grid gap-5"}>
+        {canManage && <Card className="p-5">
           <h3 className="font-display text-base font-bold">Create an operational pathway</h3><p className="mt-1 text-xs text-stone-500">Stages are ordered; defaults assign Reception, Nurse and Doctor responsibilities to the first four stages. Review before using in a real workflow.</p>
           <div className="mt-4 space-y-3">
             <Field label="Pathway code" required><input className={inputClass} maxLength={40} placeholder="E.G. FOLLOW_UP" value={form.pathway_code} onChange={e => setForm({ ...form, pathway_code: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '') })}/></Field>
@@ -90,14 +90,14 @@ export default function CareGraphPanel({ token }) {
             <Field label="Ordered stages" hint="One stage name per line; 2 to 15 stages." required><textarea className={inputClass + ' min-h-40'} value={form.stage_lines} onChange={e => setForm({ ...form, stage_lines: e.target.value })}/></Field>
             <Button onClick={create} disabled={busy}>{busy ? 'Creating…' : 'Create pathway'}</Button>
           </div>
-        </Card>
+        </Card>}
         <Card className="p-5">
           <h3 className="font-display text-base font-bold">Journey progress</h3><p className="mt-1 text-xs text-stone-500">Stage completion is role-checked server-side. Required predecessors must be completed before later stages start.</p>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className={canManage ? "mt-4 grid gap-3 md:grid-cols-2" : "mt-4"}>
             <Field label="Active queue visit"><select className={inputClass} value={queueId} onChange={e => setQueueId(e.target.value)}><option value="">Select queue visit</option>{visits.map(v => <option key={v.queue_id} value={v.queue_id}>#{v.ticket_number} · {v.status} · {v.priority_level ? 'Tier ' + v.priority_level : 'Untriaged'}</option>)}</select></Field>
-            <Field label="Assign pathway"><select className={inputClass} value={pathwayId} onChange={e => setPathwayId(e.target.value)}><option value="">Select pathway</option>{pathways.filter(p => p.is_active).map(p => <option key={p.pathway_id} value={p.pathway_id}>{p.name}</option>)}</select></Field>
+            {canManage && <Field label="Assign pathway"><select className={inputClass} value={pathwayId} onChange={e => setPathwayId(e.target.value)}><option value="">Select pathway</option>{pathways.filter(p => p.is_active).map(p => <option key={p.pathway_id} value={p.pathway_id}>{p.name}</option>)}</select></Field>}
           </div>
-          <div className="mt-3"><Button variant="secondary" onClick={assign} disabled={!queueId || !pathwayId}>Assign or confirm pathway</Button></div>
+          {canManage && <div className="mt-3"><Button variant="secondary" onClick={assign} disabled={!queueId || !pathwayId}>Assign or confirm pathway</Button></div>}
           {journey?.pathway && <div className="mt-5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="font-semibold">{journey.pathway.name}</div><div className="text-xs text-stone-500">Ticket #{journey.visit.ticket_number} · {journey.visit.visit_status}</div></div><Badge tone="teal">{journey.stages.filter(s => s.status === 'COMPLETED').length}/{journey.stages.length} complete</Badge></div>
             {journey.stages.map(stage => <div key={stage.stage_id} className="rounded-xl border border-stone-200 p-4">

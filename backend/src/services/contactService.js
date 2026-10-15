@@ -1,6 +1,7 @@
 const { query, withTransaction } = require('../db/pool');
 const { appendOperationalEvent } = require('./operationalEventService');
 const smsService = require('./smsService');
+const env = require('../config/env');
 
 const LANGUAGES = ['en','af','zu','xh','st','tn','nso','ts','ss','ve','nr'];
 const err = (message, status = 400) => Object.assign(new Error(message), { status });
@@ -50,12 +51,37 @@ async function updateContactPreferences(patientId, input, actorStaffId) {
   });
 }
 
+async function getCurrentWaitEstimate(patientId) {
+  const active = await query(
+    "SELECT COALESCE(priority_level,4)::int AS tier FROM queue_entries WHERE patient_id=$1 AND status='Waiting' ORDER BY queued_at DESC LIMIT 1",
+    [patientId]
+  );
+  if (!active.rows[0]) throw err('A current waiting visit is required for a wait estimate.', 409);
+  let response;
+  try {
+    response = await fetch(env.ANALYTICS_URL.replace(/\/$/, '') + '/api/predict', {
+      signal: AbortSignal.timeout(2000)
+    });
+  } catch (_error) {
+    throw err('The current wait estimate is unavailable. No estimate message was sent.', 503);
+  }
+  if (!response.ok) throw err('The current wait estimate is unavailable. No estimate message was sent.', 503);
+  let prediction;
+  try { prediction = await response.json(); }
+  catch (_error) { throw err('The current wait estimate is unavailable. No estimate message was sent.', 503); }
+  const wait = Number(prediction[String(active.rows[0].tier)]);
+  if (prediction.degraded || !Number.isFinite(wait) || wait < 0) {
+    throw err('The current wait estimate is unavailable. No estimate message was sent.', 503);
+  }
+  return Number(wait);
+}
+
 async function sendAccessUpdate(patientId, input, actorStaffId) {
   const patientIdNum = id(patientId, 'patient_id');
   const template = String(input.template_code || '').toUpperCase();
   if (!['WAIT_ESTIMATE','SERVICE_DELAY'].includes(template)) throw err('template_code must be WAIT_ESTIMATE or SERVICE_DELAY.');
-  const wait = template === 'WAIT_ESTIMATE' ? Number(input.wait_minutes) : null;
-  if (template === 'WAIT_ESTIMATE' && (!Number.isFinite(wait) || wait < 0 || wait > 1440)) throw err('wait_minutes must be between 0 and 1440.');
+  const providerReady = env.SMS_ENABLED && env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER;
+  const wait = template === 'WAIT_ESTIMATE' && providerReady ? await getCurrentWaitEstimate(patientIdNum) : null;
   const eligible = await query(
     'SELECT p.patient_id,p.contact_no,pref.preferred_channel,pref.contact_consent,pref.preferred_language_code ' +
     'FROM patients p JOIN patient_contact_preferences pref ON pref.patient_id=p.patient_id WHERE p.patient_id=$1',
@@ -79,7 +105,7 @@ async function sendAccessUpdate(patientId, input, actorStaffId) {
       eventType:'ACCESS_BRIDGE_MESSAGE_ATTEMPTED', entityType:'PATIENT_COMMUNICATION', entityId:saved.rows[0].communication_id,
       actorStaffId,toState:status,metadata:{ template_code:template, channel:'SMS' }
     });
-    return { ...saved.rows[0], language_used: patient.preferred_language_code === 'en' ? 'en' : 'en-fallback', translation_review_required: patient.preferred_language_code !== 'en' };
+    return { ...saved.rows[0], estimated_wait_minutes: template === 'WAIT_ESTIMATE' && status === 'SENT' ? wait : null, language_used: patient.preferred_language_code === 'en' ? 'en' : 'en-fallback', translation_review_required: patient.preferred_language_code !== 'en' };
   });
 }
 module.exports = { getContactPreferences, updateContactPreferences, sendAccessUpdate };

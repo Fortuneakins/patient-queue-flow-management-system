@@ -12,7 +12,6 @@ export default function AccessBridgePanel({ token }) {
   const [prefs, setPrefs] = useState(initial);
   const [loaded, setLoaded] = useState(false);
   const [template, setTemplate] = useState('SERVICE_DELAY');
-  const [wait, setWait] = useState('30');
   const [lastMessage, setLastMessage] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -48,7 +47,7 @@ export default function AccessBridgePanel({ token }) {
   async function send() {
     setError(''); setNotice(''); setBusy(true);
     try {
-      const result = await api.sendAccessUpdate(token, Number(patientId), { template_code: template, wait_minutes: Number(wait) });
+      const result = await api.sendAccessUpdate(token, Number(patientId), { template_code: template });
       setLastMessage(result);
       setNotice('Communication attempt recorded as ' + result.delivery_status + '.');
     } catch (e) { setError(e.message); }
@@ -73,12 +72,11 @@ export default function AccessBridgePanel({ token }) {
       <p className="mt-1 text-sm text-stone-500">Only non-clinical waiting or service-delay templates are permitted. No diagnosis, symptoms, triage priority or consultation notes are sent.</p>
       <div className="mt-4 space-y-3">
         <Field label="Message template"><select className={inputClass} value={template} onChange={e => setTemplate(e.target.value)}><option value="SERVICE_DELAY">Service delay notice</option><option value="WAIT_ESTIMATE">Estimated wait</option></select></Field>
-        {template === 'WAIT_ESTIMATE' && <Field label="Estimated wait (minutes)"><input className={inputClass} type="number" min="0" max="1440" value={wait} onChange={e => setWait(e.target.value)}/></Field>}
-        <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm text-stone-700">{template === 'WAIT_ESTIMATE' ? 'RMSH clinic update: your estimated wait is about ' + wait + ' minutes. This is an estimate and may change. Please alert clinic staff if your condition worsens.' : 'RMSH clinic update: there is an operational delay. This update is not a clinical assessment. Please alert clinic staff if your condition worsens.'}</div>
+        <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm text-stone-700">{template === 'WAIT_ESTIMATE' ? 'The server calculates the estimate from the patient’s current waiting visit and priority tier at send time. If the analytics estimate is unavailable, no wait-estimate message will be sent.' : 'RMSH clinic update: there is an operational delay. This update is not a clinical assessment. Please alert clinic staff if your condition worsens.'}</div>
         <Button onClick={send} disabled={busy || !loaded || !prefs.contact_consent || prefs.preferred_channel !== 'SMS'}>Send consented SMS update</Button>
         {!prefs.contact_consent && <p className="text-xs text-stone-500">Send is disabled until consent is explicitly recorded.</p>}
       </div>
-      {lastMessage && <div className="mt-4 rounded-xl border border-stone-200 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><strong>Attempt #{lastMessage.communication_id}</strong><Badge tone={lastMessage.delivery_status === 'SENT' ? 'green' : lastMessage.delivery_status === 'FAILED' ? 'red' : 'orange'}>{lastMessage.delivery_status}</Badge></div><p className="mt-2 text-xs text-stone-500">{lastMessage.status_message || 'No provider detail returned'} · {lastMessage.created_at ? new Date(lastMessage.created_at).toLocaleString() : ''}</p>{lastMessage.translation_review_required && <p className="mt-2 text-xs text-amber-700">English fallback was used; localised translation has not yet received review.</p>}</div>}
+      {lastMessage && <div className="mt-4 rounded-xl border border-stone-200 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><strong>Attempt #{lastMessage.communication_id}</strong><Badge tone={lastMessage.delivery_status === 'SENT' ? 'green' : lastMessage.delivery_status === 'FAILED' ? 'red' : 'orange'}>{lastMessage.delivery_status}</Badge></div><p className="mt-2 text-xs text-stone-500">{lastMessage.status_message || 'No provider detail returned'} · {lastMessage.created_at ? new Date(lastMessage.created_at).toLocaleString() : ''}</p>{lastMessage.estimated_wait_minutes !== null && lastMessage.estimated_wait_minutes !== undefined && <p className="mt-2 text-sm">Estimate used: <strong>{lastMessage.estimated_wait_minutes} minutes</strong></p>}{lastMessage.translation_review_required && <p className="mt-2 text-xs text-amber-700">English fallback was used; localised translation has not yet received review.</p>}</div>}
     </Card>
     {(error || notice) && <p role={error ? 'alert' : 'status'} className={`rounded-xl border p-3 text-sm xl:col-span-2 ${error ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{error || notice}</p>}
   </div>;

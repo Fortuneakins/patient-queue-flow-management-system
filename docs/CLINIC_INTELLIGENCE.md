@@ -9,7 +9,7 @@ On an existing local PQFMS checkout:
 1. Pull the feature branch and install dependencies with `npm ci --prefix backend` and `npm ci --prefix frontend`.
 2. Run the sorted database migrations using `scripts\\database.ps1`. The script applies migrations in filename order. Migration 003 creates the event log, pathway graph, resource registry, simulation/forecast tables, referral records, contact preferences and the constrained offline-sync receipt table. Migration 004 adds communication-delivery attempt records.
 3. Start PQFMS normally with `scripts\\start-all.ps1`.
-4. Sign in as an administrator and open **Clinic Intelligence** in the administrator sidebar.
+4. Sign in. Administrators can open **Clinic Intelligence** in the admin sidebar; Nurses and Doctors have CareGraph in their workspace, Doctors have Referral Relay, and Reception has Access Bridge contact preferences.
 
 Do not run the SQL migrations against a production database without a backup and review.
 
@@ -53,7 +53,7 @@ Stores a patient's preferred language/channel and an explicit contact-consent re
 
 ## API surface
 
-The new API is mounted at `/api/intelligence`. All endpoints require a valid bearer token and a password-ready account, plus the listed role below.
+The new API is mounted at `/api/intelligence`. All endpoints require a valid bearer token and a password-ready account, plus the listed role below. The UI exposes a subset of these routes in role-appropriate workspaces; the server remains the authority for all permissions.
 
 | Capability | Routes | Access |
 |---|---|---|
