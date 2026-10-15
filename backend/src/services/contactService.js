@@ -80,8 +80,6 @@ async function sendAccessUpdate(patientId, input, actorStaffId) {
   const patientIdNum = id(patientId, 'patient_id');
   const template = String(input.template_code || '').toUpperCase();
   if (!['WAIT_ESTIMATE','SERVICE_DELAY'].includes(template)) throw err('template_code must be WAIT_ESTIMATE or SERVICE_DELAY.');
-  const providerReady = env.SMS_ENABLED && env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER;
-  const wait = template === 'WAIT_ESTIMATE' && providerReady ? await getCurrentWaitEstimate(patientIdNum) : null;
   const eligible = await query(
     'SELECT p.patient_id,p.contact_no,pref.preferred_channel,pref.contact_consent,pref.preferred_language_code ' +
     'FROM patients p JOIN patient_contact_preferences pref ON pref.patient_id=p.patient_id WHERE p.patient_id=$1',
@@ -89,6 +87,8 @@ async function sendAccessUpdate(patientId, input, actorStaffId) {
   const patient = eligible.rows[0];
   if (!patient) throw err('Patient communication preferences are not configured.', 409);
   if (!patient.contact_consent || patient.preferred_channel !== 'SMS') throw err('Recorded SMS consent is required before sending an access update.', 403);
+  const providerReady = env.SMS_ENABLED && env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER;
+  const wait = template === 'WAIT_ESTIMATE' && providerReady ? await getCurrentWaitEstimate(patientIdNum) : null;
   let result;
   try {
     result = await smsService.sendAccessUpdate({ to:patient.contact_no, templateCode:template, waitMinutes:wait, language:patient.preferred_language_code });
