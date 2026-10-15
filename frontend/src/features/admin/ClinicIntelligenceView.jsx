@@ -45,7 +45,7 @@ export default function ClinicIntelligenceView({ token }) {
   const [labResult, setLabResult] = useState(null);
   const [resourceForm, setResourceForm] = useState({ resource_name: '', resource_type: 'STATION', status: 'AVAILABLE', capacity: 1, service_tags: 'consultation', is_critical: false });
   const [pathwayForm, setPathwayForm] = useState({ queue_id: '', template_id: '' });
-  const [templateBuilder, setTemplateBuilder] = useState({ name: '', description: '', stagesText: 'TRIAGE|Clinical triage|triage\\nCONSULTATION|Consultation|consultation\\nDISCHARGE|Discharge and next steps|registration' });
+  const [templateBuilder, setTemplateBuilder] = useState({ name: '', description: '', stagesText: 'TRIAGE|Clinical triage|triage\nCONSULTATION|Consultation|consultation\nDISCHARGE|Discharge and next steps|registration' });
   const [referralForm, setReferralForm] = useState({ queue_id: '', target_facility: '', target_service: '', reason: '' });
   const [patientId, setPatientId] = useState('');
   const [contactPreference, setContactPreference] = useState(null);
@@ -122,7 +122,7 @@ export default function ClinicIntelligenceView({ token }) {
 
   const createPathwayTemplate = event => {
     event.preventDefault();
-    const stages = templateBuilder.stagesText.split(/\\r?\\n/).map(line => line.trim()).filter(Boolean).map(line => {
+    const stages = templateBuilder.stagesText.split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
       const [stage_code = '', stage_name = '', tags = ''] = line.split('|');
       return { stage_code: stage_code.trim(), stage_name: stage_name.trim(), required_resource_tags: tags.split(',').map(tag => tag.trim()).filter(Boolean), is_required: true };
     });
