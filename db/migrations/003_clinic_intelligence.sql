@@ -40,14 +40,21 @@ DECLARE
   v_details JSONB;
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    v_type := 'visit_checked_in';
-    v_actor := NULL;
-    v_details := jsonb_build_object('status', NEW.status, 'priority_level', NEW.priority_level);
-  ELSIF OLD.priority_level IS DISTINCT FROM NEW.priority_level THEN
-    v_type := 'priority_assigned';
-    v_actor := NEW.triaged_by_staff_id;
-    v_details := jsonb_build_object('status', NEW.status, 'previous_priority', OLD.priority_level, 'priority_level', NEW.priority_level);
-  ELSIF OLD.status IS DISTINCT FROM NEW.status THEN
+    INSERT INTO operational_events(event_type, entity_type, entity_id, queue_id, actor_staff_id, event_source, details)
+    VALUES ('visit_checked_in', 'queue_entry', NEW.queue_id::TEXT, NEW.queue_id, NULL, 'SYSTEM',
+      jsonb_build_object('status', NEW.status, 'priority_level', NEW.priority_level));
+    RETURN NEW;
+  END IF;
+
+  -- A single update may change both fields. Record each transition independently
+  -- so the append-only timeline does not lose one part of a combined change.
+  IF OLD.priority_level IS DISTINCT FROM NEW.priority_level THEN
+    INSERT INTO operational_events(event_type, entity_type, entity_id, queue_id, actor_staff_id, event_source, details)
+    VALUES ('priority_assigned', 'queue_entry', NEW.queue_id::TEXT, NEW.queue_id, NEW.triaged_by_staff_id, 'SYSTEM',
+      jsonb_build_object('status', NEW.status, 'previous_priority', OLD.priority_level, 'priority_level', NEW.priority_level));
+  END IF;
+
+  IF OLD.status IS DISTINCT FROM NEW.status THEN
     v_actor := CASE
       WHEN NEW.status = 'In-Consultation' THEN NEW.called_by_staff_id
       WHEN NEW.status = 'Discharged' THEN NEW.discharged_by_staff_id
@@ -59,12 +66,10 @@ BEGIN
       ELSE 'visit_status_changed'
     END;
     v_details := jsonb_build_object('previous_status', OLD.status, 'status', NEW.status, 'priority_level', NEW.priority_level);
-  ELSE
-    RETURN NEW;
+    INSERT INTO operational_events(event_type, entity_type, entity_id, queue_id, actor_staff_id, event_source, details)
+    VALUES (v_type, 'queue_entry', NEW.queue_id::TEXT, NEW.queue_id, v_actor, 'SYSTEM', v_details);
   END IF;
 
-  INSERT INTO operational_events(event_type, entity_type, entity_id, queue_id, actor_staff_id, event_source, details)
-  VALUES (v_type, 'queue_entry', NEW.queue_id::TEXT, NEW.queue_id, v_actor, 'SYSTEM', v_details);
   RETURN NEW;
 END;
 $$;
