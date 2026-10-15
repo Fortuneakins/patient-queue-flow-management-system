@@ -8,7 +8,7 @@ function defaultRole(index) { return ['RECEPTION', 'NURSE', 'DOCTOR', 'DOCTOR'][
 function defaultResource(index) { return index === 1 ? 'SERVICE' : index === 2 ? 'ROOM' : null; }
 const stageTone = status => ({ COMPLETED: 'green', READY: 'teal', IN_PROGRESS: 'orange', BLOCKED: 'red', PENDING: 'neutral' }[status] || 'neutral');
 
-export default function CareGraphPanel({ token, canManage = false }) {
+export default function CareGraphPanel({ token, canManage = false, currentRole = null }) {
   const [pathways, setPathways] = useState([]);
   const [visits, setVisits] = useState([]);
   const [queueId, setQueueId] = useState('');
@@ -59,6 +59,8 @@ export default function CareGraphPanel({ token, canManage = false }) {
       setNotice('Pathway assigned. Existing progress is preserved unless no stages have started.');
     } catch (e) { setError(e.message); }
   }
+  const canActOnStage = stage => canManage || !stage.required_role || stage.required_role === currentRole;
+
   async function stageAction(stage, status) {
     setError(''); setNotice('');
     try {
@@ -102,7 +104,7 @@ export default function CareGraphPanel({ token, canManage = false }) {
             <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="font-semibold">{journey.pathway.name}</div><div className="text-xs text-stone-500">Ticket #{journey.visit.ticket_number} · {journey.visit.visit_status}</div></div><Badge tone="teal">{journey.stages.filter(s => s.status === 'COMPLETED').length}/{journey.stages.length} complete</Badge></div>
             {journey.stages.map(stage => <div key={stage.stage_id} className="rounded-xl border border-stone-200 p-4">
               <div className="flex flex-wrap items-start justify-between gap-2"><div className="flex min-w-0 gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-stone-100 text-xs font-bold">{stage.sequence_no}</span><div><div className="font-semibold">{stage.name}</div><div className="mt-1 text-xs text-stone-500">{stage.required_role || 'Any authorised role'}{stage.resource_type ? ' · Resource: ' + stage.resource_type : ''}</div>{stage.status === 'BLOCKED' && <p className="mt-1 text-xs text-red-700">{stage.block_reason}</p>}</div></div><Badge tone={stageTone(stage.status)}>{stage.status.replaceAll('_', ' ')}</Badge></div>
-              {journey.visit.visit_status !== 'Discharged' && <div className="mt-3 flex flex-wrap gap-2">{stage.status === 'READY' && <Button onClick={() => stageAction(stage, 'IN_PROGRESS')}>Start stage</Button>}{stage.status === 'IN_PROGRESS' && <Button variant="success" onClick={() => stageAction(stage, 'COMPLETED')}>Complete stage</Button>}{['PENDING','BLOCKED'].includes(stage.status) && <div className="text-xs text-stone-500">Waiting for the required earlier stages.</div>}{!['COMPLETED','IN_PROGRESS','READY'].includes(stage.status) && <div className="basis-full"><input className={inputClass} maxLength={300} placeholder="Short, non-clinical reason for blocking a stage" value={blockReason} onChange={e => setBlockReason(e.target.value)}/><Button className="mt-2" variant="secondary" onClick={() => stageAction(stage, 'BLOCKED')} disabled={blockReason.trim().length < 3}>Mark blocked</Button></div>}</div>}
+              {journey.visit.visit_status !== 'Discharged' && <div className="mt-3 flex flex-wrap gap-2">{stage.status === 'READY' && canActOnStage(stage) && <Button onClick={() => stageAction(stage, 'IN_PROGRESS')}>Start stage</Button>}{stage.status === 'IN_PROGRESS' && canActOnStage(stage) && <Button variant="success" onClick={() => stageAction(stage, 'COMPLETED')}>Complete stage</Button>}{['PENDING','BLOCKED'].includes(stage.status) && <div className="text-xs text-stone-500">Waiting for the required earlier stages.</div>}{!canActOnStage(stage) && ['READY','IN_PROGRESS'].includes(stage.status) && <div className="text-xs text-stone-500">This stage is reserved for {stage.required_role} staff.</div>}{canActOnStage(stage) && !['COMPLETED','IN_PROGRESS','READY'].includes(stage.status) && <div className="basis-full"><input className={inputClass} maxLength={300} placeholder="Short, non-clinical reason for blocking a stage" value={blockReason} onChange={e => setBlockReason(e.target.value)}/><Button className="mt-2" variant="secondary" onClick={() => stageAction(stage, 'BLOCKED')} disabled={blockReason.trim().length < 3}>Mark blocked</Button></div>}</div>}
             </div>)}
           </div>}
           {journey && !journey.pathway && <EmptyState title="No pathway assigned" message="Select an active pathway and assign it to this queue visit."/>}

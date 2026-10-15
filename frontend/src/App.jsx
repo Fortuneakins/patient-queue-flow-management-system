@@ -184,7 +184,7 @@ function App() {
     const finalRoleView = activeTab === 'staffDirectory' && user.role !== 'ADMIN' && user.extra_permissions?.includes('VIEW_STAFF_DIRECTORY')
       ? <StaffDirectoryView staff={state.staff} />
       : activeTab === 'careGraph' && ['NURSE', 'DOCTOR'].includes(user.role)
-        ? <CareGraphPanel token={state.token} />
+        ? <CareGraphPanel token={state.token} currentRole={user.role} />
         : activeTab === 'referrals' && user.role === 'DOCTOR'
           ? <ReferralRelayPanel token={state.token} />
           : activeTab === 'accessBridge' && user.role === 'RECEPTION'
