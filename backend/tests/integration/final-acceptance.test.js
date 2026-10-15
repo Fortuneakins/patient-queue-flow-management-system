@@ -429,5 +429,15 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
       assert.ok([200, 204].includes(preflight.response.status));
       assert.match(preflight.response.headers.get('access-control-allow-methods') || '', /PATCH/);
     });
+
+    await t.test('Twilio inbound command endpoint stays disabled without provider configuration', async () => {
+      const response = await request('/api/webhooks/twilio/inbound', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ From: '+27820000001', Body: 'STOP', MessageSid: 'SM' + 'a'.repeat(32) }).toString()
+      });
+      assert.equal(response.response.status, 503);
+      assert.match(response.body.error, /not configured/i);
+    });
   });
 }

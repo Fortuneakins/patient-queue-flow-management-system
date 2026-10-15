@@ -12,7 +12,7 @@ This change introduces the first integrated foundation for Clinic Intelligence o
 - **Prediction Truth Ledger:** versioned waiting-time forecasts and an authorised, auditable way to record a comparable observed outcome.
 - **Patient Fairness Sentinel:** aggregate waiting-time dispersion by existing priority group; it never changes triage or makes clinical decisions.
 - **Referral Relay:** status-controlled referral workflow with append-only state-change events.
-- **Access Bridge foundation:** explicit SMS consent, masked contact lookup and a templated wait-estimate message path. Free-text health messages are not supported.
+- **Access Bridge foundation:** explicit SMS consent, masked contact lookup, a templated wait-estimate message path and an optional Twilio-signed inbound START/STOP/HELP command endpoint. STOP withdraws consent for all records matching a shared number; START is only accepted when exactly one patient record matches. Raw inbound message text and phone numbers are not written to the operational event log. Provider configuration is required.
 - **Continuity Mode foundation:** an IndexedDB outbox for non-clinical operational incidents and resource observations. Sync is idempotent; reusing an event ID with a different payload is rejected, and resource observations must refer to an existing resource. It does not allow offline clinical queue changes, triage changes, or storing patient-identifying details.
 
 ## Simulation assumptions and safety
@@ -27,7 +27,7 @@ Forecast outcomes are manually recorded. A captured forecast is not automaticall
 
 The following require further integration and validation work and are not claimed as complete by this tranche:
 
-- Real two-way USSD/voice/SMS interaction, carrier callbacks and delivery receipts.
+- USSD/voice interaction and provider delivery callbacks/receipts remain external follow-up work. The inbound SMS commands are implemented, but must be configured and tested against a real Twilio webhook before deployment.
 - Offline check-in or offline clinical workflow mutation, encrypted clinical cache and conflict resolution.
 - Real cross-clinic interoperability, tenancy enforcement across existing patient/staff tables, or federated learning.
 - Production-grade predictive model calibration, clinical validation, or recommendations that autonomously change staffing/queue order.
