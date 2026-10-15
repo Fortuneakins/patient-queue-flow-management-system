@@ -334,5 +334,39 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
       assert.equal(allowed.response.status, 200);
       assert.equal(typeof allowed.body.on_duty, 'number');
     });
+
+    await t.test('clinic intelligence protects administrator metrics and serves operational views', async () => {
+      const unauthenticated = await request('/api/intelligence/resources');
+      assert.equal(unauthenticated.response.status, 401);
+
+      const receptionSummary = await request('/api/intelligence/summary', { headers: auth(tokens.reception) });
+      assert.equal(receptionSummary.response.status, 403);
+
+      const summary = await request('/api/intelligence/summary', { headers: auth(tokens.admin) });
+      assert.equal(summary.response.status, 200, JSON.stringify(summary.body));
+      assert.ok(summary.body.context);
+      assert.ok(Array.isArray(summary.body.resources));
+      assert.ok(summary.body.fairness);
+      assert.ok(Array.isArray(summary.body.recent_events));
+
+      const resources = await request('/api/intelligence/resources', { headers: auth(tokens.nurse) });
+      assert.equal(resources.response.status, 200);
+      assert.ok(resources.body.some(resource => resource.resource_name === 'Consultation station 1'));
+
+      const pathways = await request('/api/intelligence/pathways', { headers: auth(tokens.nurse) });
+      assert.equal(pathways.response.status, 200);
+      assert.ok(pathways.body.some(pathway => pathway.name === 'Standard outpatient journey'));
+
+      const fairness = await request('/api/intelligence/fairness', { headers: auth(tokens.nurse) });
+      assert.equal(fairness.response.status, 200);
+      assert.equal(typeof fairness.body.note, 'string');
+
+      const preflight = await request('/api/intelligence/resources', {
+        method: 'OPTIONS',
+        headers: { Origin: 'http://localhost:5173', 'Access-Control-Request-Method': 'PATCH' }
+      });
+      assert.ok([200, 204].includes(preflight.response.status));
+      assert.match(preflight.response.headers.get('access-control-allow-methods') || '', /PATCH/);
+    });
   });
 }

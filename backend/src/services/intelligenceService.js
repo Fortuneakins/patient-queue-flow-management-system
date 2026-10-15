@@ -107,7 +107,7 @@ async function getOperationalContext() {
     query("SELECT COUNT(*) FILTER (WHERE status = 'Waiting')::int AS waiting, COUNT(*) FILTER (WHERE status = 'In-Consultation')::int AS in_consultation, COUNT(*) FILTER (WHERE status = 'Discharged' AND discharged_at >= NOW() - INTERVAL '24 hours')::int AS discharged_24h FROM queue_entries"),
     query("SELECT COUNT(*) FILTER (WHERE status = 'AVAILABLE' AND resource_type IN ('STATION','ROOM') AND service_tags && ARRAY['consultation','general']::TEXT[])::int AS consultation_stations, COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status = 'UNAVAILABLE')::int AS unavailable FROM clinic_resources"),
     query("SELECT COUNT(DISTINCT s.staff_id)::int AS doctors_on_duty FROM shifts s JOIN clinic_staff cs ON cs.staff_id = s.staff_id WHERE cs.role = 'DOCTOR' AND cs.is_active = TRUE AND s.shift_date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date AND (NOW() AT TIME ZONE 'Africa/Johannesburg')::time BETWEEN s.start_time AND s.end_time"),
-    query("SELECT COUNT(*)::int AS sample_size, percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (discharged_at - called_at)) / 60.0) AS median_service_minutes FROM queue_entries WHERE status = 'Discharged' AND called_at IS NOT NULL AND discharged_at IS NOT NULL AND discharged_at >= NOW() - INTERVAL '90 days' AND discharged_at >= called_at")
+    query("SELECT COUNT(*)::int AS sample_size, percentile_cont(0.5) WITHIN GROUP (ORDER BY (EXTRACT(EPOCH FROM (discharged_at - called_at)) / 60.0)::double precision) AS median_service_minutes FROM queue_entries WHERE status = 'Discharged' AND called_at IS NOT NULL AND discharged_at IS NOT NULL AND discharged_at >= NOW() - INTERVAL '90 days' AND discharged_at >= called_at")
   ]);
   const row = queue.rows[0];
   const resourceCount = Number(resources.rows[0].consultation_stations);
@@ -136,7 +136,7 @@ async function getOperationalContext() {
 
 async function getFairnessSnapshot() {
   const result = await query(
-    "SELECT COALESCE(priority_level::TEXT, 'Untriaged') AS priority_group, COUNT(*)::int AS waiting_count, ROUND((MIN(EXTRACT(EPOCH FROM (NOW()-queued_at))/60.0))::numeric,2) AS newest_wait_minutes, ROUND((MAX(EXTRACT(EPOCH FROM (NOW()-queued_at))/60.0))::numeric,2) AS oldest_wait_minutes, ROUND((percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (NOW()-queued_at))/60.0))::numeric,2) AS median_wait_minutes, ROUND((percentile_cont(0.9) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (NOW()-queued_at))/60.0))::numeric,2) AS p90_wait_minutes FROM queue_entries WHERE status = 'Waiting' GROUP BY priority_level ORDER BY priority_level NULLS LAST"
+    "SELECT COALESCE(priority_level::TEXT, 'Untriaged') AS priority_group, COUNT(*)::int AS waiting_count, ROUND((MIN(EXTRACT(EPOCH FROM (NOW()-queued_at))/60.0))::numeric,2) AS newest_wait_minutes, ROUND((MAX(EXTRACT(EPOCH FROM (NOW()-queued_at))/60.0))::numeric,2) AS oldest_wait_minutes, ROUND((percentile_cont(0.5) WITHIN GROUP (ORDER BY (EXTRACT(EPOCH FROM (NOW()-queued_at))/60.0)::double precision))::numeric,2) AS median_wait_minutes, ROUND((percentile_cont(0.9) WITHIN GROUP (ORDER BY (EXTRACT(EPOCH FROM (NOW()-queued_at))/60.0)::double precision))::numeric,2) AS p90_wait_minutes FROM queue_entries WHERE status = 'Waiting' GROUP BY priority_level ORDER BY priority_level NULLS LAST"
   );
   const groups = result.rows.map(row => {
     const count = Number(row.waiting_count);
@@ -178,7 +178,7 @@ async function listPathways() {
 
 async function listPathwayInstances() {
   const result = await query(
-    "SELECT i.instance_id, i.queue_id, q.ticket_number, q.status AS queue_status, i.template_id, t.name AS template_name, i.status, i.created_at, i.completed_at, COALESCE((SELECT jsonb_agg(jsonb_build_object('instance_stage_id', x.instance_stage_id, 'stage_id', s.stage_id, 'stage_order', s.stage_order, 'stage_code', s.stage_code, 'stage_name', s.stage_name, 'status', x.status, 'started_at', x.started_at, 'completed_at', x.completed_at, 'is_required', s.is_required) ORDER BY s.stage_order) FROM care_pathway_instance_stages x JOIN care_pathway_stages s ON s.stage_id = x.stage_id WHERE x.instance_id = i.instance_id), '[]'::jsonb) AS stages FROM care_pathway_instances i JOIN queue_entries q ON q.queue_id=i.queue_id JOIN care_pathway_templates t ON t.template_id=i.template_id ORDER BY i.created_at DESC LIMIT 100"
+    "SELECT i.instance_id, i.queue_id, q.ticket_number, q.status AS queue_status, i.template_id, t.name AS template_name, i.status, i.created_at, i.completed_at, COALESCE((SELECT jsonb_agg(jsonb_build_object('instance_stage_id', x.instance_stage_id, 'stage_id', s.stage_id, 'stage_order', s.stage_order, 'stage_code', s.stage_code, 'stage_name', s.stage_name, 'required_resource_tags', s.required_resource_tags, 'status', x.status, 'started_at', x.started_at, 'completed_at', x.completed_at, 'is_required', s.is_required) ORDER BY s.stage_order) FROM care_pathway_instance_stages x JOIN care_pathway_stages s ON s.stage_id = x.stage_id WHERE x.instance_id = i.instance_id), '[]'::jsonb) AS stages FROM care_pathway_instances i JOIN queue_entries q ON q.queue_id=i.queue_id JOIN care_pathway_templates t ON t.template_id=i.template_id ORDER BY i.created_at DESC LIMIT 100"
   );
   return result.rows;
 }
@@ -211,19 +211,33 @@ async function updatePathwayStage({ instanceId, instanceStageId, status, actorSt
   if (!['IN_PROGRESS', 'COMPLETED'].includes(target)) throw badRequest('Stage status must be IN_PROGRESS or COMPLETED.');
   return withTransaction(async client => {
     const result = await client.query(
-      'SELECT x.instance_stage_id, x.instance_id, x.status, i.queue_id, i.status AS instance_status, s.stage_id, s.stage_order, s.stage_code, s.stage_name, s.is_required FROM care_pathway_instance_stages x JOIN care_pathway_instances i ON i.instance_id=x.instance_id JOIN care_pathway_stages s ON s.stage_id=x.stage_id WHERE x.instance_id=$1 AND x.instance_stage_id=$2 FOR UPDATE OF x',
+      'SELECT x.instance_stage_id, x.instance_id, x.status, i.queue_id, i.status AS instance_status, s.stage_id, s.stage_order, s.stage_code, s.stage_name, s.required_resource_tags, s.is_required FROM care_pathway_instance_stages x JOIN care_pathway_instances i ON i.instance_id=x.instance_id JOIN care_pathway_stages s ON s.stage_id=x.stage_id WHERE x.instance_id=$1 AND x.instance_stage_id=$2 FOR UPDATE OF x',
       [iid, sid]
     );
     const current = result.rows[0];
     if (!current) throw badRequest('Pathway stage not found.', 404);
     if (current.instance_status !== 'IN_PROGRESS') throw badRequest('This pathway is not active.', 409);
-    if (target === 'IN_PROGRESS' && current.status !== 'PENDING') throw badRequest('Only a pending stage can be started.', 409);
+    if (target === 'IN_PROGRESS' && !['PENDING', 'BLOCKED'].includes(current.status)) throw badRequest('Only a pending or blocked stage can be started.', 409);
     if (target === 'COMPLETED' && current.status !== 'IN_PROGRESS') throw badRequest('Start a stage before marking it complete.', 409);
     const predecessors = await client.query(
       "SELECT COUNT(*)::int AS incomplete FROM care_pathway_instance_stages x JOIN care_pathway_stages s ON s.stage_id=x.stage_id WHERE x.instance_id=$1 AND s.stage_order < $2 AND s.is_required=TRUE AND x.status <> 'COMPLETED'",
       [iid, current.stage_order]
     );
     if (Number(predecessors.rows[0].incomplete) > 0) throw badRequest('Complete all required earlier stages before progressing this stage.', 409);
+    if (target === 'IN_PROGRESS' && current.required_resource_tags?.length) {
+      const available = await client.query(
+        "SELECT COALESCE(SUM(capacity), 0)::int AS capacity FROM clinic_resources WHERE status = 'AVAILABLE' AND service_tags && $1::TEXT[]",
+        [current.required_resource_tags]
+      );
+      if (Number(available.rows[0].capacity) < 1) {
+        const blocked = await client.query(
+          "UPDATE care_pathway_instance_stages SET status='BLOCKED', started_at=NULL, completed_at=NULL, updated_by_staff_id=$1, updated_at=NOW() WHERE instance_stage_id=$2 RETURNING instance_stage_id, instance_id, status, started_at, completed_at, updated_at",
+          [actorStaffId, sid]
+        );
+        await recordEvent(client, { eventType: 'pathway_stage_blocked', entityType: 'care_pathway_instance_stage', entityId: sid, queueId: current.queue_id, actorStaffId, details: { instance_id: iid, stage_code: current.stage_code, reason: 'required_resource_unavailable', required_resource_tags: current.required_resource_tags } });
+        return { ...blocked.rows[0], blocked_reason: 'No available resource matches the required service tags.' };
+      }
+    }
     const updated = await client.query(
       "UPDATE care_pathway_instance_stages SET status=$1, started_at=CASE WHEN $1='IN_PROGRESS' THEN COALESCE(started_at,NOW()) ELSE started_at END, completed_at=CASE WHEN $1='COMPLETED' THEN NOW() ELSE NULL END, updated_by_staff_id=$2, updated_at=NOW() WHERE instance_stage_id=$3 RETURNING instance_stage_id, instance_id, status, started_at, completed_at, updated_at",
       [target, actorStaffId, sid]
