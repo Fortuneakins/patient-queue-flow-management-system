@@ -34,6 +34,8 @@ function StatusBadge({ status }) {
 export default function ClinicIntelligenceView({ token }) {
   const [section, setSection] = useState('overview');
   const [data, setData] = useState(INITIAL);
+  const [eventWindow, setEventWindow] = useState('24h');
+  const [expandedEventId, setExpandedEventId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
@@ -43,6 +45,7 @@ export default function ClinicIntelligenceView({ token }) {
   const [labResult, setLabResult] = useState(null);
   const [resourceForm, setResourceForm] = useState({ resource_name: '', resource_type: 'STATION', status: 'AVAILABLE', capacity: 1, service_tags: 'consultation', is_critical: false });
   const [pathwayForm, setPathwayForm] = useState({ queue_id: '', template_id: '' });
+  const [templateBuilder, setTemplateBuilder] = useState({ name: '', description: '', stagesText: 'TRIAGE|Clinical triage|triage\\nCONSULTATION|Consultation|consultation\\nDISCHARGE|Discharge and next steps|registration' });
   const [referralForm, setReferralForm] = useState({ queue_id: '', target_facility: '', target_service: '', reason: '' });
   const [patientId, setPatientId] = useState('');
   const [contactPreference, setContactPreference] = useState(null);
@@ -53,12 +56,18 @@ export default function ClinicIntelligenceView({ token }) {
   const [observedResource, setObservedResource] = useState({ resource_id: '', observed_status: 'UNAVAILABLE' });
   const [forecastActuals, setForecastActuals] = useState({});
 
+  const eventSince = useMemo(() => {
+    if (eventWindow === 'all') return undefined;
+    const hours = eventWindow === '7d' ? 168 : 24;
+    return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  }, [eventWindow]);
+
   const loadData = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
       const results = await Promise.all([
         api.intelligenceSummary(token),
-        api.intelligenceEvents(token, 40),
+        api.intelligenceEvents(token, 200, { since: eventSince }),
         api.intelligenceResources(token),
         api.intelligenceQueue(token),
         api.carePathways(token),
@@ -78,7 +87,7 @@ export default function ClinicIntelligenceView({ token }) {
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [token]);
+  }, [token, eventSince]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -109,6 +118,18 @@ export default function ClinicIntelligenceView({ token }) {
       await api.createIntelligenceResource(token, { ...resourceForm, capacity: Number(resourceForm.capacity), service_tags: tags });
       setResourceForm({ resource_name: '', resource_type: 'STATION', status: 'AVAILABLE', capacity: 1, service_tags: 'consultation', is_critical: false });
     }, 'Resource added to the operational inventory.');
+  };
+
+  const createPathwayTemplate = event => {
+    event.preventDefault();
+    const stages = templateBuilder.stagesText.split(/\\r?\\n/).map(line => line.trim()).filter(Boolean).map(line => {
+      const [stage_code = '', stage_name = '', tags = ''] = line.split('|');
+      return { stage_code: stage_code.trim(), stage_name: stage_name.trim(), required_resource_tags: tags.split(',').map(tag => tag.trim()).filter(Boolean), is_required: true };
+    });
+    execute(async () => {
+      await api.createCarePathwayTemplate(token, { name: templateBuilder.name, description: templateBuilder.description, stages });
+      setTemplateBuilder(current => ({ ...current, name: '', description: '' }));
+    }, 'Care pathway template created with ordered, resource-aware stages.');
   };
 
   const startPathway = event => {
@@ -205,7 +226,7 @@ export default function ClinicIntelligenceView({ token }) {
         <Card className="p-5"><SectionTitle title="Resource availability" description="Registered operational resources and their state."/><div className="mt-4 space-y-3">{data.resources.map(resource => <div key={resource.resource_id} className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-3 last:border-0"><div><p className="font-semibold text-stone-800">{resource.resource_name}</p><p className="text-xs text-stone-500">{resource.resource_type} · capacity {resource.capacity}</p></div><StatusBadge status={resource.status}/></div>)}{!data.resources.length && <EmptyState title="No resources" message="Add the clinic’s service resources in Resource twin."/>}</div></Card>
         <Card className="p-5"><SectionTitle title="Delay signals by priority" description="Group-level waiting-time dispersion only. This does not determine clinical urgency."/><div className="mt-4 space-y-3">{(data.fairness?.groups || []).map(group => <div key={group.priority_group} className="rounded-xl border border-stone-100 p-3"><div className="flex items-center justify-between gap-2"><strong className="text-sm">Tier {group.priority_group}</strong>{group.operational_delay_signal ? <Badge tone="orange">Review delay spread</Badge> : <Badge tone="neutral">No signal</Badge>}</div><div className="mt-2 grid grid-cols-3 gap-2 text-xs"><span>Waiting<strong className="block text-base text-stone-800">{group.waiting_count}</strong></span><span>Median<strong className="block text-base text-stone-800">{minutes(group.median_wait_minutes)}</strong></span><span>P90<strong className="block text-base text-stone-800">{minutes(group.p90_wait_minutes)}</strong></span></div></div>)}<p className="text-xs text-stone-500">{data.fairness?.note}</p></div></Card>
       </div>
-      <Card className="p-5"><SectionTitle title="Flight Recorder" description="Recent events omit patient names, identification numbers, symptoms and consultation notes."/><div className="mt-4 divide-y divide-stone-100">{data.events.slice(0, 12).map(item => <div key={item.event_id} className="flex flex-wrap items-start justify-between gap-2 py-3"><div><p className="font-semibold text-stone-800">{item.event_type.replaceAll('_', ' ')}</p><p className="text-xs text-stone-500">{item.entity_type} · {item.entity_id}{item.actor_staff_id ? ' · staff #' + item.actor_staff_id : ''}</p></div><span className="text-xs text-stone-500">{timeLabel(item.event_at)}</span></div>)}{!data.events.length && <EmptyState title="Event history is ready" message="Queue activity will be recorded as new visits and lifecycle changes occur."/>}</div></Card>
+      <Card className="p-5"><SectionTitle title="Flight Recorder" description="Filter and inspect the operational timeline. Event details omit patient names, identification numbers, symptoms and consultation notes." action={<select aria-label="Flight Recorder time window" className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm" value={eventWindow} onChange={event => setEventWindow(event.target.value)}><option value="24h">Past 24 hours</option><option value="7d">Past 7 days</option><option value="all">Latest 200 events</option></select>}/><p className="mt-2 text-xs text-stone-500">{data.events.length} event(s) returned; select any event to inspect its non-identifying details.</p><div className="mt-4 max-h-[36rem] divide-y divide-stone-100 overflow-y-auto">{data.events.map(item => <div key={item.event_id} className="py-3"><button type="button" aria-expanded={expandedEventId === item.event_id} onClick={() => setExpandedEventId(current => current === item.event_id ? null : item.event_id)} className="flex w-full flex-wrap items-start justify-between gap-2 text-left"><div><p className="font-semibold text-stone-800">{item.event_type.replaceAll('_', ' ')}</p><p className="text-xs text-stone-500">{item.entity_type} · {item.entity_id}{item.actor_staff_id ? ' · staff #' + item.actor_staff_id : ''}</p></div><span className="text-xs text-stone-500">{timeLabel(item.event_at)}</span></button>{expandedEventId === item.event_id && <pre className="mt-2 overflow-x-auto rounded-lg bg-stone-50 p-3 text-xs text-stone-700">{JSON.stringify(item.details || {}, null, 2)}</pre>}</div>)}{!data.events.length && <EmptyState title="No events in this window" message="Choose a wider time window or use the system to record more operational events."/>}</div></Card>
     </>}
 
     {section === 'flow' && <>
@@ -224,7 +245,8 @@ export default function ClinicIntelligenceView({ token }) {
     </>}
 
     {section === 'pathways' && <>
-      <SectionTitle title="CareGraph pathway tracking" description="Coordinate operational stages for active visits. These stages do not prescribe or approve clinical treatment."/>
+      <SectionTitle title="CareGraph pathway tracking" description="Create ordered pathway templates, then track stages and required resource dependencies. These stages do not prescribe or approve clinical treatment."/>
+      <Card className="p-5"><h3 className="font-display text-lg font-bold">Pathway template builder</h3><p className="mt-1 text-sm text-stone-500">Enter one stage per line as STAGE_CODE | Stage name | required resource tags (comma-separated).</p><form className="mt-4 grid gap-4 md:grid-cols-2" onSubmit={createPathwayTemplate}><Field label="Template name" required><input className={inputClass} required maxLength="120" value={templateBuilder.name} onChange={event => setTemplateBuilder(current => ({ ...current, name: event.target.value }))}/></Field><Field label="Description"><input className={inputClass} maxLength="500" value={templateBuilder.description} onChange={event => setTemplateBuilder(current => ({ ...current, description: event.target.value }))}/></Field><div className="md:col-span-2"><Field label="Ordered stages" required><textarea className={inputClass} rows="5" required value={templateBuilder.stagesText} onChange={event => setTemplateBuilder(current => ({ ...current, stagesText: event.target.value }))}/></Field><p className="mt-2 text-xs text-stone-500">Stage codes must be unique. Required resource tags are checked against available resources when a stage starts.</p></div><div className="md:col-span-2"><Button type="submit" disabled={working || !templateBuilder.name.trim()}>Create pathway template</Button></div></form></Card>
       <Card className="p-5"><form className="grid gap-4 md:grid-cols-3" onSubmit={startPathway}><Field label="Active visit" required><select className={inputClass} required value={pathwayForm.queue_id} onChange={e => setPathwayForm(p => ({ ...p, queue_id: e.target.value }))}><option value="">Select ticket</option>{queueOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field><Field label="Workflow template" required><select className={inputClass} required value={pathwayForm.template_id} onChange={e => setPathwayForm(p => ({ ...p, template_id: e.target.value }))}><option value="">Select template</option>{data.pathways.map(item => <option key={item.template_id} value={item.template_id}>{item.name}</option>)}</select></Field><div className="flex items-end"><Button type="submit" disabled={working || !pathwayForm.queue_id || !pathwayForm.template_id}>Start pathway</Button></div></form></Card>
       <div className="space-y-4">{data.instances.map(instance => <Card key={instance.instance_id} className="p-5"><div className="flex flex-wrap items-start justify-between gap-2"><div><h3 className="font-bold">{instance.ticket_number} · {instance.template_name}</h3><p className="text-xs text-stone-500">Opened {timeLabel(instance.created_at)}</p></div><StatusBadge status={instance.status}/></div><div className="mt-4 grid gap-3 md:grid-cols-3">{instance.stages.map(stage => <div key={stage.instance_stage_id} className="rounded-xl border border-stone-200 p-3"><p className="text-xs text-stone-500">Stage {stage.stage_order}</p><p className="mt-1 font-semibold">{stage.stage_name}</p><p className="mt-1 text-xs text-stone-500">Requires: {(stage.required_resource_tags || []).join(', ') || 'no tagged resource'}</p><div className="mt-2"><StatusBadge status={stage.status}/></div>{instance.status === 'IN_PROGRESS' && <div className="mt-3">{(stage.status === 'PENDING' || stage.status === 'BLOCKED') ? <Button className="w-full" variant="secondary" disabled={working} onClick={() => execute(async () => api.updatePathwayStage(token, instance.instance_id, stage.instance_stage_id, { status: 'IN_PROGRESS' }), result => result.status === 'BLOCKED' ? result.blocked_reason || 'Stage blocked by unavailable resources.' : 'Stage started.')}>{stage.status === 'BLOCKED' ? 'Retry stage' : 'Start stage'}</Button> : stage.status === 'IN_PROGRESS' ? <Button className="w-full" disabled={working} onClick={() => execute(async () => { await api.updatePathwayStage(token, instance.instance_id, stage.instance_stage_id, { status: 'COMPLETED' }); }, 'Stage completion recorded.')}>Complete stage</Button> : <p className="text-xs text-emerald-700">Completed {timeLabel(stage.completed_at)}</p>}</div>}</div>)}</div></Card>)}{!data.instances.length && <EmptyState title="No tracked pathways" message="Select an active visit and a template to begin stage tracking."/>}</div>
     </>}

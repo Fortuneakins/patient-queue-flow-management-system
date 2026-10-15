@@ -357,6 +357,17 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
       assert.equal(pathways.response.status, 200);
       assert.ok(pathways.body.some(pathway => pathway.name === 'Standard outpatient journey'));
 
+      const timeline = await request('/api/intelligence/events?limit=20&since=2099-01-01T00%3A00%3A00.000Z', { headers: auth(tokens.admin) });
+      assert.equal(timeline.response.status, 200);
+      assert.deepEqual(timeline.body, []);
+
+      const invalidTemplate = await request('/api/intelligence/pathways', {
+        method: 'POST',
+        headers: auth(tokens.admin),
+        body: JSON.stringify({ name: 'Invalid empty pathway', description: '', stages: [] })
+      });
+      assert.equal(invalidTemplate.response.status, 400);
+
       const fairness = await request('/api/intelligence/fairness', { headers: auth(tokens.nurse) });
       assert.equal(fairness.response.status, 200);
       assert.equal(typeof fairness.body.note, 'string');

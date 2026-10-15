@@ -75,12 +75,19 @@ export const api = {
   predictions: () => request(`${ANALYTICS_BASE_URL}/api/predict`),
 
   intelligenceSummary: token => request('/api/intelligence/summary', authOptions(token)),
-  intelligenceEvents: (token, limit = 40) => request('/api/intelligence/events?limit=' + limit, authOptions(token)),
+  intelligenceEvents: (token, limit = 200, filters = {}) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (filters.since) params.set('since', filters.since);
+    if (filters.until) params.set('until', filters.until);
+    if (filters.event_type) params.set('event_type', filters.event_type);
+    return request('/api/intelligence/events?' + params.toString(), authOptions(token));
+  },
   intelligenceResources: token => request('/api/intelligence/resources', authOptions(token)),
   createIntelligenceResource: (token, body) => request('/api/intelligence/resources', authJsonOptions(token, body)),
   updateIntelligenceResource: (token, id, body) => request('/api/intelligence/resources/' + id, authJsonOptions(token, body, 'PATCH')),
   intelligenceQueue: token => request('/api/intelligence/active-queue', authOptions(token)),
   carePathways: token => request('/api/intelligence/pathways', authOptions(token)),
+  createCarePathwayTemplate: (token, body) => request('/api/intelligence/pathways', authJsonOptions(token, body)),
   pathwayInstances: token => request('/api/intelligence/pathway-instances', authOptions(token)),
   openPathway: (token, body) => request('/api/intelligence/pathway-instances', authJsonOptions(token, body)),
   updatePathwayStage: (token, instanceId, stageId, body) => request('/api/intelligence/pathway-instances/' + instanceId + '/stages/' + stageId, authJsonOptions(token, body, 'PATCH')),

@@ -4,8 +4,8 @@ This change introduces the first integrated foundation for Clinic Intelligence o
 
 ## Implemented in this tranche
 
-- **Flight Recorder:** database-triggered, append-only, non-identifying events for queue check-in, priority changes and visit lifecycle changes, plus events for resources, pathways, referrals, scenarios and offline operational observations.
-- **CareGraph foundation:** configurable pathway templates, stage dependencies, per-visit pathway instances and enforced stage transitions. Starting a stage checks its required resource tags; a missing available resource marks it BLOCKED and creates an event for review.
+- **Flight Recorder:** database-triggered, append-only, non-identifying events for queue check-in, priority changes and visit lifecycle changes, plus events for resources, pathways, referrals, scenarios and offline operational observations. The admin timeline filters by date and expands non-identifying event details.
+- **CareGraph foundation:** admins can create ordered pathway templates; stage dependencies are enforced per visit, and a stage becomes BLOCKED when no available resource matches its required tags. Starting a stage checks its required resource tags; a missing available resource marks it BLOCKED and creates an event for review.
 - **Resource Dependency Twin foundation:** resource inventory with service tags, capacity, availability states and administrative event tracking.
 - **FlowTwin:** repeatable discrete-event capacity simulation comparing a no-outage baseline with a proposed station-capacity change and/or initial service outage. It displays warnings when the proposed station count exceeds registered available resources or scheduled doctor coverage.
 - **Synthetic Clinic Laboratory:** repeatable synthetic scenario generation. Synthetic outcomes are clearly labelled and are not represented as real patient data.
@@ -13,7 +13,7 @@ This change introduces the first integrated foundation for Clinic Intelligence o
 - **Patient Fairness Sentinel:** aggregate waiting-time dispersion by existing priority group; it never changes triage or makes clinical decisions.
 - **Referral Relay:** status-controlled referral workflow with append-only state-change events.
 - **Access Bridge foundation:** explicit SMS consent, masked contact lookup and a templated wait-estimate message path. Free-text health messages are not supported.
-- **Continuity Mode foundation:** an IndexedDB outbox for non-clinical operational incidents and resource observations. The synchronisation API is idempotent. It does not allow offline clinical queue changes, triage changes, or storing patient-identifying details.
+- **Continuity Mode foundation:** an IndexedDB outbox for non-clinical operational incidents and resource observations. Sync is idempotent; reusing an event ID with a different payload is rejected, and resource observations must refer to an existing resource. It does not allow offline clinical queue changes, triage changes, or storing patient-identifying details.
 
 ## Simulation assumptions and safety
 

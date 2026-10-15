@@ -16,7 +16,7 @@ router.get('/summary', admin, async (req, res, next) => {
   try { res.json(await service.getSummary()); } catch (error) { next(error); }
 });
 router.get('/events', admin, async (req, res, next) => {
-  try { res.json(await service.listEvents({ limit: req.query.limit })); } catch (error) { next(error); }
+  try { res.json(await service.listEvents({ limit: req.query.limit, since: req.query.since, until: req.query.until, eventType: req.query.event_type })); } catch (error) { next(error); }
 });
 router.get('/resources', clinical, async (req, res, next) => {
   try { res.json(await service.listResources()); } catch (error) { next(error); }
@@ -32,6 +32,9 @@ router.get('/active-queue', clinical, async (req, res, next) => {
 });
 router.get('/pathways', clinical, async (req, res, next) => {
   try { res.json(await service.listPathways()); } catch (error) { next(error); }
+});
+router.post('/pathways', admin, async (req, res, next) => {
+  try { res.status(201).json(await service.createPathwayTemplate(req.body || {}, req.user.staff_id)); } catch (error) { next(error); }
 });
 router.get('/pathway-instances', clinical, async (req, res, next) => {
   try { res.json(await service.listPathwayInstances()); } catch (error) { next(error); }

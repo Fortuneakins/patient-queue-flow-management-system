@@ -40,11 +40,29 @@ function stableSeed(value) {
   return hash >>> 0;
 }
 
-async function listEvents({ limit = 100 } = {}) {
+function timestampFilter(value, name) {
+  if (value === undefined || value === null || value === '') return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw badRequest(name + ' must be a valid timestamp.');
+  return date.toISOString();
+}
+function canonicalJson(value) {
+  if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
+  if (value && typeof value === 'object') {
+    return '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + canonicalJson(value[key])).join(',') + '}';
+  }
+  return JSON.stringify(value);
+}
+
+async function listEvents({ limit = 100, since, until, eventType } = {}) {
   const take = integer(limit, 'limit', 1, 200, 100);
+  const from = timestampFilter(since, 'since');
+  const to = timestampFilter(until, 'until');
+  if (from && to && Date.parse(from) > Date.parse(to)) throw badRequest('since must be earlier than or equal to until.');
+  const type = eventType ? text(eventType, 'event_type', 80) : null;
   const result = await query(
-    'SELECT event_id, event_type, entity_type, entity_id, queue_id, actor_staff_id, event_source, event_at, details FROM operational_events ORDER BY event_at DESC, event_id DESC LIMIT $1',
-    [take]
+    'SELECT event_id, event_type, entity_type, entity_id, queue_id, actor_staff_id, event_source, event_at, details FROM operational_events WHERE ($2::timestamptz IS NULL OR event_at >= $2::timestamptz) AND ($3::timestamptz IS NULL OR event_at <= $3::timestamptz) AND ($4::text IS NULL OR event_type = $4::text) ORDER BY event_at DESC, event_id DESC LIMIT $1',
+    [take, from, to, type]
   );
   return result.rows;
 }
@@ -174,6 +192,43 @@ async function listPathways() {
     "SELECT t.template_id, t.name, t.description, t.is_active, COALESCE((SELECT jsonb_agg(jsonb_build_object('stage_id', s.stage_id, 'stage_order', s.stage_order, 'stage_code', s.stage_code, 'stage_name', s.stage_name, 'required_resource_tags', s.required_resource_tags, 'is_required', s.is_required) ORDER BY s.stage_order) FROM care_pathway_stages s WHERE s.template_id = t.template_id), '[]'::jsonb) AS stages FROM care_pathway_templates t WHERE t.is_active = TRUE ORDER BY t.name"
   );
   return result.rows;
+}
+
+async function createPathwayTemplate(input, actorStaffId) {
+  const name = text(input.name, 'name', 120);
+  const description = text(input.description, 'description', 500, false);
+  if (!Array.isArray(input.stages) || input.stages.length < 1 || input.stages.length > 50) {
+    throw badRequest('stages must contain between 1 and 50 ordered stages.');
+  }
+  const stages = input.stages.map((stage, index) => {
+    const code = String(stage?.stage_code || '').trim().toUpperCase();
+    if (!/^[A-Z][A-Z0-9_]{0,39}$/.test(code)) throw badRequest('Stage ' + (index + 1) + ' has an invalid stage_code.');
+    const stageName = text(stage?.stage_name, 'stages[' + (index + 1) + '].stage_name', 120);
+    const tags = safeTags(stage?.required_resource_tags || []) || [];
+    const required = stage?.is_required === undefined ? true : stage.is_required;
+    if (typeof required !== 'boolean') throw badRequest('is_required must be true or false for every stage.');
+    return { stage_order: index + 1, stage_code: code, stage_name: stageName, required_resource_tags: tags, is_required: required };
+  });
+  if (new Set(stages.map(stage => stage.stage_code)).size !== stages.length) throw badRequest('Stage codes must be unique within a pathway template.');
+  try {
+    return await withTransaction(async client => {
+      const inserted = await client.query(
+        'INSERT INTO care_pathway_templates(name, description, is_active, created_by_staff_id) VALUES ($1,$2,TRUE,$3) RETURNING template_id, name, description, is_active, created_at',
+        [name, description, actorStaffId]
+      );
+      for (const stage of stages) {
+        await client.query(
+          'INSERT INTO care_pathway_stages(template_id, stage_order, stage_code, stage_name, required_resource_tags, is_required) VALUES ($1,$2,$3,$4,$5,$6)',
+          [inserted.rows[0].template_id, stage.stage_order, stage.stage_code, stage.stage_name, stage.required_resource_tags, stage.is_required]
+        );
+      }
+      await recordEvent(client, { eventType: 'pathway_template_created', entityType: 'care_pathway_template', entityId: inserted.rows[0].template_id, actorStaffId, details: { stage_count: stages.length, stage_codes: stages.map(stage => stage.stage_code) } });
+      return { ...inserted.rows[0], stages };
+    });
+  } catch (error) {
+    if (error.code === '23505') throw badRequest('A pathway template with that name already exists.', 409);
+    throw error;
+  }
 }
 
 async function listPathwayInstances() {
@@ -423,9 +478,19 @@ async function submitContinuityObservation(input, actorStaffId) {
   } else {
     throw badRequest('Unsupported offline event type.');
   }
+  if (type === 'RESOURCE_STATUS_OBSERVED') {
+    const resource = await query('SELECT resource_id FROM clinic_resources WHERE resource_id=$1', [payload.resource_id]);
+    if (!resource.rows[0]) throw badRequest('Resource for this observation does not exist.', 404);
+  }
   return withTransaction(async client => {
     const inserted = await client.query('INSERT INTO continuity_sync_receipts(client_event_id, event_type, payload, received_by_staff_id) VALUES ($1,$2,$3::jsonb,$4) ON CONFLICT (client_event_id) DO NOTHING RETURNING client_event_id, event_type, payload, received_at', [eventId, type, JSON.stringify(payload), actorStaffId]);
-    if (!inserted.rows[0]) return { accepted: true, duplicate: true, client_event_id: eventId };
+    if (!inserted.rows[0]) {
+      const existing = await client.query('SELECT event_type, payload FROM continuity_sync_receipts WHERE client_event_id=$1', [eventId]);
+      if (!existing.rows[0] || existing.rows[0].event_type !== type || canonicalJson(existing.rows[0].payload) !== canonicalJson(payload)) {
+        throw badRequest('This client_event_id has already been used for a different observation.', 409);
+      }
+      return { accepted: true, duplicate: true, client_event_id: eventId };
+    }
     await recordEvent(client, { eventType: 'offline_observation_received', entityType: 'offline_event', entityId: eventId, actorStaffId, source: 'OFFLINE_SYNC', details: { event_type: type, payload } });
     return { accepted: true, duplicate: false, ...inserted.rows[0] };
   });
@@ -439,7 +504,7 @@ async function listContinuityReceipts({ limit = 50 } = {}) {
 
 module.exports = {
   listEvents, listResources, createResource, updateResource, getOperationalContext,
-  getFairnessSnapshot, getSummary, listActiveQueue, listPathways, listPathwayInstances,
+  getFairnessSnapshot, getSummary, listActiveQueue, listPathways, createPathwayTemplate, listPathwayInstances,
   openPathway, updatePathwayStage, createFlowSimulation, runLab, listSimulations,
   captureForecast, listForecasts, resolveForecast, createReferral, listReferrals,
   updateReferralStatus, getContactPreference, setContactPreference, sendWaitEstimate,
