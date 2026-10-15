@@ -54,15 +54,16 @@ function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
-async function listEvents({ limit = 100, since, until, eventType } = {}) {
+async function listEvents({ limit = 100, since, until, eventType, windowHours } = {}) {
   const take = integer(limit, 'limit', 1, 200, 100);
   const from = timestampFilter(since, 'since');
   const to = timestampFilter(until, 'until');
   if (from && to && Date.parse(from) > Date.parse(to)) throw badRequest('since must be earlier than or equal to until.');
   const type = eventType ? text(eventType, 'event_type', 80) : null;
+  const hours = windowHours === undefined || windowHours === null || windowHours === '' ? null : integer(windowHours, 'window_hours', 1, 720);
   const result = await query(
-    'SELECT event_id, event_type, entity_type, entity_id, queue_id, actor_staff_id, event_source, event_at, details FROM operational_events WHERE ($2::timestamptz IS NULL OR event_at >= $2::timestamptz) AND ($3::timestamptz IS NULL OR event_at <= $3::timestamptz) AND ($4::text IS NULL OR event_type = $4::text) ORDER BY event_at DESC, event_id DESC LIMIT $1',
-    [take, from, to, type]
+    'SELECT event_id, event_type, entity_type, entity_id, queue_id, actor_staff_id, event_source, event_at, details FROM operational_events WHERE ($2::timestamptz IS NULL OR event_at >= $2::timestamptz) AND ($3::timestamptz IS NULL OR event_at <= $3::timestamptz) AND ($4::text IS NULL OR event_type = $4::text) AND ($5::int IS NULL OR event_at >= NOW() - ($5::int * INTERVAL \'1 hour\')) ORDER BY event_at DESC, event_id DESC LIMIT $1',
+    [take, from, to, type, hours]
   );
   return result.rows;
 }

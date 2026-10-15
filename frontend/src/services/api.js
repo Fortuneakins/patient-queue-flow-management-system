@@ -80,6 +80,7 @@ export const api = {
     if (filters.since) params.set('since', filters.since);
     if (filters.until) params.set('until', filters.until);
     if (filters.event_type) params.set('event_type', filters.event_type);
+    if (filters.window_hours) params.set('window_hours', String(filters.window_hours));
     return request('/api/intelligence/events?' + params.toString(), authOptions(token));
   },
   intelligenceResources: token => request('/api/intelligence/resources', authOptions(token)),

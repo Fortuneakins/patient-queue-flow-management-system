@@ -16,7 +16,7 @@ router.get('/summary', admin, async (req, res, next) => {
   try { res.json(await service.getSummary()); } catch (error) { next(error); }
 });
 router.get('/events', admin, async (req, res, next) => {
-  try { res.json(await service.listEvents({ limit: req.query.limit, since: req.query.since, until: req.query.until, eventType: req.query.event_type })); } catch (error) { next(error); }
+  try { res.json(await service.listEvents({ limit: req.query.limit, since: req.query.since, until: req.query.until, eventType: req.query.event_type, windowHours: req.query.window_hours })); } catch (error) { next(error); }
 });
 router.get('/resources', clinical, async (req, res, next) => {
   try { res.json(await service.listResources()); } catch (error) { next(error); }

@@ -56,18 +56,14 @@ export default function ClinicIntelligenceView({ token }) {
   const [observedResource, setObservedResource] = useState({ resource_id: '', observed_status: 'UNAVAILABLE' });
   const [forecastActuals, setForecastActuals] = useState({});
 
-  const eventSince = useMemo(() => {
-    if (eventWindow === 'all') return undefined;
-    const hours = eventWindow === '7d' ? 168 : 24;
-    return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-  }, [eventWindow]);
+  const eventFilters = useMemo(() => eventWindow === 'all' ? {} : { window_hours: eventWindow === '7d' ? 168 : 24 }, [eventWindow]);
 
   const loadData = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
       const results = await Promise.all([
         api.intelligenceSummary(token),
-        api.intelligenceEvents(token, 200, { since: eventSince }),
+        api.intelligenceEvents(token, 200, eventFilters),
         api.intelligenceResources(token),
         api.intelligenceQueue(token),
         api.carePathways(token),
@@ -87,7 +83,7 @@ export default function ClinicIntelligenceView({ token }) {
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [token, eventSince]);
+  }, [token, eventFilters]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
