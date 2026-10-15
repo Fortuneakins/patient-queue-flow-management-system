@@ -16,7 +16,7 @@ function uuid() {
 }
 const statusTone = status => ({ AVAILABLE: 'green', LIMITED: 'orange', UNAVAILABLE: 'red' }[status] || 'neutral');
 
-export default function ResourcesPanel({ token, currentUser }) {
+export default function ResourcesPanel({ token, currentUser, canManage = false }) {
   const [resources, setResources] = useState([]);
   const [draftStatus, setDraftStatus] = useState({});
   const [form, setForm] = useState({ resource_code: '', name: '', resource_type: 'ROOM', capacity: '1', location_label: '', notes: '' });
@@ -106,26 +106,28 @@ export default function ResourcesPanel({ token, currentUser }) {
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {['ROOM','EQUIPMENT','SERVICE','SUPPLY'].map(type => <div key={type} className="rounded-xl border border-stone-200 p-3"><div className="text-xs text-stone-500">{type.toLowerCase()} resources</div><div className="mt-1 font-display text-2xl font-bold">{resources.filter(item => item.resource_type === type).length}</div><div className="mt-1 text-xs text-stone-500">{resources.filter(item => item.resource_type === type && item.status === 'AVAILABLE').length} available</div></div>)}
         </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <Field label="Resource code" required><input className={inputClass} maxLength={40} value={form.resource_code} onChange={e => setForm({ ...form, resource_code: e.target.value })}/></Field>
-          <Field label="Name" required><input className={inputClass} maxLength={120} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}/></Field>
-          <Field label="Type" required><select className={inputClass} value={form.resource_type} onChange={e => setForm({ ...form, resource_type: e.target.value })}>{['ROOM','EQUIPMENT','SERVICE','SUPPLY'].map(type => <option key={type}>{type}</option>)}</select></Field>
-          <Field label="Capacity" hint="Operational capacity, not patients' clinical acuity"><input className={inputClass} type="number" min="1" max="100" step="1" value={form.capacity} onChange={e => setForm({ ...form, capacity: e.target.value })}/></Field>
-          <Field label="Location label"><input className={inputClass} maxLength={120} value={form.location_label} onChange={e => setForm({ ...form, location_label: e.target.value })}/></Field>
-          <Field label="General resource notes" hint="Never enter patient details here"><input className={inputClass} maxLength={500} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}/></Field>
-        </div>
-        <div className="mt-4"><Button onClick={createResource} disabled={busy || !online}>{busy ? 'Saving…' : 'Create resource'}</Button></div>
+        {canManage && <>
+          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <Field label="Resource code" required><input className={inputClass} maxLength={40} value={form.resource_code} onChange={e => setForm({ ...form, resource_code: e.target.value })}/></Field>
+            <Field label="Name" required><input className={inputClass} maxLength={120} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}/></Field>
+            <Field label="Type" required><select className={inputClass} value={form.resource_type} onChange={e => setForm({ ...form, resource_type: e.target.value })}>{['ROOM','EQUIPMENT','SERVICE','SUPPLY'].map(type => <option key={type}>{type}</option>)}</select></Field>
+            <Field label="Capacity" hint="Operational capacity, not patients' clinical acuity"><input className={inputClass} type="number" min="1" max="100" step="1" value={form.capacity} onChange={e => setForm({ ...form, capacity: e.target.value })}/></Field>
+            <Field label="Location label"><input className={inputClass} maxLength={120} value={form.location_label} onChange={e => setForm({ ...form, location_label: e.target.value })}/></Field>
+            <Field label="General resource notes" hint="Never enter patient details here"><input className={inputClass} maxLength={500} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}/></Field>
+          </div>
+          <div className="mt-4"><Button onClick={createResource} disabled={busy || !online}>{busy ? 'Saving…' : 'Create resource'}</Button></div>
+        </>}
       </Card>
       <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 p-5"><div><h2 className="font-display font-bold">Resource status</h2><p className="mt-1 text-xs text-stone-500">Offline queueing supports resource states only—never patient records, triage or clinical actions.</p></div><Button variant="secondary" icon="refresh" onClick={syncOutbox} disabled={busy || !online}>Sync outbox ({ownedCount})</Button></div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 p-5"><div><h2 className="font-display font-bold">Resource status</h2><p className="mt-1 text-xs text-stone-500">{canManage ? "Offline queueing supports resource states only—never patient records, triage or clinical actions." : "Read-only operational resource state. Contact an administrator to request availability changes."}</p></div>{canManage && <Button variant="secondary" icon="refresh" onClick={syncOutbox} disabled={busy || !online}>Sync outbox ({ownedCount})</Button>}</div>
         {resources.length ? <div className="divide-y divide-stone-100">{resources.map(resource => {
-          const pending = pendingFor(resource.resource_id);
+          const pending = canManage ? pendingFor(resource.resource_id) : null;
           return <div key={resource.resource_id} className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{resource.name}</span><Badge tone={statusTone(pending?.status || resource.status)}>{pending ? 'Pending ' + pending.status : resource.status}</Badge></div><div className="mt-1 text-xs text-stone-500">{resource.resource_code} · {resource.resource_type} · Capacity {resource.capacity}{resource.location_label ? ' · ' + resource.location_label : ''}</div>{pending && <div className="mt-1 text-xs text-orange-700">Queued at {new Date(pending.created_at).toLocaleString()} — not yet server-authoritative</div>}</div>
-            <div className="flex flex-wrap gap-2"><select aria-label={'New status for ' + resource.name} className={inputClass + ' min-w-36'} value={draftStatus[resource.resource_id] || resource.status} onChange={e => setDraftStatus({ ...draftStatus, [resource.resource_id]: e.target.value })}>{['AVAILABLE','LIMITED','UNAVAILABLE'].map(status => <option key={status}>{status}</option>)}</select><Button variant="secondary" onClick={() => updateStatus(resource)} disabled={busy || (draftStatus[resource.resource_id] || resource.status) === resource.status}>Set status</Button></div>
+            {canManage && <div className="flex flex-wrap gap-2"><select aria-label={'New status for ' + resource.name} className={inputClass + ' min-w-36'} value={draftStatus[resource.resource_id] || resource.status} onChange={e => setDraftStatus({ ...draftStatus, [resource.resource_id]: e.target.value })}>{['AVAILABLE','LIMITED','UNAVAILABLE'].map(status => <option key={status}>{status}</option>)}</select><Button variant="secondary" onClick={() => updateStatus(resource)} disabled={busy || (draftStatus[resource.resource_id] || resource.status) === resource.status}>Set status</Button></div>}
           </div>;
         })}</div> : <EmptyState title="No resources configured" message="Add rooms, equipment or other operational resources to model service capacity."/>}
-        {outbox.length > 0 && <div className="border-t border-stone-100 bg-stone-50 p-4 text-xs text-stone-600">This device has {outbox.length} pending resource update(s). Updates are linked to the staff account that created them and use server-verified idempotency keys.</div>}
+        {canManage && outbox.length > 0 && <div className="border-t border-stone-100 bg-stone-50 p-4 text-xs text-stone-600">This device has {outbox.length} pending resource update(s). Updates are linked to the staff account that created them and use server-verified idempotency keys.</div>}
       </Card>
       {(error || notice) && <p role={error ? 'alert' : 'status'} className={`rounded-xl border p-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>{error || notice}</p>}
     </div>
