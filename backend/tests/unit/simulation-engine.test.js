@@ -35,6 +35,14 @@ test('synthetic lab marks generated cases synthetic and repeats from seed', () =
   assert.ok(first.backlog_case_rate_percent >= 0 && first.backlog_case_rate_percent <= 100);
 });
 
+test('an outage increases waiting in the same deterministic queue scenario', () => {
+  const base = { initialQueue: 12, arrivalCount: 0, horizonMinutes: 120, serviceMinutes: 10, staffedStations: 2, replications: 40, seed: 11 };
+  const normal = simulateQueue({ ...base, unavailableMinutes: 0 });
+  const outage = simulateQueue({ ...base, unavailableMinutes: 20 });
+  assert.ok(outage.predicted_wait_p50_minutes >= normal.predicted_wait_p50_minutes);
+  assert.ok(outage.predicted_wait_p90_minutes >= normal.predicted_wait_p90_minutes);
+});
+
 test('percentile safely handles empty and singleton samples', () => {
   assert.equal(percentile([], 0.5), 0);
   assert.equal(percentile([4], 0.9), 4);

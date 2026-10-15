@@ -259,16 +259,22 @@ async function createFlowSimulation(input, actorStaffId) {
   const outage = integer(input.outage_minutes, 'outage_minutes', 0, 240, 0);
   const proposedStations = context.staffed_stations_modelled + delta;
   if (proposedStations < 1 || proposedStations > 50) throw badRequest('The proposed plan must retain between 1 and 50 modelled stations.');
-  const baseInput = { initialQueue: context.waiting, arrivalCount: arrivals, horizonMinutes: horizon, serviceMinutes: context.service_minutes_modelled, staffedStations: context.staffed_stations_modelled, unavailableMinutes: outage, replications: 60, seed: stableSeed([context.waiting, arrivals, horizon, outage, context.service_minutes_modelled].join(':')) };
+  const baseInput = { initialQueue: context.waiting, arrivalCount: arrivals, horizonMinutes: horizon, serviceMinutes: context.service_minutes_modelled, staffedStations: context.staffed_stations_modelled, unavailableMinutes: 0, replications: 60, seed: stableSeed([context.waiting, arrivals, horizon, outage, context.service_minutes_modelled].join(':')) };
   const baseline = simulateQueue(baseInput);
-  const proposed = simulateQueue({ ...baseInput, staffedStations: proposedStations, seed: baseInput.seed });
+  const proposed = simulateQueue({ ...baseInput, staffedStations: proposedStations, unavailableMinutes: outage, seed: baseInput.seed });
+  const feasibilityWarnings = [];
+  if (!context.staffing_schedule_found) feasibilityWarnings.push('No doctor shift is currently detected. Confirm actual clinical coverage before acting.');
+  if (proposedStations > context.consultation_stations_inventory) feasibilityWarnings.push('Proposed stations exceed currently available consultation resources; additional physical resources would be required.');
+  if (context.staffing_schedule_found && proposedStations > context.doctors_on_duty) feasibilityWarnings.push('Proposed stations exceed scheduled on-duty doctor count; additional staff coverage would be required.');
   const assumptions = {
     waiting_queue_size: context.waiting,
     service_duration_source: context.service_duration_source,
     observed_service_duration_sample_size: context.service_duration_sample_size,
     doctor_shift_found: context.staffing_schedule_found,
+    consultation_stations_inventory: context.consultation_stations_inventory,
+    doctors_on_duty: context.doctors_on_duty,
     resource_inventory_fallback_used: context.resource_inventory_fallback_used,
-    staffing_warning: context.staffing_schedule_found ? null : 'No doctor shift is currently detected. This simulation uses available resource capacity as a planning assumption; confirm actual clinical coverage before acting.',
+    feasibility_warnings: feasibilityWarnings,
     clinical_safety: 'This simulation does not assign or alter patient triage priorities and must not be used to make treatment decisions.'
   };
   const inserted = await query(
