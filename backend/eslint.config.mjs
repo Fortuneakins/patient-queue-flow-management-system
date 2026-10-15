@@ -7,6 +7,7 @@ const nodeGlobals = {
   setTimeout: 'readonly',
   clearTimeout: 'readonly',
   fetch: 'readonly',
+  AbortSignal: 'readonly',
   URL: 'readonly',
   __dirname: 'readonly',
   __filename: 'readonly'
