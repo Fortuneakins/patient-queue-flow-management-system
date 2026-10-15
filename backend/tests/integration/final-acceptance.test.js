@@ -370,6 +370,18 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
       });
       assert.equal(invalidTemplate.response.status, 400);
 
+      const unknownDependency = await request('/api/intelligence/pathways', {
+        method: 'POST',
+        headers: auth(tokens.admin),
+        body: JSON.stringify({
+          name: 'Invalid dependency ' + Date.now(),
+          description: 'A dependency cannot point to a stage that does not exist.',
+          stages: [{ stage_code: 'CHILD', stage_name: 'Child stage', depends_on_stage_codes: ['MISSING_STAGE'] }]
+        })
+      });
+      assert.equal(unknownDependency.response.status, 400);
+      assert.match(unknownDependency.body.error, /unknown stage/i);
+
       const forbiddenResourceWrite = await request('/api/intelligence/resources', {
         method: 'POST',
         headers: auth(tokens.nurse),
@@ -383,7 +395,10 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
         body: JSON.stringify({
           name: 'CI resource dependency ' + Date.now(),
           description: 'Temporary integration test template.',
-          stages: [{ stage_code: 'REQUIRES_SPECIAL_RESOURCE', stage_name: 'Resource-dependent stage', required_resource_tags: ['ci_missing_resource_tag'] }]
+          stages: [
+            { stage_code: 'ROOT', stage_name: 'Prerequisite stage', required_resource_tags: [], depends_on_stage_codes: [] },
+            { stage_code: 'REQUIRES_SPECIAL_RESOURCE', stage_name: 'Resource-dependent stage', required_resource_tags: ['ci_missing_resource_tag'], depends_on_stage_codes: ['ROOT'] }
+          ]
         })
       });
       assert.equal(testTemplate.response.status, 201, JSON.stringify(testTemplate.body));
@@ -400,9 +415,38 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
       assert.equal(pathwayInstances.response.status, 200);
       const instance = pathwayInstances.body.find(row => row.instance_id === openedPathway.body.instance_id);
       assert.ok(instance);
-      assert.equal(instance.stages.length, 1);
+      assert.equal(instance.stages.length, 2);
+      const rootStage = instance.stages.find(stage => stage.stage_code === 'ROOT');
+      const childStage = instance.stages.find(stage => stage.stage_code === 'REQUIRES_SPECIAL_RESOURCE');
+      assert.ok(rootStage);
+      assert.ok(childStage);
+      assert.deepEqual(childStage.depends_on_stage_codes, ['ROOT']);
 
-      const blockedStage = await request('/api/intelligence/pathway-instances/' + instance.instance_id + '/stages/' + instance.stages[0].instance_stage_id, {
+      const prematureChild = await request('/api/intelligence/pathway-instances/' + instance.instance_id + '/stages/' + childStage.instance_stage_id, {
+        method: 'PATCH',
+        headers: auth(tokens.nurse),
+        body: JSON.stringify({ status: 'IN_PROGRESS' })
+      });
+      assert.equal(prematureChild.response.status, 409);
+      assert.match(prematureChild.body.error, /dependency/i);
+
+      const rootStarted = await request('/api/intelligence/pathway-instances/' + instance.instance_id + '/stages/' + rootStage.instance_stage_id, {
+        method: 'PATCH',
+        headers: auth(tokens.nurse),
+        body: JSON.stringify({ status: 'IN_PROGRESS' })
+      });
+      assert.equal(rootStarted.response.status, 200);
+      assert.equal(rootStarted.body.status, 'IN_PROGRESS');
+
+      const rootCompleted = await request('/api/intelligence/pathway-instances/' + instance.instance_id + '/stages/' + rootStage.instance_stage_id, {
+        method: 'PATCH',
+        headers: auth(tokens.nurse),
+        body: JSON.stringify({ status: 'COMPLETED' })
+      });
+      assert.equal(rootCompleted.response.status, 200);
+      assert.equal(rootCompleted.body.status, 'COMPLETED');
+
+      const blockedStage = await request('/api/intelligence/pathway-instances/' + instance.instance_id + '/stages/' + childStage.instance_stage_id, {
         method: 'PATCH',
         headers: auth(tokens.nurse),
         body: JSON.stringify({ status: 'IN_PROGRESS' })
