@@ -15,6 +15,12 @@ PQFMS is an academic software-development project for the Outpatient Department 
 - Operational overview and administrator discharge log
 - Staff account administration, permissions, deactivation and sign-in history
 - Staff shift scheduling with overlap protection
+- Configurable care pathways, ordered stages and role-controlled journey progress
+- Append-only operational event history for queue, pathway, resource and simulation events
+- FlowTwin baseline-versus-scenario simulation with repeatable seeds and explicit assumptions
+- Synthetic clinic stress testing, captured forecast-versus-observed wait ledger and tier-level delay review
+- Clinic resource registry plus idempotent offline resource-status outbox (not a full offline clinical workflow)
+- Internal referral tracking and consent-gated operational SMS templates
 - Server-side authentication, authorisation, rate limiting and input validation
 - PostgreSQL-backed integrity constraints and concurrency protection
 
@@ -53,7 +59,7 @@ For SMS, set `SMS_ENABLED=true` and provide Twilio credentials. With SMS disable
 .\scripts\database.ps1
 ```
 
-The migration creates the final schema, constraints, indexes and shift-overlap protection. The seed script uses synthetic patient data and demo staff accounts.
+The sorted migration set creates the schema and constraints. Migrations `003_clinic_intelligence.sql` and `004_patient_communications.sql` add the optional Clinic Intelligence modules and are applied automatically by `scripts\\database.ps1`. The seed script uses synthetic patient data and demo staff accounts.
 
 ## Run the system
 
@@ -78,7 +84,7 @@ These accounts are for the academic demonstration only. Do not reuse the passwor
 
 ## Verification
 
-The repository includes unit, integration, security, database-integrity, analytics and performance test infrastructure. Run the automated gates from a clean setup before tagging the final release.
+The repository includes unit, integration, security, database-integrity, analytics and performance test infrastructure. The `feat/clinic-intelligence-platform` branch also adds deterministic simulation unit tests and an integration suite for its new API surfaces. Run the automated gates from a clean setup before tagging a release.
 
 Backend unit tests:
 
@@ -132,4 +138,4 @@ The project uses server-side role checks, bcrypt password hashes, issuer/audienc
 
 ## Academic boundary
 
-This is an academic prototype using synthetic data. It is not approved or validated for production clinical use and has not been deployed at RMSH. Several capabilities remain deferred as documented in the final report, including appointment scheduling/reminders, pharmacy integration, referrals, full EHR/ICD-10, MFA, offline resilience and multi-site rollout.
+This is an academic prototype using synthetic data. It is not approved or validated for production clinical use and has not been deployed at RMSH. The new Referral Relay tracks referrals locally but does not exchange them with another health system. The offline outbox supports resource-status changes only; it does not permit offline patient registration, triage or consultations. Access Bridge stores language preferences but currently sends the approved English SMS templates only when Twilio is configured and recorded consent is present. FlowTwin is a planning simulation, not a clinically validated prediction or auto-triage system. Multi-clinic federation and privacy-preserving cross-site benchmarks, full EHR/ICD-10 and pharmacy integration, appointment scheduling/reminders, MFA, reviewed translations, disaster recovery and a production privacy/security assessment remain out of scope.
