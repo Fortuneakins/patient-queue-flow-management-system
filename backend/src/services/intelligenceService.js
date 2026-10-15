@@ -379,7 +379,7 @@ async function sendWaitEstimate(patientId, input, actorStaffId) {
   if (!result.rows[0].contact_no) throw badRequest('No contact number is recorded for this patient.', 409);
   let delivery;
   try { delivery = await smsService.sendWaitEstimate({ to: result.rows[0].contact_no, estimatedWaitMinutes: wait }); }
-  catch (error) { delivery = { sent: false, skipped: false, reason: 'provider-error' }; }
+  catch (_error) { delivery = { sent: false, skipped: false, reason: 'provider-error' }; }
   const status = delivery.sent ? 'SENT' : delivery.skipped ? 'SKIPPED' : 'FAILED';
   const saved = await query('INSERT INTO patient_notifications(patient_id, channel, notification_type, status, provider_reference, safe_result, created_by_staff_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING notification_id, status, safe_result, created_at', [id, 'SMS', 'WAIT_ESTIMATE', status, delivery.provider_reference || null, String(delivery.reason || (delivery.sent ? 'sent' : status.toLowerCase())).slice(0, 80), actorStaffId]);
   await recordEvent(query, { eventType: 'patient_wait_estimate_notification', entityType: 'patient_notification', entityId: saved.rows[0].notification_id, actorStaffId, details: { channel: 'SMS', status, template: 'WAIT_ESTIMATE' } });

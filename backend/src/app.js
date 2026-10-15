@@ -16,13 +16,13 @@ const { notFound, errorHandler } = require('./middleware/errorHandler');
 const app = express();
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: env.CORS_ORIGIN, methods: ['GET', 'POST', 'PUT', 'DELETE'] }
+  cors: { origin: env.CORS_ORIGIN, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] }
 });
 app.set('io', io);
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
-app.use(cors({ origin: env.CORS_ORIGIN, methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization', 'X-Internal-Service-Token'] }));
+app.use(cors({ origin: env.CORS_ORIGIN, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization', 'X-Internal-Service-Token'] }));
 app.use(express.json({ limit: '1mb' }));
 
 io.on('connection', socket => {
