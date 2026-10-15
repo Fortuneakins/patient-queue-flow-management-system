@@ -18,6 +18,7 @@ if (!dbConfigured) {
   const createdPatientIds = [];
   const createdShiftIds = [];
   const createdStaffIds = [];
+  const createdPathwayTemplateIds = [];
 
   function passportId(suffix = '') {
     return `TEST${Date.now().toString().slice(-8)}${suffix}`.slice(0, 15);
@@ -56,6 +57,7 @@ if (!dbConfigured) {
       await query('DELETE FROM patients WHERE patient_id = $1', [patientId]);
     }
     for (const shiftId of createdShiftIds) await query('DELETE FROM shifts WHERE shift_id = $1', [shiftId]);
+    for (const templateId of createdPathwayTemplateIds) await query('DELETE FROM care_pathway_templates WHERE template_id = $1', [templateId]);
     for (const staffId of createdStaffIds) {
   // Remove login events for this test-created account only.
   await query('DELETE FROM login_events WHERE staff_id = $1', [staffId]);
@@ -367,6 +369,54 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
         body: JSON.stringify({ name: 'Invalid empty pathway', description: '', stages: [] })
       });
       assert.equal(invalidTemplate.response.status, 400);
+
+      const forbiddenResourceWrite = await request('/api/intelligence/resources', {
+        method: 'POST',
+        headers: auth(tokens.nurse),
+        body: JSON.stringify({ resource_name: 'Forbidden test resource', resource_type: 'STATION', status: 'AVAILABLE', capacity: 1, service_tags: ['consultation'] })
+      });
+      assert.equal(forbiddenResourceWrite.response.status, 403);
+
+      const testTemplate = await request('/api/intelligence/pathways', {
+        method: 'POST',
+        headers: auth(tokens.admin),
+        body: JSON.stringify({
+          name: 'CI resource dependency ' + Date.now(),
+          description: 'Temporary integration test template.',
+          stages: [{ stage_code: 'REQUIRES_SPECIAL_RESOURCE', stage_name: 'Resource-dependent stage', required_resource_tags: ['ci_missing_resource_tag'] }]
+        })
+      });
+      assert.equal(testTemplate.response.status, 201, JSON.stringify(testTemplate.body));
+      createdPathwayTemplateIds.push(testTemplate.body.template_id);
+
+      const openedPathway = await request('/api/intelligence/pathway-instances', {
+        method: 'POST',
+        headers: auth(tokens.nurse),
+        body: JSON.stringify({ queue_id: secondVisitRow.queue_id, template_id: testTemplate.body.template_id })
+      });
+      assert.equal(openedPathway.response.status, 201, JSON.stringify(openedPathway.body));
+
+      const pathwayInstances = await request('/api/intelligence/pathway-instances', { headers: auth(tokens.nurse) });
+      assert.equal(pathwayInstances.response.status, 200);
+      const instance = pathwayInstances.body.find(row => row.instance_id === openedPathway.body.instance_id);
+      assert.ok(instance);
+      assert.equal(instance.stages.length, 1);
+
+      const blockedStage = await request('/api/intelligence/pathway-instances/' + instance.instance_id + '/stages/' + instance.stages[0].instance_stage_id, {
+        method: 'PATCH',
+        headers: auth(tokens.nurse),
+        body: JSON.stringify({ status: 'IN_PROGRESS' })
+      });
+      assert.equal(blockedStage.response.status, 200, JSON.stringify(blockedStage.body));
+      assert.equal(blockedStage.body.status, 'BLOCKED');
+      assert.match(blockedStage.body.blocked_reason, /resource/i);
+
+      const invalidContinuity = await request('/api/intelligence/continuity/sync', {
+        method: 'POST',
+        headers: auth(tokens.nurse),
+        body: JSON.stringify({ client_event_id: 'not-a-uuid', event_type: 'OPERATIONAL_INCIDENT_RECORDED', payload: { incident_code: 'NETWORK_UNAVAILABLE' } })
+      });
+      assert.equal(invalidContinuity.response.status, 400);
 
       const fairness = await request('/api/intelligence/fairness', { headers: auth(tokens.nurse) });
       assert.equal(fairness.response.status, 200);
