@@ -46,10 +46,10 @@ async function listEvents({ limit = 100, eventType = null } = {}) {
 }
 async function listActiveVisits() {
   const result = await query(
-    "SELECT queue_id, ticket_number, status, priority_level, queued_at, " +
-    "ROUND((EXTRACT(EPOCH FROM (NOW() - queued_at)) / 60.0)::numeric, 1) AS elapsed_wait_minutes " +
-    "FROM queue_entries WHERE status IN ('Waiting','In-Consultation') " +
-    "ORDER BY CASE WHEN status = 'In-Consultation' THEN 0 ELSE 1 END, COALESCE(priority_level,4), queued_at"
+    "SELECT q.queue_id, q.patient_id, p.full_name, q.ticket_number, q.status, q.priority_level, q.queued_at, " +
+    "ROUND((EXTRACT(EPOCH FROM (NOW() - q.queued_at)) / 60.0)::numeric, 1) AS elapsed_wait_minutes " +
+    "FROM queue_entries q JOIN patients p ON p.patient_id = q.patient_id WHERE q.status IN ('Waiting','In-Consultation') " +
+    "ORDER BY CASE WHEN q.status = 'In-Consultation' THEN 0 ELSE 1 END, COALESCE(q.priority_level,4), q.queued_at"
   );
   return result.rows;
 }

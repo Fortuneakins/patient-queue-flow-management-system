@@ -9,6 +9,8 @@ const languages = [
 const initial = { preferred_language_code: 'en', preferred_channel: 'NONE', contact_consent: false, consent_method: 'STAFF_RECORDED', consent_version: 'v1' };
 export default function AccessBridgePanel({ token }) {
   const [patientId, setPatientId] = useState('');
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientMatches, setPatientMatches] = useState([]);
   const [prefs, setPrefs] = useState(initial);
   const [loaded, setLoaded] = useState(false);
   const [template, setTemplate] = useState('SERVICE_DELAY');
@@ -16,6 +18,19 @@ export default function AccessBridgePanel({ token }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  async function searchPatients(event) {
+    event.preventDefault();
+    setError(''); setNotice('');
+    const term = patientSearch.trim();
+    if (term.length < 2) { setError('Enter at least two characters to search patient records.'); return; }
+    setBusy(true);
+    try {
+      const rows = await api.listPatients(token, term);
+      setPatientMatches(rows);
+      setNotice(rows.length ? rows.length + ' patient record(s) found.' : 'No matching patient records found.');
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
   async function load() {
     setError(''); setNotice('');
     if (!Number.isInteger(Number(patientId)) || Number(patientId) < 1) { setError('Enter a valid patient ID first.'); return; }
@@ -57,7 +72,9 @@ export default function AccessBridgePanel({ token }) {
     <Card className="p-5 md:p-6">
       <h2 className="font-display text-lg font-bold">Consent-based contact preferences</h2>
       <p className="mt-1 text-sm text-stone-500">Contact preferences are separate from clinical care. Staff should record explicit consent and honour revocation before sending operational updates.</p>
-      <div className="mt-4 flex items-end gap-2"><div className="flex-1"><Field label="Patient ID" required><input className={inputClass} type="number" min="1" value={patientId} onChange={e => { setPatientId(e.target.value); setLoaded(false); }} /></Field></div><Button onClick={load} variant="secondary" disabled={busy}>Load</Button></div>
+      <form className="mt-4 flex items-end gap-2" onSubmit={searchPatients}><div className="flex-1"><Field label="Find patient by name or ID number"><input className={inputClass} value={patientSearch} maxLength={150} onChange={e => setPatientSearch(e.target.value)} placeholder="Search patient records"/></Field></div><Button type="submit" variant="secondary" icon="search" disabled={busy}>Search</Button></form>
+      {patientMatches.length > 0 && <div className="mt-3"><Field label="Matching patient records"><select className={inputClass} value={patientId} onChange={e => { setPatientId(e.target.value); setLoaded(false); }}><option value="">Choose a patient record</option>{patientMatches.map(patient => <option key={patient.patient_id} value={patient.patient_id}>{patient.full_name} · record #{patient.patient_id}</option>)}</select></Field></div>}
+      <div className="mt-3 flex items-end gap-2"><div className="flex-1"><Field label="Selected patient record ID" required><input className={inputClass} type="number" min="1" value={patientId} onChange={e => { setPatientId(e.target.value); setLoaded(false); }} /></Field></div><Button onClick={load} variant="secondary" disabled={busy || !patientId}>Load preferences</Button></div>
       <div className="mt-4 space-y-3">
         <Field label="Preferred language"><select className={inputClass} value={prefs.preferred_language_code} onChange={e => setPrefs({ ...prefs, preferred_language_code: e.target.value })}>{languages.map(([code,label]) => <option key={code} value={code}>{label}</option>)}</select></Field>
         <Field label="Preferred channel"><select className={inputClass} value={prefs.preferred_channel} onChange={e => setPrefs({ ...prefs, preferred_channel: e.target.value })}><option value="NONE">No messages</option><option value="SMS">SMS</option><option value="VOICE">Voice (preference only; provider not implemented)</option></select></Field>

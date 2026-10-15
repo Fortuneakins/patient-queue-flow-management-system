@@ -75,6 +75,29 @@ if (!dbConfigured) {
       const admin = await request('/api/intelligence/overview', { headers: auth(tokens.admin) });
       assert.equal(admin.response.status, 200);
       assert.equal(admin.body.model_version, 'flowtwin-1.0.0');
+
+      const nurseResources = await request('/api/intelligence/resources', { headers: auth(tokens.nurse) });
+      assert.equal(nurseResources.response.status, 200);
+      const nurseReferrals = await request('/api/intelligence/referrals', { headers: auth(tokens.nurse) });
+      assert.equal(nurseReferrals.response.status, 200);
+      const nurseEventLog = await request('/api/intelligence/events', { headers: auth(tokens.nurse) });
+      assert.equal(nurseEventLog.response.status, 403);
+      const nurseCreateResource = await request('/api/intelligence/resources', {
+        method: 'POST', headers: auth(tokens.nurse), body: JSON.stringify({ resource_code: 'DENIED', name: 'Denied resource', resource_type: 'ROOM' })
+      });
+      assert.equal(nurseCreateResource.response.status, 403);
+      const nurseCreateReferral = await request('/api/intelligence/referrals', {
+        method: 'POST', headers: auth(tokens.nurse), body: JSON.stringify({ patient_id: 1, referred_to: 'Denied', reason: 'Not authorised' })
+      });
+      assert.equal(nurseCreateReferral.response.status, 403);
+      const doctorEditsConsent = await request('/api/intelligence/contact-preferences/1', {
+        method: 'PUT', headers: auth(tokens.doctor), body: JSON.stringify({ preferred_channel: 'SMS', contact_consent: true, consent_confirmed: true })
+      });
+      assert.equal(doctorEditsConsent.response.status, 403);
+      const nurseSimulation = await request('/api/intelligence/simulations', {
+        method: 'POST', headers: auth(tokens.nurse), body: JSON.stringify({ horizon_minutes: 60 })
+      });
+      assert.equal(nurseSimulation.response.status, 403);
     });
 
     const patientPayload = {
