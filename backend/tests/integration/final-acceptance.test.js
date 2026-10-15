@@ -434,7 +434,7 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
       const response = await request('/api/webhooks/twilio/inbound', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ From: '+27820000001', Body: 'STOP', MessageSid: 'SM' + 'a'.repeat(32) }).toString()
+        body: 'From=%2B27820000001&Body=STOP&MessageSid=SM' + 'a'.repeat(32)
       });
       assert.equal(response.response.status, 503);
       assert.match(response.body.error, /not configured/i);
