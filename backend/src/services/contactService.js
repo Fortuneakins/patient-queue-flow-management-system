@@ -88,6 +88,14 @@ async function sendAccessUpdate(patientId, input, actorStaffId) {
   if (!patient) throw err('Patient communication preferences are not configured.', 409);
   if (!patient.contact_consent || patient.preferred_channel !== 'SMS') throw err('Recorded SMS consent is required before sending an access update.', 403);
   const providerReady = env.SMS_ENABLED && env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_PHONE_NUMBER;
+  if (providerReady) {
+    const recent = await query(
+      "SELECT communication_id FROM patient_communications WHERE patient_id=$1 AND delivery_status='SENT' " +
+      "AND created_at >= NOW() - INTERVAL '2 minutes' ORDER BY created_at DESC LIMIT 1",
+      [patientIdNum]
+    );
+    if (recent.rows[0]) throw err('An operational SMS was sent to this patient recently. Wait two minutes before sending another update.', 429);
+  }
   const wait = template === 'WAIT_ESTIMATE' && providerReady ? await getCurrentWaitEstimate(patientIdNum) : null;
   let result;
   try {

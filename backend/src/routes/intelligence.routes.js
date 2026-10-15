@@ -7,11 +7,13 @@ const offline = require('../services/offlineSyncService');
 const flow = require('../services/flowAnalyticsService');
 const referrals = require('../services/referralService');
 const contacts = require('../services/contactService');
+const { createRateLimiter } = require('../utils/rateLimit');
 const router = express.Router();
 router.use(authenticate, requireReadyPassword);
 const admin = authorizeRoles('ADMIN');
 const clinical = authorizeRoles('ADMIN','NURSE','DOCTOR');
 const careTeam = authorizeRoles('ADMIN','RECEPTION','NURSE','DOCTOR');
+const communicationLimiter = createRateLimiter({ windowMs: 60 * 1000, max: 5, keyGenerator: req => String(req.user?.staff_id || req.ip) });
 const endpoint = (handler, status = 200) => async (req, res, next) => {
   try { res.status(status).json(await handler(req, res)); } catch (error) { next(error); }
 };
@@ -40,6 +42,6 @@ router.post('/referrals', authorizeRoles('ADMIN','DOCTOR'), endpoint(req => refe
 router.patch('/referrals/:referral_id', authorizeRoles('ADMIN','DOCTOR'), endpoint(req => referrals.updateReferral(req.params.referral_id, req.body || {}, req.user.staff_id)));
 router.get('/contact-preferences/:patient_id', authorizeRoles('ADMIN','RECEPTION','NURSE','DOCTOR'), endpoint(req => contacts.getContactPreferences(req.params.patient_id)));
 router.put('/contact-preferences/:patient_id', authorizeRoles('ADMIN','RECEPTION'), endpoint(req => contacts.updateContactPreferences(req.params.patient_id, req.body || {}, req.user.staff_id)));
-router.post('/contact-preferences/:patient_id/send-update', authorizeRoles('ADMIN','RECEPTION'), endpoint(req => contacts.sendAccessUpdate(req.params.patient_id, req.body || {}, req.user.staff_id)));
+router.post('/contact-preferences/:patient_id/send-update', authorizeRoles('ADMIN','RECEPTION'), communicationLimiter, endpoint(req => contacts.sendAccessUpdate(req.params.patient_id, req.body || {}, req.user.staff_id)));
 
 module.exports = router;
