@@ -6,6 +6,11 @@ const emptyForm = { identification_type:'SA_ID', identification_number:'', full_
 export default function ReceptionWorkspace({ patients, onRefreshPatients, onCreatePatient, onVerifyPatient, onAssistedCheckIn, busy, activeTab='register', onTabChange }) {
   const [form,setForm]=useState(emptyForm); const [search,setSearch]=useState(''); const [selected,setSelected]=useState(null); const [symptoms,setSymptoms]=useState(''); const [error,setError]=useState(''); const [success,setSuccess]=useState('');
   useEffect(()=>{ if(activeTab==='directory') onRefreshPatients(''); },[activeTab,onRefreshPatients]);
+  useEffect(() => {
+    if (!success) return undefined;
+    const timeoutId = window.setTimeout(() => setSuccess(''), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [success]);
   async function register(e){e.preventDefault();setError('');setSuccess('');try{const p=await onCreatePatient(form);setSuccess(`Registered ${p.full_name}.`);setForm(emptyForm)}catch(e){setError(e.message)}}
   async function searchPatients(e){e.preventDefault();try{await onRefreshPatients(search)}catch(e){setError(e.message)}}
   async function assist(){setError('');try{const r=await onAssistedCheckIn({patient_id:selected.patient_id,symptoms:symptoms.trim()});setSuccess(`${r.ticket_number} issued for ${selected.full_name}.`);setSelected(null);setSymptoms('')}catch(e){setError(e.message)}}
