@@ -37,10 +37,11 @@ export default function SyntheticLabPanel({ token }) {
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[
         ['Average completions', result.summary.average_projected_completed],
         ['Average remaining', result.summary.average_projected_remaining],
-        ['Median P90 wait', (result.summary.median_p90_additional_wait_minutes ?? '—') + ' min'],
+        ['Median P90 wait to service start', (result.summary.median_p90_additional_wait_minutes ?? '—') + ' min'],
         ['Runs with P90 > 60 min', result.summary.replications_over_60_minute_p90 + '/' + result.input.replications]
       ].map(item => <div key={item[0]} className="rounded-xl border border-stone-200 p-3"><div className="text-xs text-stone-500">{item[0]}</div><div className="mt-1 text-2xl font-bold">{item[1]}</div></div>)}</div>
       <p className="mt-3 text-sm text-stone-600">Worst P90 wait: {result.summary.worst_p90_additional_wait_minutes} minutes. Outcomes depend on the configured assumptions.</p>
+      <p className="mt-2 rounded-xl border border-stone-200 bg-stone-50 p-3 text-sm text-stone-600"><strong>Interpreting wait metrics.</strong> Waits measure simulated time from arrival until service can start. A queue can extend beyond the simulated arrival window, so wait values may exceed the simulated hours; they are not service-completion times or observed clinic waits.</p>
     </Card>}
     <Card className="p-5"><h2 className="font-display font-bold">Reference profiles</h2><p className="mt-1 text-xs text-stone-500">Synthetic examples only; not measured clinic benchmarks.</p><div className="mt-3 grid gap-3 md:grid-cols-3">{profiles.map(item => <div key={item.code} className="rounded-xl border border-stone-200 p-3"><div className="font-semibold">{item.name}</div><div className="mt-2 text-xs text-stone-500">{item.arrivals_per_hour} arrivals/hour · {item.servers} stations · {item.mean_service_minutes} minutes/service</div><div className="mt-2"><Badge tone="orange">{item.provenance}</Badge></div></div>)}</div></Card>
   </div>;
