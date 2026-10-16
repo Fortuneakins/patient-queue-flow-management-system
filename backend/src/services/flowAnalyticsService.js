@@ -155,7 +155,7 @@ async function fairnessMetrics() {
     'WITH tiers AS (SELECT generate_series(1,4)::int AS tier), ' +
     "history AS (SELECT COALESCE(priority_level,4)::int AS tier, COUNT(*)::int AS sample_size, " +
     'ROUND(AVG(EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0)::numeric,1) AS mean_wait_minutes, ' +
-    'ROUND(percentile_cont(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (discharged_at - queued_at)) / 60.0)::numeric,1) AS p90_wait_minutes ' +
+    'ROUND(percentile_cont(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0)::numeric,1) AS p90_wait_minutes ' +
     "FROM queue_entries WHERE status = 'Discharged' AND called_at IS NOT NULL AND called_at >= queued_at AND discharged_at >= NOW() - INTERVAL '30 days' GROUP BY COALESCE(priority_level,4)), " +
     "active AS (SELECT COALESCE(priority_level,4)::int AS tier, COUNT(*) FILTER (WHERE queued_at < NOW() - INTERVAL '60 minutes')::int AS overdue_waiting " +
     "FROM queue_entries WHERE status = 'Waiting' GROUP BY COALESCE(priority_level,4)) " +
