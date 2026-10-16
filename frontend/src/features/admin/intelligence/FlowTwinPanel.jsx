@@ -63,8 +63,8 @@ export default function FlowTwinPanel({ token }) {
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="Projected completions" value={scenario?.projected_completed} />
           <Metric label="Projected remaining" value={scenario?.projected_remaining} />
-          <Metric label="Median added wait" value={scenario?.p50_additional_wait_minutes} suffix=" min" />
-          <Metric label="90th-percentile added wait" value={scenario?.p90_additional_wait_minutes} suffix=" min" />
+          <Metric label="Median wait to service start" value={scenario?.p50_additional_wait_minutes} suffix=" min" />
+          <Metric label="P90 wait to service start" value={scenario?.p90_additional_wait_minutes} suffix=" min" />
         </div>
         <div><h3 className="font-semibold">Scenario impact vs baseline</h3><div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Metric label="Change in completions" value={showDelta(compare?.projected_completed_delta)} />
@@ -75,6 +75,7 @@ export default function FlowTwinPanel({ token }) {
           <Metric label="Available modelled servers" value={scenario?.available_servers} />
         </div></div>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><strong>Human review required.</strong> The simulator did not change queue records or clinical priorities. These projections depend on the service-time assumptions, arrival pattern and current staffing snapshot.</div>
+        <p className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm text-stone-600"><strong>Interpreting wait metrics.</strong> Median and P90 waits estimate time from arrival until service can start. Jobs may remain queued after the scenario horizon ends, so these waits can exceed the selected horizon. They are not service-completion times or observed clinical waits.</p>
         <details className="rounded-xl border border-stone-200 p-4"><summary className="cursor-pointer font-semibold">Model assumptions and data sufficiency</summary><ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-stone-600">{(scenario?.assumptions || []).map(item => <li key={item}>{item}</li>)}</ul><p className="mt-3 text-xs text-stone-500">Observed service samples used: {scenario?.service_samples_used ?? 0}. The absence of sufficient history is reported instead of being represented as model confidence.</p></details>
       </Card>}
       <Card className="overflow-hidden">
