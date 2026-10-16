@@ -248,5 +248,39 @@ if (!dbConfigured) {
     assert.ok(events.body.some(event => event.event_type === 'VISIT_CHECKED_IN'));
     assert.ok(events.body.some(event => event.event_type === 'FLOWTWIN_SIMULATION_RUN'));
     assert.ok(events.body.some(event => event.event_type === 'REFERRAL_CREATED'));
+
+    // Regression: P90 labelled queue-to-call must not include time from call to discharge.
+    const doctor = await query("SELECT staff_id FROM clinic_staff WHERE username = 'doctor_demo' LIMIT 1");
+    assert.ok(doctor.rows[0], 'doctor_demo must exist in integration seed data');
+    await query(
+      "UPDATE queue_entries SET status='Discharged', priority_level=2, " +
+      "queued_at=NOW() - INTERVAL '60 minutes', called_by_staff_id=$2, called_at=NOW() - INTERVAL '45 minutes', " +
+      "discharged_by_staff_id=$2, discharged_at=NOW() - INTERVAL '5 minutes' WHERE queue_id=$1",
+      [queueId, doctor.rows[0].staff_id]
+    );
+    const fairnessRegression = await request('/api/intelligence/fairness', { headers: auth(tokens.admin) });
+    assert.equal(fairnessRegression.response.status, 200);
+    const tierTwo = fairnessRegression.body.tiers.find(item => item.tier === 2);
+    assert.ok(tierTwo, 'tier 2 metrics should be present');
+    const expectedTierTwo = await query(
+      "SELECT COUNT(*)::int AS sample_size, " +
+      "ROUND(AVG(EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0)::numeric,1) AS mean_wait_minutes, " +
+      "ROUND(percentile_cont(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0)::numeric,1) AS p90_queue_to_call_minutes, " +
+      "ROUND(percentile_cont(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (discharged_at - queued_at)) / 60.0)::numeric,1) AS p90_queue_to_discharge_minutes " +
+      "FROM queue_entries WHERE status='Discharged' AND COALESCE(priority_level,4)=2 " +
+      "AND called_at IS NOT NULL AND called_at >= queued_at AND discharged_at >= NOW() - INTERVAL '30 days'"
+    );
+    assert.equal(tierTwo.sample_size, expectedTierTwo.rows[0].sample_size);
+    assert.equal(Number(tierTwo.mean_wait_minutes), Number(expectedTierTwo.rows[0].mean_wait_minutes));
+    assert.notEqual(
+      Number(expectedTierTwo.rows[0].p90_queue_to_call_minutes),
+      Number(expectedTierTwo.rows[0].p90_queue_to_discharge_minutes),
+      'fixture must distinguish queue-to-call from queue-to-discharge duration'
+    );
+    assert.equal(
+      Number(tierTwo.p90_wait_minutes),
+      Number(expectedTierTwo.rows[0].p90_queue_to_call_minutes),
+      'P90 must use called_at - queued_at, not discharged_at - queued_at'
+    );
   });
 }

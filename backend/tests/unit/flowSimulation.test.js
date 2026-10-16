@@ -28,6 +28,16 @@ test('simulation is deterministic for the same seed and inputs', () => {
   assert.ok(first.server_utilisation_percent >= 0 && first.server_utilisation_percent <= 100);
 });
 
+test('wait percentiles can exceed the simulation horizon when backlog extends beyond the arrival window', () => {
+  const result = runClinicSimulation({
+    waiting: [], in_consultation: 0, extra_arrivals: 48, servers: 1,
+    horizon_minutes: 240, mean_service_minutes: 14, seed: 777
+  });
+  assert.equal(result.projected_arrivals, 48);
+  assert.ok(result.projected_remaining > 0);
+  assert.ok(result.p90_additional_wait_minutes > result.horizon_minutes);
+});
+
 test('zero available service capacity never reports completed work', () => {
   const result = runClinicSimulation({
     waiting: [{ priority_level: 1 }, { priority_level: 4 }],
