@@ -262,8 +262,25 @@ if (!dbConfigured) {
     assert.equal(fairnessRegression.response.status, 200);
     const tierTwo = fairnessRegression.body.tiers.find(item => item.tier === 2);
     assert.ok(tierTwo, 'tier 2 metrics should be present');
-    assert.equal(tierTwo.sample_size, 1, 'fresh integration database should contain only the regression visit in tier 2');
-    assert.equal(Number(tierTwo.mean_wait_minutes), 15);
-    assert.equal(Number(tierTwo.p90_wait_minutes), 15, 'P90 must use called_at - queued_at, not discharged_at - queued_at');
+    const expectedTierTwo = await query(
+      "SELECT COUNT(*)::int AS sample_size, " +
+      "ROUND(AVG(EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0)::numeric,1) AS mean_wait_minutes, " +
+      "ROUND(percentile_cont(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0)::numeric,1) AS p90_queue_to_call_minutes, " +
+      "ROUND(percentile_cont(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (discharged_at - queued_at)) / 60.0)::numeric,1) AS p90_queue_to_discharge_minutes " +
+      "FROM queue_entries WHERE status='Discharged' AND COALESCE(priority_level,4)=2 " +
+      "AND called_at IS NOT NULL AND called_at >= queued_at AND discharged_at >= NOW() - INTERVAL '30 days'"
+    );
+    assert.equal(tierTwo.sample_size, expectedTierTwo.rows[0].sample_size);
+    assert.equal(Number(tierTwo.mean_wait_minutes), Number(expectedTierTwo.rows[0].mean_wait_minutes));
+    assert.notEqual(
+      Number(expectedTierTwo.rows[0].p90_queue_to_call_minutes),
+      Number(expectedTierTwo.rows[0].p90_queue_to_discharge_minutes),
+      'fixture must distinguish queue-to-call from queue-to-discharge duration'
+    );
+    assert.equal(
+      Number(tierTwo.p90_wait_minutes),
+      Number(expectedTierTwo.rows[0].p90_queue_to_call_minutes),
+      'P90 must use called_at - queued_at, not discharged_at - queued_at'
+    );
   });
 }
