@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../../../services/api';
 import { Badge, Button, Card, Field, inputClass } from '../../../components/ui';
 
@@ -18,6 +18,14 @@ export default function AccessBridgePanel({ token }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  useEffect(() => {
+    if (!error && !notice) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      setError('');
+      setNotice('');
+    }, 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [error, notice]);
   async function searchPatients(event) {
     event.preventDefault();
     setError(''); setNotice('');
