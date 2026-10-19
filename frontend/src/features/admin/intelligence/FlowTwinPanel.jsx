@@ -15,11 +15,12 @@ const numberFields = [
 
 function Metric({ label, value, suffix = '', icon = 'chart' }) {
   const missing = value === null || value === undefined;
+  const explanatory = typeof value === 'string' && value.length > 12;
   return (
     <div className="flowtwin-metric">
       <span className="flowtwin-metric-icon" aria-hidden="true"><Icon name={icon} size={17} /></span>
       <div className="flowtwin-metric-label">{label}</div>
-      <div className="flowtwin-metric-value">{missing ? '—' : value}{missing ? '' : suffix}</div>
+      <div className={`flowtwin-metric-value${explanatory ? ' flowtwin-metric-value--explanatory' : ''}`}>{missing ? '—' : value}{missing ? '' : suffix}</div>
     </div>
   );
 }
