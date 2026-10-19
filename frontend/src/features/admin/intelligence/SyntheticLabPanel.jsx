@@ -19,7 +19,10 @@ export default function SyntheticLabPanel({ token }) {
     finally { setBusy(false); }
   }
   const change = key => e => setForm(current => ({ ...current, [key]: Number(e.target.value) }));
-  return <div className="space-y-5">
+  const replicationCount = Number(result?.input?.replications) || 0;
+  const longWaitReplications = Number(result?.summary?.replications_over_60_minute_p90) || 0;
+  const longWaitShare = replicationCount > 0 ? Math.round((longWaitReplications / replicationCount) * 100) : 0;
+  return <div className="space-y-5 synthetic-lab-panel">
     <Card className="p-5">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-display text-lg font-bold">Synthetic Clinic Laboratory</h2><p className="mt-1 text-sm text-stone-500">Repeatable clinic-day stress tests with a fixed seed. These outputs are synthetic scenarios, not clinic observations.</p></div><Badge tone="orange">Synthetic only</Badge></div>
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -41,6 +44,11 @@ export default function SyntheticLabPanel({ token }) {
         ['Runs with P90 > 60 min', result.summary.replications_over_60_minute_p90 + '/' + result.input.replications]
       ].map(item => <div key={item[0]} className="rounded-xl border border-stone-200 p-3"><div className="text-xs text-stone-500">{item[0]}</div><div className="mt-1 text-2xl font-bold">{item[1]}</div></div>)}</div>
       <p className="mt-3 text-sm text-stone-600">Worst P90 wait: {result.summary.worst_p90_additional_wait_minutes} minutes. Outcomes depend on the configured assumptions.</p>
+      <section className="synthetic-lab-threshold-visual" aria-label="Replications with P90 wait over 60 minutes">
+        <div className="synthetic-lab-threshold-heading"><div><p className="eyebrow">Wait-threshold signal</p><h3>Replications with P90 wait over 60 minutes</h3><p>Share of this synthetic batch exceeding the configured review threshold.</p></div><strong>{longWaitShare}%</strong></div>
+        <div className="synthetic-lab-threshold-track" role="progressbar" aria-label="Share of replications with P90 wait over 60 minutes" aria-valuemin={0} aria-valuemax={100} aria-valuenow={longWaitShare}><span style={{ width: longWaitShare + '%' }} /></div>
+        <div className="synthetic-lab-threshold-foot"><span>{longWaitReplications} of {replicationCount} replications</span><span>Synthetic output · not observed clinic data</span></div>
+      </section>
       <p className="mt-2 rounded-xl border border-stone-200 bg-stone-50 p-3 text-sm text-stone-600"><strong>Interpreting wait metrics.</strong> Waits measure simulated time from arrival until service can start. A queue can extend beyond the simulated arrival window, so wait values may exceed the simulated hours; they are not service-completion times or observed clinic waits.</p>
     </Card>}
     <Card className="p-5"><h2 className="font-display font-bold">Reference profiles</h2><p className="mt-1 text-xs text-stone-500">Synthetic examples only; not measured clinic benchmarks.</p><div className="mt-3 grid gap-3 md:grid-cols-3">{profiles.map(item => <div key={item.code} className="rounded-xl border border-stone-200 p-3"><div className="font-semibold">{item.name}</div><div className="mt-2 text-xs text-stone-500">{item.arrivals_per_hour} arrivals/hour · {item.servers} stations · {item.mean_service_minutes} minutes/service</div><div className="mt-2"><Badge tone="orange">{item.provenance}</Badge></div></div>)}</div></Card>
