@@ -81,7 +81,7 @@ function createSyntheticEvents(options) {
 
   add('DIG-004-REG', 'SYN-VISIT-004', 'REGISTERED', 4);
   add('DIG-004-WAIT', 'SYN-VISIT-004', 'WAITING', 5);
-  add('PAP-004-CALL', 'SYN-VISIT-004', 'IN_CONSULTATION', 29, 'PAPER', 8);
+  add('PAP-004-CALL', 'SYN-VISIT-004', 'IN_CONSULTATION', 29, 'PAPER', 10);
   add('PAP-004-DIS', 'SYN-VISIT-004', 'DISCHARGED', 43, 'PAPER', 6);
 
   return events.map(event => ({
