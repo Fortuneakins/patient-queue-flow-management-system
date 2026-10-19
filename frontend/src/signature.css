@@ -4209,3 +4209,45 @@
   }
   .synthetic-lab-history-row, .synthetic-lab-result-card { transform: none !important; }
 }
+
+
+/* Explain missing historical baseline wait samples rather than leaving ambiguous dashes. */
+.flowtwin-baseline-note {
+  display: flex;
+  align-items: flex-start;
+  gap: .55rem;
+  margin: .25rem 0 .8rem;
+  border: 1px solid color-mix(in srgb, var(--brand-muted) 34%, var(--line));
+  border-radius: .78rem;
+  padding: .72rem .8rem;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--brand-pale) 32%, var(--surface-solid));
+  font-size: .63rem;
+  line-height: 1.55;
+}
+.flowtwin-baseline-note > svg { flex: 0 0 auto; margin-top: .03rem; color: var(--brand); }
+.flowtwin-baseline-note strong { color: var(--ink-strong); }
+.flowtwin-comparison-value-missing {
+  color: var(--muted-soft) !important;
+  font-size: .56rem !important;
+  font-weight: 680 !important;
+  line-height: 1.3;
+  text-align: right;
+}
+.flowtwin-panel .flowtwin-metric-value {
+  overflow-wrap: anywhere;
+}
+.app-root[data-theme="dark"] .flowtwin-baseline-note {
+  border-color: var(--line-strong);
+  color: var(--muted);
+  background: var(--surface-raised);
+}
+.app-root[data-theme="dark"] .flowtwin-baseline-note strong { color: var(--ink-strong); }
+
+.flowtwin-panel .flowtwin-metric-value--explanatory {
+  font-family: inherit;
+  font-size: .86rem;
+  font-weight: 790;
+  letter-spacing: -.01em;
+  line-height: 1.35;
+}
