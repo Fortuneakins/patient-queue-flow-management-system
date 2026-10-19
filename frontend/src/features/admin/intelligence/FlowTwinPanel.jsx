@@ -42,6 +42,22 @@ function displayValue(value, suffix = '') {
     : Number(value).toLocaleString(undefined, { maximumFractionDigits: 1 }) + suffix;
 }
 
+// Older saved runs may predate the persisted comparison-delta fields. Rebuild
+// only the display delta from that run's own stored baseline and scenario;
+// never simulate again or change the persisted result.
+function resolveDelta(savedDelta, baselineValue, scenarioValue) {
+  if (savedDelta !== null && savedDelta !== undefined && Number.isFinite(Number(savedDelta))) {
+    return Number(savedDelta);
+  }
+  if (baselineValue === null || baselineValue === undefined || scenarioValue === null || scenarioValue === undefined) {
+    return null;
+  }
+  const baselineNumber = Number(baselineValue);
+  const scenarioNumber = Number(scenarioValue);
+  if (!Number.isFinite(baselineNumber) || !Number.isFinite(scenarioNumber)) return null;
+  return Number((scenarioNumber - baselineNumber).toFixed(1));
+}
+
 function ComparisonBar({ label, baseline, scenario, suffix = '' }) {
   const base = numericValue(baseline);
   const projected = numericValue(scenario);
@@ -95,6 +111,13 @@ export default function FlowTwinPanel({ token }) {
   // The API's recent-simulation feed also includes Synthetic Lab batches.
   // FlowTwin can only render its own SCENARIO output contract.
   const flowTwinRecent = recent.filter(item => item.simulation_kind === 'SCENARIO');
+  const resolvedDeltas = {
+    completed: resolveDelta(compare?.projected_completed_delta, baseline?.projected_completed, scenario?.projected_completed),
+    remaining: resolveDelta(compare?.projected_remaining_delta, baseline?.projected_remaining, scenario?.projected_remaining),
+    p90Wait: resolveDelta(compare?.p90_additional_wait_delta_minutes, baseline?.p90_additional_wait_minutes, scenario?.p90_additional_wait_minutes),
+    meanWait: resolveDelta(compare?.mean_additional_wait_delta_minutes, baseline?.mean_additional_wait_minutes, scenario?.mean_additional_wait_minutes),
+    utilisation: resolveDelta(compare?.server_utilisation_delta_percentage_points, baseline?.server_utilisation_percent, scenario?.server_utilisation_percent)
+  };
 
   function openSavedScenario(item) {
     const output = item?.output && typeof item.output === 'object' ? item.output : {};
@@ -173,11 +196,11 @@ export default function FlowTwinPanel({ token }) {
         <section>
           <div className="flowtwin-section-title"><div><p className="eyebrow">Change from baseline</p><h3>Scenario impact</h3></div></div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <Metric label="Change in completions" value={showDelta(compare?.projected_completed_delta)} icon="checkCircle" />
-            <Metric label="Change in remaining queue" value={showDelta(compare?.projected_remaining_delta)} icon="users" />
-            <Metric label="Change in P90 wait" value={showDelta(compare?.p90_additional_wait_delta_minutes, ' min')} icon="history" />
-            <Metric label="Change in mean wait" value={showDelta(compare?.mean_additional_wait_delta_minutes, ' min')} icon="clock" />
-            <Metric label="Server utilisation change" value={showDelta(compare?.server_utilisation_delta_percentage_points, ' pp')} icon="chart" />
+            <Metric label="Change in completions" value={showDelta(resolvedDeltas.completed)} icon="checkCircle" />
+            <Metric label="Change in remaining queue" value={showDelta(resolvedDeltas.remaining)} icon="users" />
+            <Metric label="Change in P90 wait" value={showDelta(resolvedDeltas.p90Wait, ' min')} icon="history" />
+            <Metric label="Change in mean wait" value={showDelta(resolvedDeltas.meanWait, ' min')} icon="clock" />
+            <Metric label="Server utilisation change" value={showDelta(resolvedDeltas.utilisation, ' pp')} icon="chart" />
             <Metric label="Available modelled servers" value={scenario?.available_servers} icon="settings" />
           </div>
         </section>
