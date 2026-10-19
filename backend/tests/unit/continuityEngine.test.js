@@ -38,7 +38,7 @@ test('late paper entries and occurrence-versus-recording order discrepancies are
 test('only the supported synthetic scenario and bounded input values are accepted', () => {
   assert.equal(normalizeScenario({}).scenario_code, 'RMSH_DOWNTIME_RECOVERY');
   assert.throws(() => normalizeScenario({ scenario_code: 'REAL_PATIENT_IMPORT' }), /Only the built-in synthetic RMSH downtime scenario/);
-  assert.throws(() => normalizeScenario({ outage_minutes: 2 }), /between 15 and 240/);
+  assert.throws(() => normalizeScenario({ outage_minutes: 2 }), /between 45 and 240/);
   assert.throws(() => normalizeScenario({ seed: -1 }), /between 1 and 2147483647/);
   assert.throws(() => normalizeScenario([]), /scenario object/);
 });
