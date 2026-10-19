@@ -94,7 +94,7 @@ export default function ContinuityLabPanel({ token }) {
             <input className={inputClass} type="number" min="45" max="240" value={outageMinutes} onChange={e => setOutageMinutes(e.target.value)} required />
           </Field>
           <div className="self-end">
-            <Button type="submit" icon="play" disabled={busy}>{busy ? 'Reconstructing…' : 'Run recovery scenario'}</Button>
+            <Button type="submit" icon="refresh" disabled={busy}>{busy ? 'Reconstructing…' : 'Run recovery scenario'}</Button>
           </div>
         </form>
         {error && <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
