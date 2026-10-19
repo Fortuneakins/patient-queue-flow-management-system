@@ -23,6 +23,7 @@ This document is a practical engineering companion to the final academic report.
 | Performance | NFR-05–NFR-06 | queue indexes in `db/migrations/001_schema.sql`, Socket.IO refresh signal, load-test location reserved under `tests/load/` when added |
 | Fault tolerance | NFR-07, BR-08 | `backend/src/services/smsService.js`, `analytics_service/app.py`, UI degraded-state handling |
 | Reproducibility | NFR-12 | `db/migrations/`, `db/seed/`, `scripts/setup.ps1`, root and service lock/dependency files |
+| Synthetic continuity recovery | FR-CONT-01–FR-CONT-05; NFR-CONT-01–NFR-CONT-03; BR-CONT-01–BR-CONT-03 | `frontend/src/features/admin/intelligence/ContinuityLabPanel.jsx`, `backend/src/routes/intelligence.routes.js`, `backend/src/services/continuityService.js`, `backend/src/utils/continuityEngine.js`, `db/migrations/005_continuity_runs.sql`, `backend/tests/unit/continuityEngine.test.js`, `backend/tests/integration/continuity.test.js`; detailed specification in `docs/CONTINUITY_LAB_DESIGN.md` |
 | Repository quality | NFR-11 | ESLint configs, modular `frontend/src/` and `backend/src/` structure, CI workflow |
 
 ## Release integrity rule

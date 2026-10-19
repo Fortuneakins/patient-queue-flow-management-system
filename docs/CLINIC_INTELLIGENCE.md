@@ -33,6 +33,14 @@ The resource registry tracks rooms, equipment, services and supplies using `AVAI
 
 The outbox is local browser storage and covers resource statuses only. It is not a general offline clinical mode, has no cross-device queue, and should not be treated as a durable backup. Staff must sign in as the account that created pending changes before synchronising them.
 
+### Operational Continuity Lab
+
+The Continuity Lab is an administrator-only, synthetic prototype intended to explore reconstruction of outpatient event histories after a simulated downtime. It records a scenario seed and outage duration, creates synthetic digital/paper events with separate occurrence and recording minutes, groups events into synthetic visit timelines, and flags duplicate source references, cross-source semantic duplicates, invalid transitions and per-visit recording-order discrepancies. Repeated scenarios are deterministic for the same input. Results and engine version are persisted in `continuity_runs`, and run creation is recorded in Flight Recorder within the same database transaction.
+
+The current increment is intentionally not a real paper-ingestion or offline clinical workflow. It does not read or change patient/queue records, upload scans, match real identities, modify source records or claim to prove what happened during an actual RMSH outage. Invalid events do not advance the reconstructed state; uncertain cases are labelled for review. The transition model is an operational test fixture, not a clinical protocol or triage mechanism.
+
+See [Operational Continuity Lab design and verification](CONTINUITY_LAB_DESIGN.md) for requirement IDs, business rules, implementation details and acceptance evidence.
+
 ### Prediction truth and safety review
 
 A forecast capture stores per-tier estimates against the current waiting-visit snapshot. Once a visit has a first-call timestamp, the ledger compares the remaining time from forecast capture until first call with the captured per-tier estimate and reports mean absolute error. The review panel also displays sample sizes, queue-to-first-call wait among completed visits by tier, and currently waiting visits past an operational threshold.
@@ -64,6 +72,7 @@ The new API is mounted at `/api/intelligence`. All endpoints require a valid bea
 | Resources and offline sync | `GET /resources` | Nurse, Doctor, Admin |
 | Resource changes and offline sync | `POST /resources`, `PUT /resources/:resource_id/status`, `POST /offline-sync` | Admin |
 | Scenarios and synthetic lab | `POST /simulations`, `GET /simulations`, `GET /benchmarks`, `POST /synthetic-lab/run` | Admin |
+| Synthetic continuity recovery and run history | `POST /continuity/run`, `GET /continuity/runs` | Admin |
 | Forecast truth and delay review | `POST /forecasts`, `GET /forecasts/truth`, `GET /fairness` | Admin |
 | Referrals | `GET /referrals` | Nurse, Doctor, Admin |
 | Create/update referrals | `POST /referrals`, `PATCH /referrals/:referral_id` | Doctor, Admin |
@@ -74,6 +83,8 @@ The new API is mounted at `/api/intelligence`. All endpoints require a valid bea
 
 The branch includes:
 - Pure-function simulation tests for validation, repeatability, zero capacity and synthetic-batch outputs.
+- Continuity-engine unit tests for determinism, duplicate detection, invalid transitions, delayed recording and constrained synthetic-only scope.
+- Continuity API integration tests for role enforcement, input validation, persisted results and Flight Recorder linkage.
 - Database-backed integration coverage for role boundaries, default journey assignment, ordered stage progress, resource status idempotency, simulation persistence, forecast/fairness queries, referral state transitions and consent-gated communications.
 - The existing backend, analytics and frontend checks in GitHub Actions.
 

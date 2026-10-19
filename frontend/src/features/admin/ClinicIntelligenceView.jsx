@@ -9,6 +9,7 @@ import FlightRecorderPanel from './intelligence/FlightRecorderPanel';
 import SyntheticLabPanel from './intelligence/SyntheticLabPanel';
 import ReferralRelayPanel from './intelligence/ReferralRelayPanel';
 import AccessBridgePanel from './intelligence/AccessBridgePanel';
+import ContinuityLabPanel from './intelligence/ContinuityLabPanel';
 
 const sections = [
   { id: 'flow', label: 'FlowTwin', icon: 'chart', desc: 'Predict and simulate operational pressure' },
@@ -17,6 +18,7 @@ const sections = [
   { id: 'learning', label: 'Safety & prediction truth', icon: 'shield', desc: 'Review overdue waits and prediction accuracy' },
   { id: 'lab', label: 'Synthetic lab', icon: 'chart', desc: 'Run repeatable synthetic clinic scenarios' },
   { id: 'events', label: 'Flight Recorder', icon: 'history', desc: 'Inspect the append-only operational event history' },
+  { id: 'continuity', label: 'Continuity Lab', icon: 'refresh', desc: 'Reconstruct synthetic downtime events and inspect discrepancies' },
   { id: 'referrals', label: 'Referral Relay', icon: 'arrow', desc: 'Track referral acknowledgements and hand-offs' },
   { id: 'access', label: 'Access Bridge', icon: 'volume', desc: 'Manage contact consent and operational SMS updates' }
 ];
@@ -31,8 +33,10 @@ export default function ClinicIntelligenceView({ token, currentUser }) {
   else if (active === 'learning') panel = <LearningPanel token={token} />;
   else if (active === 'lab') panel = <SyntheticLabPanel token={token} />;
   else if (active === 'events') panel = <FlightRecorderPanel token={token} />;
+  else if (active === 'continuity') panel = <ContinuityLabPanel token={token} />;
   else if (active === 'referrals') panel = <ReferralRelayPanel token={token} canManage={true} />;
-  else panel = <AccessBridgePanel token={token} />;
+  else if (active === 'access') panel = <AccessBridgePanel token={token} />;
+  else panel = <FlowTwinPanel token={token} />;
 
   return (
     <div className="space-y-6">
