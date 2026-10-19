@@ -92,6 +92,19 @@ export default function FlowTwinPanel({ token }) {
   const scenario = result?.scenario;
   const baseline = result?.baseline;
   const compare = result?.comparison;
+  // The API's recent-simulation feed also includes Synthetic Lab batches.
+  // FlowTwin can only render its own SCENARIO output contract.
+  const flowTwinRecent = recent.filter(item => item.simulation_kind === 'SCENARIO');
+
+  function openSavedScenario(item) {
+    const output = item?.output && typeof item.output === 'object' ? item.output : {};
+    if (!output.scenario || !output.baseline || !output.comparison) {
+      setError('This saved FlowTwin scenario does not contain a complete baseline comparison. The record has not been changed.');
+      return;
+    }
+    setError('');
+    setResult({ ...output, simulation_id: item.simulation_id, name: item.name, input: item.input });
+  }
 
   return (
     <div className="space-y-5 flowtwin-panel">
@@ -175,8 +188,8 @@ export default function FlowTwinPanel({ token }) {
       </Card>}
 
       <Card className="overflow-hidden flowtwin-recent-card">
-        <div className="border-b border-stone-100 p-5"><p className="eyebrow">Saved operational evidence</p><h2 className="font-display font-bold">Recent simulations</h2><p className="mt-1 text-xs text-stone-500">Stored scenarios are operational evidence; synthetic reference profiles are not real clinic benchmarks.</p></div>
-        {recent.length ? <div className="divide-y divide-stone-100">{recent.map(item => <div key={item.simulation_id} className="flex flex-wrap items-center justify-between gap-3 p-4 flowtwin-recent-row"><div><div className="font-semibold">{item.name}</div><div className="mt-1 text-xs text-stone-500">#{item.simulation_id} · {item.simulation_kind.replaceAll('_', ' ')} · {item.model_version}</div></div><Button variant="secondary" onClick={() => setResult({ ...item.output, simulation_id: item.simulation_id, name: item.name, input: item.input })}>View result</Button></div>)}</div> : <EmptyState title="No simulations saved yet" message="Run a scenario above to record a baseline comparison."/>}
+        <div className="border-b border-stone-100 p-5"><p className="eyebrow">Saved operational evidence</p><h2 className="font-display font-bold">Recent FlowTwin scenarios</h2><p className="mt-1 text-xs text-stone-500">Only FlowTwin scenario comparisons appear here. Synthetic Lab batches have their own results view in Synthetic Lab.</p></div>
+        {flowTwinRecent.length ? <div className="divide-y divide-stone-100">{flowTwinRecent.map(item => <div key={item.simulation_id} className="flex flex-wrap items-center justify-between gap-3 p-4 flowtwin-recent-row"><div><div className="font-semibold">{item.name}</div><div className="mt-1 text-xs text-stone-500">#{item.simulation_id} · FlowTwin scenario · {item.model_version}</div></div><Button variant="secondary" onClick={() => openSavedScenario(item)}>View comparison</Button></div>)}</div> : <EmptyState title="No saved FlowTwin scenarios" message="Run a scenario above to save a baseline comparison. Synthetic Lab batches remain available in the Synthetic Lab tool."/>}
       </Card>
     </div>
   );
