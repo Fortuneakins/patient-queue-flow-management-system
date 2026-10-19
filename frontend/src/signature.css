@@ -4243,3 +4243,11 @@
   background: var(--surface-raised);
 }
 .app-root[data-theme="dark"] .flowtwin-baseline-note strong { color: var(--ink-strong); }
+
+.flowtwin-panel .flowtwin-metric-value--explanatory {
+  font-family: inherit;
+  font-size: .86rem;
+  font-weight: 790;
+  letter-spacing: -.01em;
+  line-height: 1.35;
+}
