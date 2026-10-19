@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../services/api';
 import { Badge, Button, Card, EmptyState, Field, inputClass } from '../../../components/ui';
+import Icon from '../../../components/ui/Icon';
 
 const initialScenario = { name: 'Demand pressure test', horizon_minutes: '60', extra_arrivals: '8', additional_stations: '0', station_loss: '0', doctor_delay_minutes: '0', seed: '20261015' };
 const numberFields = [
@@ -11,26 +12,73 @@ const numberFields = [
   ['doctor_delay_minutes', 'Doctor delay (minutes)', 0, 180],
   ['seed', 'Repeatable scenario seed', 1, 2147483647]
 ];
-function Metric({ label, value, suffix = '' }) {
-  return <div className="rounded-xl border border-stone-200 bg-white p-3"><div className="text-xs text-stone-500">{label}</div><div className="mt-1 font-display text-2xl font-bold text-stone-900">{value === null || value === undefined ? '—' : value}{value === null || value === undefined ? '' : suffix}</div></div>;
+
+function Metric({ label, value, suffix = '', icon = 'chart' }) {
+  const missing = value === null || value === undefined;
+  return (
+    <div className="flowtwin-metric">
+      <span className="flowtwin-metric-icon" aria-hidden="true"><Icon name={icon} size={17} /></span>
+      <div className="flowtwin-metric-label">{label}</div>
+      <div className="flowtwin-metric-value">{missing ? '—' : value}{missing ? '' : suffix}</div>
+    </div>
+  );
 }
+
 function showDelta(value, suffix = '') {
   if (value === null || value === undefined) return 'Not available';
   const n = Number(value);
   return (n > 0 ? '+' : '') + n + suffix;
 }
+
+function numericValue(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const converted = Number(value);
+  return Number.isFinite(converted) && converted >= 0 ? converted : null;
+}
+
+function displayValue(value, suffix = '') {
+  return value === null || value === undefined || !Number.isFinite(Number(value))
+    ? '—'
+    : Number(value).toLocaleString(undefined, { maximumFractionDigits: 1 }) + suffix;
+}
+
+function ComparisonBar({ label, baseline, scenario, suffix = '' }) {
+  const base = numericValue(baseline);
+  const projected = numericValue(scenario);
+  const scale = Math.max(base ?? 0, projected ?? 0);
+  const barWidth = value => !value || scale === 0 ? 0 : Math.max(2, (value / scale) * 100);
+
+  return (
+    <div className="flowtwin-comparison-row" role="group" aria-label={`${label}: baseline ${displayValue(base, suffix)}, scenario ${displayValue(projected, suffix)}`}>
+      <div className="flowtwin-comparison-row-heading">
+        <span>{label}</span>
+        <span className="flowtwin-comparison-values"><strong>{displayValue(base, suffix)}</strong><span aria-hidden="true">→</span><strong>{displayValue(projected, suffix)}</strong></span>
+      </div>
+      <div className="flowtwin-comparison-track" aria-hidden="true">
+        <span className="flowtwin-comparison-bar flowtwin-comparison-bar--baseline" style={{ width: barWidth(base) + '%' }} />
+      </div>
+      <div className="flowtwin-comparison-track flowtwin-comparison-track--scenario" aria-hidden="true">
+        <span className="flowtwin-comparison-bar flowtwin-comparison-bar--scenario" style={{ width: barWidth(projected) + '%' }} />
+      </div>
+    </div>
+  );
+}
+
 export default function FlowTwinPanel({ token }) {
   const [form, setForm] = useState(initialScenario);
   const [result, setResult] = useState(null);
   const [recent, setRecent] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
   const refresh = useCallback(async () => {
     try { setRecent(await api.listFlowSimulations(token, 8)); } catch (e) { setError(e.message); }
   }, [token]);
   useEffect(() => { refresh(); }, [refresh]);
+
   async function run() {
-    setBusy(true); setError('');
+    setBusy(true);
+    setError('');
     try {
       const payload = { ...form };
       numberFields.forEach(([key]) => { payload[key] = Number(form[key]); });
@@ -40,13 +88,19 @@ export default function FlowTwinPanel({ token }) {
     } catch (e) { setError(e.message || 'The simulation could not be run.'); }
     finally { setBusy(false); }
   }
+
   const scenario = result?.scenario;
+  const baseline = result?.baseline;
   const compare = result?.comparison;
+
   return (
-    <div className="space-y-5">
-      <Card className="p-5 md:p-6">
+    <div className="space-y-5 flowtwin-panel">
+      <Card className="flowtwin-config-card p-5 md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><h2 className="font-display text-lg font-bold">What happens if…?</h2><p className="mt-1 max-w-2xl text-sm text-stone-500">Compare the current operational snapshot with a hypothetical demand, staffing or station disruption. No live queue actions are taken.</p></div>
+          <div className="flowtwin-panel-heading">
+            <span className="flowtwin-panel-heading-icon" aria-hidden="true"><Icon name="chart" size={20} /></span>
+            <div><p className="eyebrow">Scenario workbench</p><h2 className="font-display text-lg font-bold">What happens if…?</h2><p className="mt-1 max-w-2xl text-sm text-stone-500">Compare the current operational snapshot with hypothetical demand, staffing or station disruption. No live queue actions are taken.</p></div>
+          </div>
           <Badge tone="teal">Deterministic model</Badge>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -55,32 +109,74 @@ export default function FlowTwinPanel({ token }) {
           </div>
           {numberFields.map(([key, label, min, max]) => <Field key={key} label={label} hint={`Allowed: ${min}–${max}`}><input className={inputClass} type="number" min={min} max={max} step="1" value={form[key]} onChange={e => setForm({ ...form, [key]: e.target.value })} /></Field>)}
         </div>
+        <div className="flowtwin-input-summary">
+          <div className="flowtwin-input-summary-heading"><span>Scenario inputs</span><small>Configured values · before simulation</small></div>
+          <div className="flowtwin-input-summary-grid">
+            {[
+              { key: 'extra_arrivals', label: 'Additional arrivals', max: 200, unit: '' },
+              { key: 'additional_stations', label: 'Additional stations', max: 8, unit: '' },
+              { key: 'station_loss', label: 'Stations unavailable', max: 8, unit: '' },
+              { key: 'doctor_delay_minutes', label: 'Doctor delay', max: 180, unit: ' min' }
+            ].map(item => {
+              const value = Number(form[item.key]) || 0;
+              const width = Math.max(0, Math.min(100, (value / item.max) * 100));
+              return (
+                <div className="flowtwin-input-meter" key={item.key}>
+                  <div><span>{item.label}</span><strong>{value}{item.unit}</strong></div>
+                  <div className="flowtwin-input-meter-track" role="progressbar" aria-label={item.label} aria-valuemin={0} aria-valuemax={item.max} aria-valuenow={Math.max(0, Math.min(item.max, value))}><span style={{ width: width + '%' }} /></div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
         {error && <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
         <div className="mt-5 flex flex-wrap gap-2"><Button icon="chart" onClick={run} disabled={busy}>{busy ? 'Simulating…' : 'Run comparison'}</Button><Button variant="secondary" onClick={() => { setForm(initialScenario); setResult(null); setError(''); }}>Reset scenario</Button></div>
       </Card>
-      {result && <Card className="space-y-5 p-5 md:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-display text-lg font-bold">{result.name}</h2><p className="mt-1 text-xs text-stone-500">Simulation #{result.simulation_id} · {result.model_version} · seed {result.input?.seed}</p></div><Badge tone={scenario?.model_quality === 'OBSERVATION_BASED' ? 'green' : 'orange'}>{scenario?.model_quality?.replaceAll('_', ' ') || 'Estimate'}</Badge></div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Metric label="Projected completions" value={scenario?.projected_completed} />
-          <Metric label="Projected remaining" value={scenario?.projected_remaining} />
-          <Metric label="Median wait to service start" value={scenario?.p50_additional_wait_minutes} suffix=" min" />
-          <Metric label="P90 wait to service start" value={scenario?.p90_additional_wait_minutes} suffix=" min" />
-        </div>
-        <div><h3 className="font-semibold">Scenario impact vs baseline</h3><div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <Metric label="Change in completions" value={showDelta(compare?.projected_completed_delta)} />
-          <Metric label="Change in remaining queue" value={showDelta(compare?.projected_remaining_delta)} />
-          <Metric label="Change in P90 wait" value={showDelta(compare?.p90_additional_wait_delta_minutes, ' min')} />
-          <Metric label="Change in mean wait" value={showDelta(compare?.mean_additional_wait_delta_minutes, ' min')} />
-          <Metric label="Server utilisation change" value={showDelta(compare?.server_utilisation_delta_percentage_points, ' pp')} />
-          <Metric label="Available modelled servers" value={scenario?.available_servers} />
-        </div></div>
+
+      {result && <Card className="flowtwin-results-card space-y-5 p-5 md:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eyebrow">Simulation result</p><h2 className="font-display text-lg font-bold">{result.name}</h2><p className="mt-1 text-xs text-stone-500">Simulation #{result.simulation_id} · {result.model_version} · seed {result.input?.seed}</p></div><Badge tone={scenario?.model_quality === 'OBSERVATION_BASED' ? 'green' : 'orange'}>{scenario?.model_quality?.replaceAll('_', ' ') || 'Estimate'}</Badge></div>
+
+        <section className="flowtwin-projection-section">
+          <div className="flowtwin-section-title"><div><p className="eyebrow">Projected scenario</p><h3>Estimated service picture</h3></div><span className="flowtwin-model-tag"><Icon name="info" size={14} /> Model output</span></div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric label="Projected completions" value={scenario?.projected_completed} icon="checkCircle" />
+            <Metric label="Projected remaining" value={scenario?.projected_remaining} icon="users" />
+            <Metric label="Median wait to service start" value={scenario?.p50_additional_wait_minutes} suffix=" min" icon="clock" />
+            <Metric label="P90 wait to service start" value={scenario?.p90_additional_wait_minutes} suffix=" min" icon="history" />
+          </div>
+        </section>
+
+        {baseline && scenario && <section className="flowtwin-comparison-visual">
+          <div className="flowtwin-section-title"><div><p className="eyebrow">Baseline vs scenario</p><h3>Compare projected outcomes</h3><p>Each pair uses its own scale so you can compare the baseline and scenario for that measure.</p></div></div>
+          <div className="flowtwin-comparison-legend"><span><i className="flowtwin-legend-dot flowtwin-legend-dot--baseline" /> Baseline</span><span><i className="flowtwin-legend-dot flowtwin-legend-dot--scenario" /> Scenario</span></div>
+          <div className="flowtwin-comparison-grid">
+            <ComparisonBar label="Projected completions" baseline={baseline.projected_completed} scenario={scenario.projected_completed} />
+            <ComparisonBar label="Remaining queue" baseline={baseline.projected_remaining} scenario={scenario.projected_remaining} />
+            <ComparisonBar label="Median wait" baseline={baseline.p50_additional_wait_minutes} scenario={scenario.p50_additional_wait_minutes} suffix=" min" />
+            <ComparisonBar label="P90 wait" baseline={baseline.p90_additional_wait_minutes} scenario={scenario.p90_additional_wait_minutes} suffix=" min" />
+          </div>
+        </section>}
+
+        <section>
+          <div className="flowtwin-section-title"><div><p className="eyebrow">Change from baseline</p><h3>Scenario impact</h3></div></div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <Metric label="Change in completions" value={showDelta(compare?.projected_completed_delta)} icon="checkCircle" />
+            <Metric label="Change in remaining queue" value={showDelta(compare?.projected_remaining_delta)} icon="users" />
+            <Metric label="Change in P90 wait" value={showDelta(compare?.p90_additional_wait_delta_minutes, ' min')} icon="history" />
+            <Metric label="Change in mean wait" value={showDelta(compare?.mean_additional_wait_delta_minutes, ' min')} icon="clock" />
+            <Metric label="Server utilisation change" value={showDelta(compare?.server_utilisation_delta_percentage_points, ' pp')} icon="chart" />
+            <Metric label="Available modelled servers" value={scenario?.available_servers} icon="settings" />
+          </div>
+        </section>
+
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><strong>Human review required.</strong> The simulator did not change queue records or clinical priorities. These projections depend on the service-time assumptions, arrival pattern and current staffing snapshot.</div>
         <p className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm text-stone-600"><strong>Interpreting wait metrics.</strong> Median and P90 waits estimate time from arrival until service can start. Jobs may remain queued after the scenario horizon ends, so these waits can exceed the selected horizon. They are not service-completion times or observed clinical waits.</p>
-        <details className="rounded-xl border border-stone-200 p-4"><summary className="cursor-pointer font-semibold">Model assumptions and data sufficiency</summary><ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-stone-600">{(scenario?.assumptions || []).map(item => <li key={item}>{item}</li>)}</ul><p className="mt-3 text-xs text-stone-500">Observed service samples used: {scenario?.service_samples_used ?? 0}. The absence of sufficient history is reported instead of being represented as model confidence.</p></details>
+        <details className="flowtwin-assumptions rounded-xl border border-stone-200 p-4"><summary className="cursor-pointer font-semibold">Model assumptions and data sufficiency</summary><ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-stone-600">{(scenario?.assumptions || []).map(item => <li key={item}>{item}</li>)}</ul><p className="mt-3 text-xs text-stone-500">Observed service samples used: {scenario?.service_samples_used ?? 0}. The absence of sufficient history is reported instead of being represented as model confidence.</p></details>
       </Card>}
-      <Card className="overflow-hidden">
-        <div className="border-b border-stone-100 p-5"><h2 className="font-display font-bold">Recent simulations</h2><p className="mt-1 text-xs text-stone-500">Stored scenarios are operational evidence; synthetic reference profiles are not real clinic benchmarks.</p></div>
-        {recent.length ? <div className="divide-y divide-stone-100">{recent.map(item => <div key={item.simulation_id} className="flex flex-wrap items-center justify-between gap-3 p-4"><div><div className="font-semibold">{item.name}</div><div className="mt-1 text-xs text-stone-500">#{item.simulation_id} · {item.simulation_kind.replaceAll('_', ' ')} · {item.model_version}</div></div><Button variant="secondary" onClick={() => setResult({ ...item.output, simulation_id: item.simulation_id, name: item.name, input: item.input })}>View result</Button></div>)}</div> : <EmptyState title="No simulations saved yet" message="Run a scenario above to record a baseline comparison."/>}
+
+      <Card className="overflow-hidden flowtwin-recent-card">
+        <div className="border-b border-stone-100 p-5"><p className="eyebrow">Saved operational evidence</p><h2 className="font-display font-bold">Recent simulations</h2><p className="mt-1 text-xs text-stone-500">Stored scenarios are operational evidence; synthetic reference profiles are not real clinic benchmarks.</p></div>
+        {recent.length ? <div className="divide-y divide-stone-100">{recent.map(item => <div key={item.simulation_id} className="flex flex-wrap items-center justify-between gap-3 p-4 flowtwin-recent-row"><div><div className="font-semibold">{item.name}</div><div className="mt-1 text-xs text-stone-500">#{item.simulation_id} · {item.simulation_kind.replaceAll('_', ' ')} · {item.model_version}</div></div><Button variant="secondary" onClick={() => setResult({ ...item.output, simulation_id: item.simulation_id, name: item.name, input: item.input })}>View result</Button></div>)}</div> : <EmptyState title="No simulations saved yet" message="Run a scenario above to record a baseline comparison."/>}
       </Card>
     </div>
   );
