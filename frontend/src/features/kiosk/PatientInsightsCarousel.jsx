@@ -45,14 +45,17 @@ export default function PatientInsightsCarousel() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [interacting, setInteracting] = useState(false);
   const [manuallyPaused, setManuallyPaused] = useState(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => (
+    typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ));
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
 
     const query = window.matchMedia('(prefers-reduced-motion: reduce)');
     const updatePreference = event => setPrefersReducedMotion(event.matches);
-    setPrefersReducedMotion(query.matches);
 
     if (typeof query.addEventListener === 'function') {
       query.addEventListener('change', updatePreference);
