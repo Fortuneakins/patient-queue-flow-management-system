@@ -88,6 +88,8 @@ export const api = {
   listFlowSimulations: (token, limit = 20) => request(`/api/intelligence/simulations?limit=${limit}`, authOptions(token)),
   benchmarkProfiles: token => request('/api/intelligence/benchmarks', authOptions(token)),
   runSyntheticLab: (token, body) => request('/api/intelligence/synthetic-lab/run', authJsonOptions(token, body)),
+  runContinuityScenario: (token, body) => request('/api/intelligence/continuity/run', authJsonOptions(token, body)),
+  continuityRuns: (token, limit = 10) => request(`/api/intelligence/continuity/runs?limit=${limit}`, authOptions(token)),
   recordFlowForecast: (token, body) => request('/api/intelligence/forecasts', authJsonOptions(token, body)),
   forecastTruth: (token, limit = 20) => request(`/api/intelligence/forecasts/truth?limit=${limit}`, authOptions(token)),
   fairnessMetrics: token => request('/api/intelligence/fairness', authOptions(token)),
