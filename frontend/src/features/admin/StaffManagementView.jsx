@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Button, Card, EmptyState, Field, Modal, Badge, inputClass, Icon } from '../../components/ui';
+import { Button, Card, EmptyState, Field, Modal, Badge, inputClass } from '../../components/ui';
+import Icon from '../../components/ui/Icon';
 import { formatDateTime } from '../../utils/format';
 
 const STATUS_FILTERS = [
