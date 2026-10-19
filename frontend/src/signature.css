@@ -527,3 +527,305 @@
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
 }
+
+
+/* Patient Insights Carousel — helpful, low-pressure guidance for public kiosk users. */
+.kiosk-main-column {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 1.1rem;
+}
+.patient-insights-card {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--brand-muted) 52%, var(--line)) !important;
+  padding: clamp(1.05rem, 2vw, 1.55rem) !important;
+  background:
+    radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--gold) 10%, transparent), transparent 45%),
+    linear-gradient(145deg, color-mix(in srgb, var(--surface-solid) 96%, var(--brand-pale)), var(--surface)) !important;
+}
+.patient-insights-card::before {
+  position: absolute;
+  z-index: -1;
+  top: -4.5rem;
+  right: -3.1rem;
+  width: 13rem;
+  height: 13rem;
+  border: 1px solid color-mix(in srgb, var(--brand-muted) 28%, transparent);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.15rem color-mix(in srgb, var(--brand-muted) 9%, transparent), 0 0 0 2.3rem color-mix(in srgb, var(--gold) 7%, transparent);
+  content: "";
+  pointer-events: none;
+}
+.patient-insights-heading,
+.patient-insights-heading-copy,
+.patient-insights-footer,
+.patient-insights-controls {
+  display: flex;
+  align-items: center;
+}
+.patient-insights-heading {
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.patient-insights-heading-copy { min-width: 0; gap: 0.75rem; }
+.patient-insights-heading-icon {
+  display: grid;
+  width: 2.65rem;
+  height: 2.65rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--gold) 58%, var(--brand-muted));
+  border-radius: 0.9rem;
+  color: #a57b35;
+  background: linear-gradient(145deg, #fff8e8, #f4edda);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.8);
+}
+.patient-insights-heading .eyebrow { font-size: 0.59rem; }
+.patient-insights-title {
+  margin: 0.15rem 0 0;
+  color: var(--ink-strong);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.03rem, 1.8vw, 1.36rem);
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+.patient-insights-subtitle {
+  margin: 0.26rem 0 0;
+  color: var(--muted);
+  font-size: 0.69rem;
+  line-height: 1.45;
+}
+.patient-insights-count {
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--brand-muted) 46%, var(--line));
+  border-radius: 999px;
+  padding: 0.42rem 0.58rem;
+  color: var(--brand-strong);
+  background: color-mix(in srgb, var(--brand-pale) 76%, var(--surface-solid));
+  font-size: 0.68rem;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.patient-insights-count span { color: var(--muted-soft); font-weight: 700; }
+.patient-insight-slide {
+  display: grid;
+  min-width: 0;
+  min-height: 8.4rem;
+  grid-template-columns: 4.1rem minmax(0, 1fr);
+  align-items: start;
+  gap: 1rem;
+  margin: 1.15rem 0 0.95rem;
+}
+.patient-insight-art {
+  position: relative;
+  display: grid;
+  width: 4.1rem;
+  height: 4.1rem;
+  place-items: center;
+  margin-top: 0.15rem;
+}
+.patient-insight-orbit {
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--brand-muted) 58%, transparent);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.patient-insight-orbit--outer { inset: 0; }
+.patient-insight-orbit--inner {
+  inset: 0.43rem;
+  border-color: color-mix(in srgb, var(--gold) 50%, transparent);
+  border-style: dashed;
+}
+.patient-insight-symbol {
+  display: grid;
+  width: 2.65rem;
+  height: 2.65rem;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.95rem;
+  color: #e6c98c;
+  background: linear-gradient(145deg, #1b7568, #0b4b43);
+  box-shadow: 0 9px 18px rgba(12, 78, 67, 0.17), inset 0 1px rgba(255, 255, 255, 0.18);
+}
+.patient-insight-copy {
+  min-width: 0;
+  animation: patient-insight-enter 420ms cubic-bezier(.18,.78,.22,1) both;
+}
+.patient-insight-label {
+  margin: 0;
+  color: #a27c3d;
+  font-size: 0.59rem;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+  line-height: 1.35;
+}
+.patient-insight-copy h3 {
+  margin: 0.22rem 0 0;
+  color: var(--ink-strong);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.12rem, 1.85vw, 1.46rem);
+  font-weight: 780;
+  letter-spacing: -0.038em;
+  line-height: 1.16;
+  text-wrap: balance;
+}
+.patient-insight-message {
+  max-width: 48rem;
+  margin: 0.42rem 0 0;
+  color: var(--muted);
+  font-size: 0.755rem;
+  line-height: 1.62;
+}
+.patient-insight-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.38rem;
+  margin: 0.62rem 0 0;
+  color: var(--brand-strong);
+  font-size: 0.645rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.patient-insight-note svg { flex: 0 0 auto; margin-top: 0.02rem; color: var(--green); }
+.patient-insights-footer {
+  justify-content: space-between;
+  gap: 0.8rem;
+  border-top: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+  padding-top: 0.72rem;
+}
+.patient-insights-pagination { display: flex; align-items: center; gap: 0.23rem; }
+.patient-insight-dot {
+  display: grid;
+  width: 1.15rem;
+  height: 1.55rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 0.5rem;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.patient-insight-dot::before {
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-muted) 80%, var(--line));
+  content: "";
+  transition: width 200ms ease, background-color 200ms ease, box-shadow 200ms ease;
+}
+.patient-insight-dot:hover::before { background: var(--brand); }
+.patient-insight-dot.is-active::before {
+  width: 1.05rem;
+  background: linear-gradient(90deg, var(--brand), #2d9e85);
+  box-shadow: 0 2px 7px rgba(18, 102, 94, 0.17);
+}
+.patient-insight-dot:focus-visible { outline: 2px solid var(--brand) !important; outline-offset: 1px !important; }
+.patient-insights-controls { gap: 0.25rem; }
+.patient-insight-control {
+  display: inline-flex;
+  min-width: 2rem;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 0.72rem;
+  padding: 0.38rem 0.55rem;
+  color: var(--brand-strong);
+  background: color-mix(in srgb, var(--surface-solid) 85%, var(--brand-pale));
+  font-size: 0.64rem;
+  font-weight: 760;
+  transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+.patient-insight-control:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--brand-muted);
+  background: var(--brand-pale);
+}
+.patient-insight-control:disabled { cursor: not-allowed; opacity: 0.7; }
+.patient-insight-control--pause { padding-inline: 0.55rem; }
+.patient-insight-pause-mark { color: #a27c3d; font-size: 0.7rem; font-weight: 900; line-height: 1; }
+.patient-insight-control-divider { width: 1px; height: 1.25rem; margin: 0 0.15rem; background: var(--line); }
+.patient-insight-arrow--previous { transform: rotate(180deg); }
+.patient-insight-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--brand-muted) 28%, transparent);
+}
+.patient-insight-progress-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #176b60, #3aa78e, #d6b578);
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: patient-insight-progress 9500ms linear both;
+}
+.patient-insights-card.is-paused .patient-insight-progress-fill { animation-play-state: paused; }
+.app-root[data-theme="dark"] .patient-insights-card {
+  border-color: var(--line-strong) !important;
+  background:
+    radial-gradient(ellipse at 100% 0%, rgba(214, 181, 120, 0.06), transparent 45%),
+    linear-gradient(145deg, var(--surface-solid), var(--surface)) !important;
+}
+.app-root[data-theme="dark"] .patient-insights-heading-icon {
+  border-color: #665532;
+  color: #e5c585;
+  background: linear-gradient(145deg, #403720, #2a2c24);
+}
+.app-root[data-theme="dark"] .patient-insights-count {
+  color: #b9f1e0;
+  border-color: var(--line-strong);
+  background: var(--surface-raised);
+}
+.app-root[data-theme="dark"] .patient-insight-label { color: #e4c17d; }
+.app-root[data-theme="dark"] .patient-insight-note { color: #a9e8d6; }
+.app-root[data-theme="dark"] .patient-insight-control {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--surface-raised);
+}
+.app-root[data-theme="dark"] .patient-insight-control:hover:not(:disabled) { background: var(--brand-pale); }
+.app-root[data-theme="dark"] .patient-insight-symbol { box-shadow: 0 9px 18px rgba(0, 0, 0, 0.22), inset 0 1px rgba(255, 255, 255, 0.12); }
+@keyframes patient-insight-enter {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes patient-insight-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@media (max-width: 940px) {
+  .kiosk-layout { grid-template-columns: minmax(0, 1fr); }
+  .kiosk-main-column { gap: 0.9rem; }
+  .patient-insight-slide { min-height: 0; }
+}
+@media (max-width: 640px) {
+  .patient-insights-card { padding: 1rem !important; }
+  .patient-insights-heading-icon { width: 2.35rem; height: 2.35rem; }
+  .patient-insights-heading-copy { gap: 0.55rem; }
+  .patient-insights-title { font-size: 1.04rem; }
+  .patient-insights-subtitle { font-size: 0.65rem; }
+  .patient-insight-slide { grid-template-columns: 3.05rem minmax(0, 1fr); gap: 0.75rem; margin-top: 1rem; }
+  .patient-insight-art { width: 3.05rem; height: 3.05rem; }
+  .patient-insight-symbol { width: 2.15rem; height: 2.15rem; border-radius: 0.8rem; }
+  .patient-insight-symbol svg { width: 23px; height: 23px; }
+  .patient-insight-copy h3 { font-size: 1.1rem; }
+  .patient-insight-message { font-size: 0.72rem; }
+  .patient-insights-footer { align-items: flex-end; }
+  .patient-insights-controls { gap: 0.15rem; }
+  .patient-insight-control { min-width: 1.9rem; min-height: 1.9rem; padding: 0.3rem 0.45rem; }
+  .patient-insight-control--pause { max-width: 2.1rem; font-size: 0; gap: 0; }
+  .patient-insight-control--pause .patient-insight-pause-mark { font-size: 0.75rem; }
+}

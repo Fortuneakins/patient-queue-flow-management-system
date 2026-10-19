@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Icon from '../../components/ui/Icon';
 import { Button, Card, Field, inputClass, Badge, Spinner } from '../../components/ui';
 import { firstName } from '../../utils/format';
+import PatientInsightsCarousel from './PatientInsightsCarousel';
 
 export default function KioskView({ publicQueue, predictions, onVerify, onCheckIn, liveConnected = false }) {
   const [form, setForm] = useState({ identification_number: '', symptoms: '' });
@@ -75,45 +76,48 @@ export default function KioskView({ publicQueue, predictions, onVerify, onCheckI
       </div>
 
       <div className="kiosk-layout">
-        <Card className="kiosk-form-card p-7 md:p-9">
-          <div className="kiosk-section-heading">
-            <div className="kiosk-section-symbol"><Icon name={verified ? 'checkCircle' : 'ticket'} size={23} /></div>
-            <div>
-              <p className="eyebrow">Patient kiosk</p>
-              <h2>{verified ? 'Confirm your visit details' : 'Join the outpatient queue'}</h2>
-              <p>{verified ? 'Your patient record has been verified. Tell us why you are visiting today.' : 'Use your identification number or passport number. No staff sign-in is required.'}</p>
+        <div className="kiosk-main-column">
+          <Card className="kiosk-form-card p-7 md:p-9">
+            <div className="kiosk-section-heading">
+              <div className="kiosk-section-symbol"><Icon name={verified ? 'checkCircle' : 'ticket'} size={23} /></div>
+              <div>
+                <p className="eyebrow">Patient kiosk</p>
+                <h2>{verified ? 'Confirm your visit details' : 'Join the outpatient queue'}</h2>
+                <p>{verified ? 'Your patient record has been verified. Tell us why you are visiting today.' : 'Use your identification number or passport number. No staff sign-in is required.'}</p>
+              </div>
             </div>
-          </div>
-
-          {!verified ? (
-            <form className="kiosk-form-body" onSubmit={(event) => { event.preventDefault(); verify(); }}>
-              <Field label="Identification number" required htmlFor="kiosk-identification" hint="Enter your South African ID number or passport number.">
-                <div className="kiosk-input-row">
-                  <input id="kiosk-identification" className={inputClass} autoComplete="off" inputMode="text" maxLength={20} required value={form.identification_number} onChange={event => setForm({ ...form, identification_number: event.target.value.toUpperCase() })} />
-                  <Button type="submit" disabled={!form.identification_number.trim() || busy} icon={busy ? undefined : 'search'}>{busy ? <><Spinner /> Verifying</> : 'Verify record'}</Button>
+  
+            {!verified ? (
+              <form className="kiosk-form-body" onSubmit={(event) => { event.preventDefault(); verify(); }}>
+                <Field label="Identification number" required htmlFor="kiosk-identification" hint="Enter your South African ID number or passport number.">
+                  <div className="kiosk-input-row">
+                    <input id="kiosk-identification" className={inputClass} autoComplete="off" inputMode="text" maxLength={20} required value={form.identification_number} onChange={event => setForm({ ...form, identification_number: event.target.value.toUpperCase() })} />
+                    <Button type="submit" disabled={!form.identification_number.trim() || busy} icon={busy ? undefined : 'search'}>{busy ? <><Spinner /> Verifying</> : 'Verify record'}</Button>
+                  </div>
+                </Field>
+              </form>
+            ) : (
+              <form onSubmit={submit} className="kiosk-form-body">
+                <div className="verified-patient-banner">
+                  <div className="verified-patient-mark"><Icon name="checkCircle" size={20} /></div>
+                  <div className="verified-patient-copy"><p className="eyebrow">Patient verified</p><strong>{firstName(verified.first_name)}</strong><span>Identity check complete</span></div>
+                  <Badge tone="green">Ready to check in</Badge>
                 </div>
-              </Field>
-            </form>
-          ) : (
-            <form onSubmit={submit} className="kiosk-form-body">
-              <div className="verified-patient-banner">
-                <div className="verified-patient-mark"><Icon name="checkCircle" size={20} /></div>
-                <div className="verified-patient-copy"><p className="eyebrow">Patient verified</p><strong>{firstName(verified.first_name)}</strong><span>Identity check complete</span></div>
-                <Badge tone="green">Ready to check in</Badge>
-              </div>
-              <Field label="Reason for visit" required id="kiosk-reason" hint={`${form.symptoms.length}/500 characters. Please do not include unnecessary sensitive details.`}>
-                <textarea className={`${inputClass} kiosk-reason-field resize-y`} maxLength={500} id="kiosk-reason" required value={form.symptoms} onChange={event => setForm({ ...form, symptoms: event.target.value })} />
-              </Field>
-              <div className="kiosk-form-actions">
-                <Button type="submit" disabled={busy || !form.symptoms.trim()} icon="ticket">{busy ? <><Spinner /> Creating ticket</> : 'Join queue'}</Button>
-                <Button variant="secondary" type="button" onClick={() => { setVerified(null); setMessage(''); }} disabled={busy}>Use another patient</Button>
-              </div>
-            </form>
-          )}
-
-          {message && <div className="form-message form-message--error" role="alert"><Icon name="alert" size={17} /><span>{message}</span></div>}
-          <div className="kiosk-privacy-note"><Icon name="shield" size={16} /><p><strong>Your privacy matters.</strong> Your identification number and clinical details are not shown on the public waiting-room board.</p></div>
-        </Card>
+                <Field label="Reason for visit" required id="kiosk-reason" hint={`${form.symptoms.length}/500 characters. Please do not include unnecessary sensitive details.`}>
+                  <textarea className={`${inputClass} kiosk-reason-field resize-y`} maxLength={500} id="kiosk-reason" required value={form.symptoms} onChange={event => setForm({ ...form, symptoms: event.target.value })} />
+                </Field>
+                <div className="kiosk-form-actions">
+                  <Button type="submit" disabled={busy || !form.symptoms.trim()} icon="ticket">{busy ? <><Spinner /> Creating ticket</> : 'Join queue'}</Button>
+                  <Button variant="secondary" type="button" onClick={() => { setVerified(null); setMessage(''); }} disabled={busy}>Use another patient</Button>
+                </div>
+              </form>
+            )}
+  
+            {message && <div className="form-message form-message--error" role="alert"><Icon name="alert" size={17} /><span>{message}</span></div>}
+            <div className="kiosk-privacy-note"><Icon name="shield" size={16} /><p><strong>Your privacy matters.</strong> Your identification number and clinical details are not shown on the public waiting-room board.</p></div>
+          </Card>
+          <PatientInsightsCarousel />
+        </div>
 
         <aside className="kiosk-side-panels" aria-label="Live queue information">
           <Card className="queue-status-card p-6">
