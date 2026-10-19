@@ -39,27 +39,66 @@ export default function ClinicIntelligenceView({ token, currentUser }) {
   else panel = <FlowTwinPanel token={token} />;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-700">Operational intelligence</p>
-          <Badge tone="teal">FlowTwin · v1 foundations</Badge>
+    <div className="clinic-intelligence-view">
+      <header className="clinic-intelligence-hero">
+        <span className="clinic-intelligence-hero-icon" aria-hidden="true">
+          <Icon name="chart" size={25} />
+        </span>
+        <div className="clinic-intelligence-hero-copy">
+          <div className="clinic-intelligence-eyebrows">
+            <p className="eyebrow">Operational intelligence</p>
+            <Badge tone="teal">FlowTwin · v1 foundations</Badge>
+          </div>
+          <h1 className="font-display">Clinic Intelligence</h1>
+          <p>Model patient-flow dependencies, simulate operational scenarios, audit what happened and measure forecasts. This supports authorised staff; it never changes clinical priority automatically.</p>
         </div>
-        <h1 className="mt-1 font-display text-2xl font-bold">Clinic Intelligence</h1>
-        <p className="mt-1 max-w-3xl text-sm text-stone-500">Model patient-flow dependencies, simulate operational scenarios, audit what happened and measure forecasts. This supports authorised staff; it never changes clinical priority automatically.</p>
-      </div>
-      <Card className="p-3">
-        <nav aria-label="Clinic intelligence sections" className="flex flex-wrap gap-2">
+      </header>
+
+      <Card className="clinic-intelligence-navigation-card">
+        <div className="clinic-intelligence-nav-heading">
+          <div>
+            <p className="eyebrow">Intelligence workspace</p>
+            <h2 className="font-display">Choose an operational tool</h2>
+          </div>
+          <span className="clinic-intelligence-tool-count">{sections.length} tools</span>
+        </div>
+        <nav aria-label="Clinic intelligence sections" className="clinic-intelligence-nav-grid">
           {sections.map(section => (
-            <button key={section.id} type="button" onClick={() => setActive(section.id)} aria-current={active === section.id ? 'page' : undefined} className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm font-semibold transition ${active === section.id ? 'border-teal-800 bg-teal-800 text-white shadow-sm' : 'border-stone-200 bg-white text-stone-600 hover:border-teal-300 hover:bg-teal-50'}`}>
-              <Icon name={section.icon} size={16} />
-              <span>{section.label}</span>
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => setActive(section.id)}
+              aria-current={active === section.id ? 'page' : undefined}
+              aria-pressed={active === section.id}
+              className={`clinic-intelligence-nav-item ${active === section.id ? 'is-active' : ''}`}
+            >
+              <span className="clinic-intelligence-nav-icon"><Icon name={section.icon} size={18} /></span>
+              <span className="clinic-intelligence-nav-copy">
+                <strong>{section.label}</strong>
+                <small>{section.desc}</small>
+              </span>
+              <Icon name="arrow" size={15} className="clinic-intelligence-nav-arrow" />
             </button>
           ))}
         </nav>
       </Card>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500"><Icon name="info" size={15} /><span>{selected.desc}. Use synthetic scenarios for demonstrations; simulation outputs are estimates, not clinical guarantees.</span></div>
-      {panel}
+
+      <section className="clinic-intelligence-context" aria-live="polite">
+        <span className="clinic-intelligence-context-icon"><Icon name={selected.icon} size={18} /></span>
+        <div className="clinic-intelligence-context-copy">
+          <span className="clinic-intelligence-context-label">Selected tool</span>
+          <strong>{selected.label}</strong>
+          <p>{selected.desc}</p>
+        </div>
+        <div className="clinic-intelligence-safety-note">
+          <Icon name="info" size={16} />
+          <span>Simulations are estimates, not clinical guarantees. Synthetic scenarios do not change live queue actions or clinical priority.</span>
+        </div>
+      </section>
+
+      <div key={active} className="clinic-intelligence-panel-enter">
+        {panel}
+      </div>
     </div>
   );
 }
