@@ -1023,7 +1023,7 @@
 .staff-management-error > svg { flex: 0 0 auto; margin-top: 0.05rem; }
 .staff-management-error > span { flex: 1; }
 .staff-management-error button { flex: 0 0 auto; }
-.staff-login-history-table-wrap { width: 100%; }
+.staff-login-history-table-wrap { width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
 .staff-login-history-table { width: 100%; min-width: 20rem; table-layout: auto; }
 .staff-login-history-table thead th {
   position: sticky;
