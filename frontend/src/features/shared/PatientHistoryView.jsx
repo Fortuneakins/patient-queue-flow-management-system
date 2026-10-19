@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Badge, Button, Card, EmptyState, inputClass } from '../../components/ui';
+import { Badge, Button, Card, inputClass } from '../../components/ui';
 import Icon from '../../components/ui/Icon';
 import { formatDateTime } from '../../utils/format';
 
