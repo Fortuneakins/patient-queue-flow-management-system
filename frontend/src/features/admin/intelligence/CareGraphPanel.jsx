@@ -83,7 +83,7 @@ export default function CareGraphPanel({ token, canManage = false, currentRole =
         </div>
       </Card>
       <div className={canManage ? "grid gap-5 xl:grid-cols-[0.8fr_1.2fr]" : "grid gap-5"}>
-        {canManage && <Card className="p-5">
+        {canManage && <Card className="caregraph-create-card p-5">
           <h3 className="font-display text-base font-bold">Create an operational pathway</h3><p className="mt-1 text-xs text-stone-500">Stages are ordered; defaults assign Reception, Nurse and Doctor responsibilities to the first four stages. Review before using in a real workflow.</p>
           <div className="mt-4 space-y-3">
             <Field label="Pathway code" required><input className={inputClass} maxLength={40} placeholder="E.G. FOLLOW_UP" value={form.pathway_code} onChange={e => setForm({ ...form, pathway_code: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '') })}/></Field>
