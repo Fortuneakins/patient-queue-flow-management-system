@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Icon from '../../components/ui/Icon';
 import { Button, Card, Field, inputClass, Badge, Spinner } from '../../components/ui';
 import { firstName } from '../../utils/format';
+import PatientInsightsCarousel from './PatientInsightsCarousel';
 
 export default function KioskView({ publicQueue, predictions, onVerify, onCheckIn, liveConnected = false }) {
   const [form, setForm] = useState({ identification_number: '', symptoms: '' });
@@ -75,7 +76,8 @@ export default function KioskView({ publicQueue, predictions, onVerify, onCheckI
       </div>
 
       <div className="kiosk-layout">
-        <Card className="kiosk-form-card p-7 md:p-9">
+        <div className="kiosk-main-column">
+          <Card className="kiosk-form-card p-7 md:p-9">
           <div className="kiosk-section-heading">
             <div className="kiosk-section-symbol"><Icon name={verified ? 'checkCircle' : 'ticket'} size={23} /></div>
             <div>
@@ -113,7 +115,9 @@ export default function KioskView({ publicQueue, predictions, onVerify, onCheckI
 
           {message && <div className="form-message form-message--error" role="alert"><Icon name="alert" size={17} /><span>{message}</span></div>}
           <div className="kiosk-privacy-note"><Icon name="shield" size={16} /><p><strong>Your privacy matters.</strong> Your identification number and clinical details are not shown on the public waiting-room board.</p></div>
-        </Card>
+          </Card>
+          <PatientInsightsCarousel />
+        </div>
 
         <aside className="kiosk-side-panels" aria-label="Live queue information">
           <Card className="queue-status-card p-6">
