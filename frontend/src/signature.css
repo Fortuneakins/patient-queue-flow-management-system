@@ -4138,3 +4138,74 @@
 
 /* CareGraph editor should size to its form instead of stretching into empty space beside the journey timeline. */
 .caregraph-create-card { align-self: start; height: fit-content; }
+
+
+/* Saved Synthetic Lab batches: clearly separated from FlowTwin scenarios. */
+.ui-card.synthetic-lab-history-card { overflow: hidden; padding: 0 !important; }
+.synthetic-lab-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .85rem;
+  padding: 1rem clamp(1rem, 1.65vw, 1.4rem);
+  border-bottom: 1px solid var(--line);
+  background:
+    radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--gold) 7%, transparent), transparent 48%),
+    linear-gradient(145deg, color-mix(in srgb, var(--surface-solid) 98%, #fff4df), var(--surface));
+}
+.synthetic-lab-history-header .eyebrow { margin: 0 0 .22rem; }
+.synthetic-lab-history-header h2 { margin: 0; color: var(--ink-strong); font-family: Georgia, "Times New Roman", serif; font-size: 1.1rem; font-weight: 790; letter-spacing: -.03em; }
+.synthetic-lab-history-header p:last-child { max-width: 44rem; margin: .3rem 0 0; color: var(--muted); font-size: .65rem; line-height: 1.5; }
+.synthetic-lab-history-header > button { flex: 0 0 auto; }
+.synthetic-lab-history-list { display: grid; }
+.synthetic-lab-history-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .78rem;
+  padding: .88rem clamp(1rem, 1.65vw, 1.4rem);
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-solid) 91%, transparent);
+  animation: synthetic-lab-panel-arrive 320ms cubic-bezier(.18,.78,.22,1) both;
+  animation-delay: calc(var(--synthetic-history-index, 0) * 35ms);
+  transition: background-color 160ms ease;
+}
+.synthetic-lab-history-row:last-child { border-bottom: 0; }
+.synthetic-lab-history-row:hover { background: color-mix(in srgb, #fff4df 24%, var(--surface-solid)); }
+.synthetic-lab-history-icon { display: grid; width: 2.45rem; height: 2.45rem; flex: 0 0 auto; place-items: center; border: 1px solid color-mix(in srgb, var(--gold) 36%, var(--line)); border-radius: .78rem; color: #a17a38; background: color-mix(in srgb, #fff3da 72%, var(--surface-solid)); }
+.synthetic-lab-history-main { display: grid; min-width: 0; gap: .23rem; }
+.synthetic-lab-history-main > strong { color: var(--ink-strong); font-size: .76rem; font-weight: 820; overflow-wrap: anywhere; }
+.synthetic-lab-history-main > span { color: var(--muted); font-size: .6rem; line-height: 1.45; }
+.synthetic-lab-history-chips { display: flex; flex-wrap: wrap; gap: .32rem; margin-top: .18rem; }
+.synthetic-lab-history-chips > span { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: .18rem .4rem; color: var(--muted); background: var(--surface); font-size: .54rem; font-weight: 700; }
+.synthetic-lab-history-main > small { color: var(--muted-soft); font-size: .59rem; line-height: 1.45; }
+.synthetic-lab-history-error { margin: .8rem 1rem 0; border: 1px solid #efc3c8; border-radius: .75rem; padding: .7rem .8rem; color: #a82f3c; background: #fff1f2; font-size: .7rem; line-height: 1.5; }
+.synthetic-lab-history-footer { display: flex; align-items: center; justify-content: space-between; gap: .7rem; border-top: 1px solid var(--line); padding: .7rem clamp(1rem, 1.65vw, 1.4rem); color: var(--muted-soft); background: color-mix(in srgb, var(--surface) 68%, var(--surface-solid)); font-size: .57rem; font-weight: 650; }
+.synthetic-lab-history-footer > span:first-child { display: inline-flex; align-items: center; gap: .38rem; }
+.synthetic-lab-history-dot { width: .4rem; height: .4rem; flex: 0 0 auto; border-radius: 50%; background: #d58b2e; box-shadow: 0 0 0 3px rgba(213,139,46,.1); }
+.synthetic-lab-result-card { animation: synthetic-lab-panel-arrive 350ms cubic-bezier(.18,.78,.22,1) both; }
+.synthetic-lab-result-metric { display: grid; min-width: 0; gap: .35rem; border: 1px solid var(--line); border-top: 2px solid color-mix(in srgb, var(--gold) 56%, var(--line)); border-radius: .82rem; padding: .72rem .78rem; background: var(--surface-solid); }
+.synthetic-lab-result-metric > span { color: var(--muted); font-size: .6rem; font-weight: 720; line-height: 1.42; }
+.synthetic-lab-result-metric > strong { color: var(--ink-strong); font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.2rem, 2vw, 1.6rem); font-weight: 820; font-variant-numeric: tabular-nums; letter-spacing: -.03em; line-height: 1.15; overflow-wrap: anywhere; }
+.app-root[data-theme="dark"] .ui-card.synthetic-lab-history-card { border-color: var(--line) !important; background: var(--surface-solid) !important; }
+.app-root[data-theme="dark"] .synthetic-lab-history-header { border-color: var(--line); background: linear-gradient(145deg, var(--surface-solid), var(--surface-raised)); }
+.app-root[data-theme="dark"] .synthetic-lab-history-row { border-color: var(--line); background: var(--surface-solid); }
+.app-root[data-theme="dark"] .synthetic-lab-history-row:hover { background: var(--surface-raised); }
+.app-root[data-theme="dark"] .synthetic-lab-history-icon { border-color: #665532; color: #e4c17d; background: #332d20; }
+.app-root[data-theme="dark"] .synthetic-lab-history-chips > span { border-color: var(--line-strong); background: var(--surface-raised); }
+.app-root[data-theme="dark"] .synthetic-lab-history-footer { border-color: var(--line); background: var(--surface-raised); }
+.app-root[data-theme="dark"] .synthetic-lab-result-metric { border-color: var(--line-strong); background: var(--surface-solid); }
+@media (max-width: 650px) {
+  .synthetic-lab-history-header { align-items: flex-start; flex-direction: column; }
+  .synthetic-lab-history-header > button { width: 100%; }
+  .synthetic-lab-history-row { grid-template-columns: auto minmax(0,1fr); align-items: start; gap: .58rem; }
+  .synthetic-lab-history-row > button { grid-column: 2; justify-self: start; }
+  .synthetic-lab-history-footer { align-items: flex-start; flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .synthetic-lab-history-card *, .synthetic-lab-history-card *::before, .synthetic-lab-history-card *::after,
+  .synthetic-lab-result-card *, .synthetic-lab-result-card *::before, .synthetic-lab-result-card *::after {
+    animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important;
+  }
+  .synthetic-lab-history-row, .synthetic-lab-result-card { transform: none !important; }
+}
