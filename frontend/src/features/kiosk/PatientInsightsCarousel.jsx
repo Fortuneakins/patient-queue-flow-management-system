@@ -166,7 +166,7 @@ export default function PatientInsightsCarousel() {
       </div>
 
       <div className="patient-insight-progress" aria-hidden="true">
-        <span key={activeIndex} className="patient-insight-progress-fill" />
+        <span key={`${activeIndex}-${isPaused}`} className="patient-insight-progress-fill" />
       </div>
     </section>
   );
