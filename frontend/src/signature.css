@@ -3712,3 +3712,429 @@
   .overview-metric-card, .overview-metric-value, .overview-performance-row, .overview-empty-orbit,
   .clinic-intelligence-nav-item, .clinic-intelligence-nav-arrow, .clinic-intelligence-panel-enter { transform: none !important; }
 }
+
+
+/* Clinic Intelligence studio-wide finish: consistent cards, data surfaces and restrained motion. */
+.clinic-intelligence-panel-enter > .space-y-5,
+.clinic-intelligence-panel-enter > .grid { gap: 1rem; }
+.clinic-intelligence-panel-enter > .ui-card,
+.clinic-intelligence-panel-enter > .space-y-5 > .ui-card,
+.clinic-intelligence-panel-enter > .grid > .ui-card {
+  border-color: color-mix(in srgb, var(--brand-muted) 36%, var(--line)) !important;
+  border-radius: 1.15rem !important;
+  box-shadow: 0 11px 27px rgba(12, 59, 50, .045), inset 0 1px rgba(255,255,255,.3);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+.clinic-intelligence-panel-enter > .space-y-5 > .ui-card:hover,
+.clinic-intelligence-panel-enter > .grid > .ui-card:hover {
+  border-color: color-mix(in srgb, var(--brand-muted) 58%, var(--line)) !important;
+  box-shadow: 0 14px 31px rgba(12, 59, 50, .065), inset 0 1px rgba(255,255,255,.3);
+}
+.clinic-intelligence-panel-enter .eyebrow {
+  color: var(--brand-strong);
+  font-size: .57rem;
+  font-weight: 850;
+  letter-spacing: .16em;
+}
+.clinic-intelligence-panel-enter input:not([type="checkbox"]):not([type="radio"]),
+.clinic-intelligence-panel-enter select,
+.clinic-intelligence-panel-enter textarea {
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+.clinic-intelligence-panel-enter input:not([type="checkbox"]):not([type="radio"]):focus,
+.clinic-intelligence-panel-enter select:focus,
+.clinic-intelligence-panel-enter textarea:focus {
+  outline: none;
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-muted) 36%, transparent) !important;
+}
+.clinic-intelligence-panel-enter details > summary {
+  list-style: none;
+}
+.clinic-intelligence-panel-enter details > summary::-webkit-details-marker { display: none; }
+.clinic-intelligence-panel-enter details > summary:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+  border-radius: .4rem;
+}
+.clinic-intelligence-panel-enter table { border-collapse: separate; border-spacing: 0; }
+.clinic-intelligence-panel-enter thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--brand-pale) 57%, var(--surface-solid));
+  font-size: .59rem;
+  font-weight: 850;
+  letter-spacing: .075em;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.clinic-intelligence-panel-enter tbody tr { transition: background-color 150ms ease; }
+.clinic-intelligence-panel-enter tbody tr:hover { background: color-mix(in srgb, var(--brand-pale) 32%, var(--surface-solid)); }
+.clinic-intelligence-panel-enter tbody td {
+  border-bottom-color: var(--line);
+  line-height: 1.5;
+  vertical-align: top;
+}
+.clinic-intelligence-panel-enter tbody tr:last-child td { border-bottom: 0; }
+.clinic-intelligence-panel-enter .overflow-x-auto {
+  scrollbar-color: color-mix(in srgb, var(--brand-muted) 65%, var(--line)) transparent;
+  scrollbar-width: thin;
+}
+.clinic-intelligence-panel-enter .rounded-xl.border.p-4,
+.clinic-intelligence-panel-enter .rounded-xl.border.p-3 {
+  border-color: var(--line);
+}
+.app-root[data-theme="dark"] .clinic-intelligence-panel-enter > .ui-card,
+.app-root[data-theme="dark"] .clinic-intelligence-panel-enter > .space-y-5 > .ui-card,
+.app-root[data-theme="dark"] .clinic-intelligence-panel-enter > .grid > .ui-card {
+  border-color: var(--line) !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.16), inset 0 1px rgba(255,255,255,.02);
+}
+.app-root[data-theme="dark"] .clinic-intelligence-panel-enter thead th {
+  border-color: var(--line);
+  color: var(--muted);
+  background: var(--surface-raised);
+}
+.app-root[data-theme="dark"] .clinic-intelligence-panel-enter tbody tr:hover { background: var(--surface-raised); }
+@media (prefers-reduced-motion: reduce) {
+  .clinic-intelligence-panel-enter > *,
+  .clinic-intelligence-panel-enter > * *,
+  .clinic-intelligence-panel-enter > *::before,
+  .clinic-intelligence-panel-enter > *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Flight Recorder: compact event cards with expandable, readable metadata instead of an oversized JSON column. */
+.ui-card.flight-recorder-card { padding: 0 !important; overflow: hidden; }
+.flight-recorder-header {
+  display: grid;
+  gap: .9rem;
+  padding: clamp(1rem, 1.8vw, 1.5rem);
+  border-bottom: 1px solid var(--line);
+  background:
+    radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--gold) 7%, transparent), transparent 46%),
+    linear-gradient(145deg, color-mix(in srgb, var(--surface-solid) 98%, var(--brand-pale)), var(--surface));
+}
+.flight-recorder-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.flight-recorder-title-copy { display: flex; min-width: 0; align-items: flex-start; gap: .82rem; }
+.flight-recorder-heading-icon {
+  display: grid;
+  width: 2.9rem;
+  height: 2.9rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--line));
+  border-radius: .98rem;
+  color: #a17a38;
+  background: linear-gradient(145deg, #fff8e8, #f3eddc);
+  box-shadow: inset 0 1px rgba(255,255,255,.8), 0 4px 10px rgba(151,111,47,.07);
+}
+.flight-recorder-title-copy .eyebrow { margin: .02rem 0 .26rem; }
+.flight-recorder-title-copy h2 {
+  margin: 0;
+  color: var(--ink-strong);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.35rem, 2vw, 1.7rem);
+  font-weight: 790;
+  letter-spacing: -.04em;
+  line-height: 1.2;
+}
+.flight-recorder-title-copy p:last-child { max-width: 53rem; margin: .42rem 0 0; color: var(--muted); font-size: .72rem; line-height: 1.58; }
+.flight-recorder-title-row > .ui-badge { flex: 0 0 auto; }
+.flight-recorder-privacy-note {
+  display: flex;
+  align-items: flex-start;
+  gap: .48rem;
+  border: 1px solid color-mix(in srgb, var(--brand-muted) 35%, var(--line));
+  border-radius: .78rem;
+  padding: .65rem .75rem;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--brand-pale) 29%, var(--surface-solid));
+}
+.flight-recorder-privacy-note > svg { flex: 0 0 auto; margin-top: .03rem; color: var(--brand); }
+.flight-recorder-privacy-note p { margin: 0; font-size: .64rem; line-height: 1.5; }
+.flight-recorder-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .6rem; }
+.flight-recorder-summary-item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: .62rem;
+  border: 1px solid var(--line);
+  border-radius: .85rem;
+  padding: .68rem .75rem;
+  background: color-mix(in srgb, var(--surface-solid) 89%, transparent);
+  animation: flight-recorder-card-arrive 340ms cubic-bezier(.18,.78,.22,1) both;
+}
+.flight-recorder-summary-item:nth-child(2) { animation-delay: 45ms; }
+.flight-recorder-summary-item:nth-child(3) { animation-delay: 90ms; }
+.flight-recorder-summary-icon {
+  display: grid;
+  width: 2.15rem;
+  height: 2.15rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--brand-muted) 35%, var(--line));
+  border-radius: .68rem;
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand-pale) 75%, var(--surface-solid));
+}
+.flight-recorder-summary-item > span:last-child { display: grid; min-width: 0; gap: .08rem; }
+.flight-recorder-summary-item strong { color: var(--ink-strong); font-family: Georgia, "Times New Roman", serif; font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.05; }
+.flight-recorder-summary-item small { color: var(--muted); font-size: .59rem; line-height: 1.35; }
+.flight-recorder-filter-panel {
+  display: grid;
+  gap: .6rem;
+  border: 1px solid var(--line);
+  border-radius: .9rem;
+  padding: .82rem;
+  background: color-mix(in srgb, var(--surface) 55%, var(--surface-solid));
+}
+.flight-recorder-filter-panel .eyebrow { margin: 0 0 .22rem; }
+.flight-recorder-filter-caption { margin: 0; color: var(--muted); font-size: .62rem; line-height: 1.45; }
+.flight-recorder-filter-caption code { border: 1px solid var(--line); border-radius: .3rem; padding: .04rem .25rem; color: var(--brand-strong); background: var(--surface-solid); font-size: .6rem; }
+.flight-recorder-filter-controls { display: grid; grid-template-columns: minmax(0,1fr) 8.5rem auto; align-items: end; gap: .65rem; }
+.flight-recorder-filter-controls > div:last-child { padding-bottom: .02rem; }
+.flight-recorder-event-list { display: grid; gap: .7rem; padding: .9rem; }
+.flight-recorder-event {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-left: 3px solid color-mix(in srgb, var(--brand-muted) 80%, var(--gold));
+  border-radius: .92rem;
+  background: color-mix(in srgb, var(--surface-solid) 96%, transparent);
+  animation: flight-recorder-card-arrive 340ms cubic-bezier(.18,.78,.22,1) both;
+  animation-delay: calc(var(--flight-event-index, 0) * 35ms);
+  transition: transform 170ms ease, border-color 170ms ease, box-shadow 170ms ease, background-color 170ms ease;
+}
+.flight-recorder-event:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--brand-muted) 58%, var(--line));
+  box-shadow: 0 7px 17px rgba(12,59,50,.045);
+}
+.flight-recorder-event-top { display: flex; align-items: flex-start; justify-content: space-between; gap: .8rem; padding: .85rem .9rem .78rem; }
+.flight-recorder-event-type { display: flex; min-width: 0; align-items: center; gap: .62rem; }
+.flight-recorder-event-icon {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--brand-muted) 37%, var(--line));
+  border-radius: .68rem;
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand-pale) 74%, var(--surface-solid));
+}
+.flight-recorder-event-type h3 { margin: 0; color: var(--ink-strong); font-size: .76rem; font-weight: 850; line-height: 1.45; overflow-wrap: anywhere; }
+.flight-recorder-event-id { display: inline-block; margin-top: .14rem; color: var(--muted-soft); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .59rem; }
+.flight-recorder-timestamp { display: inline-flex; max-width: 45%; align-items: center; justify-content: flex-end; gap: .35rem; color: var(--muted); font-size: .61rem; line-height: 1.45; text-align: right; overflow-wrap: anywhere; }
+.flight-recorder-timestamp svg { flex: 0 0 auto; color: var(--brand-muted); }
+.flight-recorder-event-details { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 48%, var(--surface-solid)); }
+.flight-recorder-detail { display: grid; min-width: 0; align-content: start; gap: .25rem; padding: .68rem .86rem; }
+.flight-recorder-detail + .flight-recorder-detail { border-left: 1px solid var(--line); }
+.flight-recorder-detail > span { color: var(--muted-soft); font-size: .54rem; font-weight: 830; letter-spacing: .1em; text-transform: uppercase; }
+.flight-recorder-detail > strong { color: var(--ink-strong); font-size: .66rem; font-weight: 760; line-height: 1.45; overflow-wrap: anywhere; }
+.flight-recorder-detail > small { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .58rem; overflow-wrap: anywhere; }
+.flight-recorder-transition { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .62rem !important; }
+.flight-recorder-metadata { padding: .15rem .9rem; }
+.flight-recorder-metadata > summary { display: flex; min-height: 2.45rem; align-items: center; gap: .5rem; cursor: pointer; color: var(--brand-strong); font-size: .63rem; font-weight: 790; }
+.flight-recorder-metadata-leading { display: inline-flex; min-width: 0; flex: 1; align-items: center; gap: .38rem; }
+.flight-recorder-metadata-leading svg { flex: 0 0 auto; }
+.flight-recorder-metadata-count { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; padding: .17rem .42rem; color: var(--muted); background: var(--surface); font-size: .56rem; font-weight: 720; }
+.flight-recorder-metadata-toggle { display: grid; width: 1.55rem; height: 1.55rem; flex: 0 0 auto; place-items: center; border: 1px solid var(--line); border-radius: .5rem; color: var(--muted); background: var(--surface-solid); transition: transform 170ms ease, background-color 170ms ease; }
+.flight-recorder-metadata[open] .flight-recorder-metadata-toggle { transform: rotate(180deg); background: var(--brand-pale); color: var(--brand-strong); }
+.flight-recorder-metadata pre {
+  max-height: 22rem;
+  overflow: auto;
+  margin: 0 0 .8rem;
+  border: 1px solid var(--line);
+  border-radius: .72rem;
+  padding: .8rem;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 72%, var(--surface-solid));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .65rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  scrollbar-color: color-mix(in srgb, var(--brand-muted) 65%, var(--line)) transparent;
+  scrollbar-width: thin;
+}
+.flight-recorder-no-metadata { margin: 0 0 .8rem; border: 1px dashed var(--line-strong); border-radius: .7rem; padding: .72rem; color: var(--muted); font-size: .65rem; }
+.flight-recorder-message { margin: .85rem; border-radius: .8rem; padding: .8rem; font-size: .72rem; }
+.flight-recorder-message--error { border: 1px solid #efc3c8; color: #a82f3c; background: #fff1f2; }
+.flight-recorder-empty { padding: 1rem; }
+.flight-recorder-footer { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: .35rem .75rem; border-top: 1px solid var(--line); padding: .85rem 1rem; color: var(--muted-soft); background: color-mix(in srgb, var(--surface) 68%, var(--surface-solid)); font-size: .59rem; }
+.flight-recorder-footer > span:first-child { display: inline-flex; align-items: center; gap: .38rem; color: var(--muted); font-weight: 720; }
+.flight-recorder-footer-dot { width: .4rem; height: .4rem; flex: 0 0 auto; border-radius: 50%; background: #1ba779; box-shadow: 0 0 0 3px rgba(27,167,121,.1); }
+.flight-recorder-footer p { grid-column: 1 / -1; margin: .1rem 0 0; line-height: 1.5; }
+.app-root[data-theme="dark"] .ui-card.flight-recorder-card { border-color: var(--line) !important; background: var(--surface-solid) !important; }
+.app-root[data-theme="dark"] .flight-recorder-header { border-color: var(--line); background: linear-gradient(145deg, var(--surface-solid), var(--surface-raised)); }
+.app-root[data-theme="dark"] .flight-recorder-heading-icon { color: #e4c17d; border-color: #665532; background: linear-gradient(145deg, #403720, #2a2c24); }
+.app-root[data-theme="dark"] .flight-recorder-privacy-note,
+.app-root[data-theme="dark"] .flight-recorder-filter-panel { border-color: var(--line-strong); background: var(--surface-raised); }
+.app-root[data-theme="dark"] .flight-recorder-summary-item { border-color: var(--line-strong); background: var(--surface-solid); }
+.app-root[data-theme="dark"] .flight-recorder-summary-icon,
+.app-root[data-theme="dark"] .flight-recorder-event-icon { border-color: var(--line-strong); background: var(--surface-raised); }
+.app-root[data-theme="dark"] .flight-recorder-event { border-color: var(--line); border-left-color: #398f80; background: var(--surface-solid); }
+.app-root[data-theme="dark"] .flight-recorder-event-details { border-color: var(--line); background: var(--surface-raised); }
+.app-root[data-theme="dark"] .flight-recorder-detail + .flight-recorder-detail { border-color: var(--line); }
+.app-root[data-theme="dark"] .flight-recorder-metadata-count,
+.app-root[data-theme="dark"] .flight-recorder-metadata-toggle { border-color: var(--line-strong); background: var(--surface-raised); }
+.app-root[data-theme="dark"] .flight-recorder-metadata[open] .flight-recorder-metadata-toggle { background: var(--surface-solid); }
+.app-root[data-theme="dark"] .flight-recorder-metadata pre { border-color: var(--line-strong); background: var(--surface-raised); }
+.app-root[data-theme="dark"] .flight-recorder-footer { border-color: var(--line); background: var(--surface-raised); }
+@keyframes flight-recorder-card-arrive { from { opacity: 0; transform: translate3d(0, 6px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
+@media (max-width: 760px) {
+  .flight-recorder-title-row { flex-direction: column; }
+  .flight-recorder-summary-grid { grid-template-columns: repeat(3, minmax(0,1fr)); gap: .42rem; }
+  .flight-recorder-summary-item { align-items: flex-start; flex-direction: column; gap: .42rem; padding: .58rem; }
+  .flight-recorder-filter-controls { grid-template-columns: minmax(0,1fr) minmax(7rem,.55fr); }
+  .flight-recorder-filter-controls > div:last-child { grid-column: 1 / -1; }
+  .flight-recorder-filter-controls > div:last-child button { width: 100%; }
+  .flight-recorder-event-top { flex-direction: column; }
+  .flight-recorder-timestamp { max-width: 100%; justify-content: flex-start; text-align: left; }
+  .flight-recorder-detail { padding: .62rem .58rem; }
+}
+@media (max-width: 520px) {
+  .flight-recorder-header { padding: .85rem; }
+  .flight-recorder-title-copy { gap: .6rem; }
+  .flight-recorder-heading-icon { width: 2.45rem; height: 2.45rem; }
+  .flight-recorder-summary-grid { grid-template-columns: 1fr; }
+  .flight-recorder-summary-item { align-items: center; flex-direction: row; }
+  .flight-recorder-filter-controls { grid-template-columns: 1fr; }
+  .flight-recorder-filter-controls > div:last-child { grid-column: auto; }
+  .flight-recorder-event-list { padding: .62rem; gap: .55rem; }
+  .flight-recorder-event-details { grid-template-columns: 1fr; }
+  .flight-recorder-detail + .flight-recorder-detail { border-top: 1px solid var(--line); border-left: 0; }
+  .flight-recorder-detail { padding: .58rem .75rem; }
+  .flight-recorder-footer { grid-template-columns: 1fr; }
+  .flight-recorder-footer p { grid-column: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flight-recorder-card *,
+  .flight-recorder-card *::before,
+  .flight-recorder-card *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .flight-recorder-event,
+  .flight-recorder-summary-item,
+  .flight-recorder-metadata-toggle { transform: none !important; }
+}
+
+/* FlowTwin: legible metrics, scale-labelled baseline comparison bars and bounded input meters. */
+.flowtwin-panel-heading { display: flex; min-width: 0; align-items: flex-start; gap: .72rem; }
+.flowtwin-panel-heading-icon { display: grid; width: 2.55rem; height: 2.55rem; flex: 0 0 auto; place-items: center; border: 1px solid color-mix(in srgb, var(--brand-muted) 40%, var(--line)); border-radius: .82rem; color: var(--brand); background: var(--brand-pale); }
+.flowtwin-panel-heading .eyebrow { margin: .03rem 0 .24rem; }
+.flowtwin-panel-heading h2 { margin: 0; }
+.flowtwin-input-summary { margin-top: 1rem; border: 1px solid var(--line); border-radius: .92rem; padding: .85rem; background: color-mix(in srgb, var(--surface) 57%, var(--surface-solid)); }
+.flowtwin-input-summary-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .4rem; margin-bottom: .75rem; }
+.flowtwin-input-summary-heading > span { color: var(--ink-strong); font-size: .7rem; font-weight: 830; }
+.flowtwin-input-summary-heading small { color: var(--muted-soft); font-size: .59rem; }
+.flowtwin-input-summary-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: .65rem; }
+.flowtwin-input-meter { display: grid; min-width: 0; gap: .45rem; }
+.flowtwin-input-meter > div:first-child { display: flex; align-items: baseline; justify-content: space-between; gap: .4rem; }
+.flowtwin-input-meter > div:first-child span { color: var(--muted); font-size: .59rem; line-height: 1.35; }
+.flowtwin-input-meter > div:first-child strong { flex: 0 0 auto; color: var(--ink-strong); font-size: .66rem; font-variant-numeric: tabular-nums; }
+.flowtwin-input-meter-track { height: .38rem; overflow: hidden; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-solid); }
+.flowtwin-input-meter-track > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #4f9b8c, #0d6659); transition: width 260ms cubic-bezier(.18,.78,.22,1); }
+.flowtwin-results-card { animation: flowtwin-results-arrive 380ms cubic-bezier(.18,.78,.22,1) both; }
+.flowtwin-panel .flowtwin-metric {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-top: 2px solid color-mix(in srgb, var(--brand-muted) 65%, var(--line));
+  border-radius: .9rem;
+  padding: .78rem .85rem .82rem;
+  background: color-mix(in srgb, var(--surface-solid) 91%, transparent);
+  animation: flowtwin-metric-arrive 350ms cubic-bezier(.18,.78,.22,1) both;
+  transition: transform 170ms ease, border-color 170ms ease, box-shadow 170ms ease;
+}
+.flowtwin-panel .flowtwin-metric:hover { transform: translateY(-1px); border-color: var(--brand-muted); box-shadow: 0 7px 16px rgba(12,59,50,.04); }
+.flowtwin-metric-icon { display: grid; width: 2rem; height: 2rem; place-items: center; border: 1px solid var(--line); border-radius: .65rem; color: var(--brand); background: var(--brand-pale); }
+.flowtwin-metric-label { margin-top: .62rem; color: var(--muted); font-size: .62rem; font-weight: 720; line-height: 1.4; }
+.flowtwin-metric-value { margin-top: .26rem; color: var(--ink-strong); font-family: Georgia, "Times New Roman", serif; font-size: clamp(1.3rem, 2vw, 1.8rem); font-weight: 820; font-variant-numeric: tabular-nums; letter-spacing: -.035em; line-height: 1.13; overflow-wrap: anywhere; }
+.flowtwin-section-title { display: flex; align-items: flex-start; justify-content: space-between; gap: .8rem; margin-bottom: .75rem; }
+.flowtwin-section-title .eyebrow { margin: 0 0 .2rem; }
+.flowtwin-section-title h3 { margin: 0; color: var(--ink-strong); font-family: Georgia, "Times New Roman", serif; font-size: 1.05rem; font-weight: 780; letter-spacing: -.025em; }
+.flowtwin-section-title p:last-child { max-width: 40rem; margin: .28rem 0 0; color: var(--muted); font-size: .63rem; line-height: 1.5; }
+.flowtwin-model-tag { display: inline-flex; flex: 0 0 auto; align-items: center; gap: .32rem; border: 1px solid var(--line); border-radius: 999px; padding: .33rem .5rem; color: var(--muted); background: var(--surface); font-size: .58rem; font-weight: 760; }
+.flowtwin-projection-section { display: grid; gap: .7rem; }
+.flowtwin-comparison-visual { border: 1px solid var(--line); border-radius: 1rem; padding: .95rem; background: color-mix(in srgb, var(--surface) 60%, var(--surface-solid)); }
+.flowtwin-comparison-legend { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; margin: .3rem 0 .78rem; }
+.flowtwin-comparison-legend > span { display: inline-flex; align-items: center; gap: .32rem; color: var(--muted); font-size: .59rem; font-weight: 700; }
+.flowtwin-legend-dot { display: inline-block; width: .48rem; height: .48rem; border-radius: 50%; }
+.flowtwin-legend-dot--baseline { background: #8fa7b6; }
+.flowtwin-legend-dot--scenario { background: #16816e; }
+.flowtwin-comparison-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .8rem 1rem; }
+.flowtwin-comparison-row { min-width: 0; border: 1px solid var(--line); border-radius: .78rem; padding: .68rem .72rem; background: var(--surface-solid); }
+.flowtwin-comparison-row-heading { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; margin-bottom: .46rem; }
+.flowtwin-comparison-row-heading > span:first-child { color: var(--muted); font-size: .62rem; font-weight: 780; }
+.flowtwin-comparison-values { display: inline-flex; align-items: center; gap: .3rem; flex: 0 0 auto; color: var(--muted-soft); font-size: .59rem; font-variant-numeric: tabular-nums; }
+.flowtwin-comparison-values strong { color: var(--ink-strong); font-size: .65rem; font-weight: 820; }
+.flowtwin-comparison-track { height: .38rem; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, #8fa7b6 12%, var(--surface)); }
+.flowtwin-comparison-track + .flowtwin-comparison-track { margin-top: .27rem; }
+.flowtwin-comparison-track--scenario { background: color-mix(in srgb, #16816e 9%, var(--surface)); }
+.flowtwin-comparison-bar { display: block; height: 100%; border-radius: inherit; transition: width 420ms cubic-bezier(.18,.78,.22,1); }
+.flowtwin-comparison-bar--baseline { background: linear-gradient(90deg, #b7c8d2, #7f9dab); }
+.flowtwin-comparison-bar--scenario { background: linear-gradient(90deg, #54ad99, #0f6f5e); }
+.flowtwin-assumptions > summary { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+.flowtwin-assumptions > summary::after { content: "+"; color: var(--brand); font-size: 1rem; }
+.flowtwin-assumptions[open] > summary::after { content: "−"; }
+.flowtwin-recent-row { transition: background-color 160ms ease; }
+.flowtwin-recent-row:hover { background: color-mix(in srgb, var(--brand-pale) 25%, var(--surface-solid)); }
+.app-root[data-theme="dark"] .flowtwin-panel-heading-icon,
+.app-root[data-theme="dark"] .flowtwin-metric-icon { border-color: var(--line-strong); background: var(--surface-raised); }
+.app-root[data-theme="dark"] .flowtwin-input-summary,
+.app-root[data-theme="dark"] .flowtwin-comparison-visual { border-color: var(--line-strong); background: var(--surface-raised); }
+.app-root[data-theme="dark"] .flowtwin-input-meter-track { border-color: var(--line-strong); background: var(--surface-solid); }
+.app-root[data-theme="dark"] .flowtwin-panel .flowtwin-metric,
+.app-root[data-theme="dark"] .flowtwin-comparison-row { border-color: var(--line-strong); background: var(--surface-solid); }
+.app-root[data-theme="dark"] .flowtwin-comparison-track { background: var(--surface-raised); }
+.app-root[data-theme="dark"] .flowtwin-recent-row:hover { background: var(--surface-raised); }
+@keyframes flowtwin-results-arrive { from { opacity: .55; transform: translate3d(0,7px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+@keyframes flowtwin-metric-arrive { from { opacity: .6; transform: translate3d(0,5px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+@media (max-width: 850px) {
+  .flowtwin-input-summary-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .flowtwin-comparison-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .flowtwin-panel-heading { gap: .55rem; }
+  .flowtwin-panel-heading-icon { width: 2.25rem; height: 2.25rem; }
+  .flowtwin-input-summary-grid { grid-template-columns: 1fr; }
+  .flowtwin-comparison-row-heading { align-items: flex-start; flex-direction: column; gap: .22rem; }
+  .flowtwin-model-tag { font-size: .54rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flowtwin-panel *, .flowtwin-panel *::before, .flowtwin-panel *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .flowtwin-results-card, .flowtwin-metric { transform: none !important; }
+}
+
+/* Synthetic Lab: make the threshold share visible without implying real-world clinical validation. */
+.synthetic-lab-panel > .ui-card { animation: synthetic-lab-panel-arrive 360ms cubic-bezier(.18,.78,.22,1) both; }
+.synthetic-lab-panel > .ui-card:nth-child(2) { animation-delay: 55ms; }
+.synthetic-lab-threshold-visual { margin-top: 1rem; border: 1px solid color-mix(in srgb, var(--gold) 36%, var(--line)); border-radius: .95rem; padding: .9rem; background: linear-gradient(135deg, color-mix(in srgb, #fff4df 44%, var(--surface-solid)), var(--surface-solid)); }
+.synthetic-lab-threshold-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: .8rem; }
+.synthetic-lab-threshold-heading .eyebrow { margin: 0 0 .22rem; color: #9b7133; }
+.synthetic-lab-threshold-heading h3 { margin: 0; color: var(--ink-strong); font-size: .79rem; font-weight: 830; }
+.synthetic-lab-threshold-heading p { margin: .28rem 0 0; color: var(--muted); font-size: .62rem; line-height: 1.48; }
+.synthetic-lab-threshold-heading > strong { flex: 0 0 auto; color: #956c2d; font-family: Georgia, "Times New Roman", serif; font-size: 1.5rem; font-variant-numeric: tabular-nums; line-height: 1; }
+.synthetic-lab-threshold-track { height: .6rem; overflow: hidden; margin-top: .85rem; border: 1px solid color-mix(in srgb, var(--gold) 25%, var(--line)); border-radius: 999px; background: color-mix(in srgb, var(--gold) 9%, var(--surface-solid)); }
+.synthetic-lab-threshold-track > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #d8ac5e, #a86e29); transition: width 500ms cubic-bezier(.18,.78,.22,1); }
+.synthetic-lab-threshold-foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .4rem; margin-top: .52rem; color: var(--muted-soft); font-size: .57rem; }
+.app-root[data-theme="dark"] .synthetic-lab-threshold-visual { border-color: #665532; background: linear-gradient(135deg, #332d20, var(--surface-solid)); }
+.app-root[data-theme="dark"] .synthetic-lab-threshold-heading .eyebrow,
+.app-root[data-theme="dark"] .synthetic-lab-threshold-heading > strong { color: #e4c17d; }
+.app-root[data-theme="dark"] .synthetic-lab-threshold-track { border-color: #665532; background: var(--surface-raised); }
+@keyframes synthetic-lab-panel-arrive { from { opacity: .68; transform: translate3d(0,6px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+@media (prefers-reduced-motion: reduce) {
+  .synthetic-lab-panel *, .synthetic-lab-panel *::before, .synthetic-lab-panel *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .synthetic-lab-panel > .ui-card { transform: none !important; }
+}
+
+/* CareGraph editor should size to its form instead of stretching into empty space beside the journey timeline. */
+.caregraph-create-card { align-self: start; height: fit-content; }
