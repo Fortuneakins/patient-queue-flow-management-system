@@ -8,7 +8,7 @@ const initialOutage = '45';
 function dispositionTone(value) {
   if (value === 'RECONSTRUCTED') return 'green';
   if (value === 'REVIEW_REQUIRED') return 'orange';
-  return 'gray';
+  return 'neutral';
 }
 
 function severityTone(value) {
@@ -90,8 +90,8 @@ export default function ContinuityLabPanel({ token }) {
           <Field label="Random seed" hint="Same inputs produce the same scenario.">
             <input className={inputClass} type="number" min="1" max="2147483647" value={seed} onChange={e => setSeed(e.target.value)} required />
           </Field>
-          <Field label="Simulated outage (minutes)" hint="Choose between 15 and 240 minutes.">
-            <input className={inputClass} type="number" min="15" max="240" value={outageMinutes} onChange={e => setOutageMinutes(e.target.value)} required />
+          <Field label="Simulated outage (minutes)" hint="Choose between 45 and 240 minutes.">
+            <input className={inputClass} type="number" min="45" max="240" value={outageMinutes} onChange={e => setOutageMinutes(e.target.value)} required />
           </Field>
           <div className="self-end">
             <Button type="submit" icon="play" disabled={busy}>{busy ? 'Reconstructing…' : 'Run recovery scenario'}</Button>
@@ -205,7 +205,7 @@ export default function ContinuityLabPanel({ token }) {
                 <p className="font-semibold">Run #{run.continuity_run_id} · seed {run.seed} · {run.outage_minutes} minute outage</p>
                 <p className="mt-1 text-xs text-stone-500">{run.created_at ? new Date(run.created_at).toLocaleString() : ''} · {run.output?.summary?.discrepancy_count ?? 0} discrepancies · {run.source_scope}</p>
               </div>
-              <Button size="sm" variant="secondary" onClick={() => loadRun(run)}>Open result</Button>
+              <Button variant="secondary" onClick={() => loadRun(run)}>Open result</Button>
             </div>
           ))}
         </div> : <p className="p-5 text-sm text-stone-500">{loadingRuns ? 'Loading run history…' : 'No continuity runs recorded yet. Run the synthetic scenario to create the first result.'}</p>}
