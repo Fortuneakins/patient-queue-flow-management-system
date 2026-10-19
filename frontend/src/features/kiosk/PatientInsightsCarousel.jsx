@@ -3,6 +3,15 @@ import Icon from '../../components/ui/Icon';
 
 const ROTATION_INTERVAL_MS = 9500;
 
+function readReducedMotionPreference() {
+  const systemPreference = typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const applicationPreference = typeof document !== 'undefined'
+    && document.documentElement?.dataset.motion === 'reduced';
+  return Boolean(systemPreference || applicationPreference);
+}
+
 const insights = [
   {
     label: 'CHECK-IN TIP',
@@ -45,25 +54,37 @@ export default function PatientInsightsCarousel() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [interacting, setInteracting] = useState(false);
   const [manuallyPaused, setManuallyPaused] = useState(false);
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => (
-    typeof window !== 'undefined'
-    && typeof window.matchMedia === 'function'
-    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  ));
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(readReducedMotionPreference);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    if (typeof window === 'undefined' || typeof document === 'undefined') return undefined;
 
-    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const updatePreference = event => setPrefersReducedMotion(event.matches);
+    const query = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)')
+      : null;
+    const updatePreference = () => {
+      setPrefersReducedMotion(Boolean(query?.matches || document.documentElement.dataset.motion === 'reduced'));
+    };
 
-    if (typeof query.addEventListener === 'function') {
+    if (query && typeof query.addEventListener === 'function') {
       query.addEventListener('change', updatePreference);
-      return () => query.removeEventListener('change', updatePreference);
+    } else {
+      query?.addListener?.(updatePreference);
     }
 
-    query.addListener?.(updatePreference);
-    return () => query.removeListener?.(updatePreference);
+    const observer = typeof MutationObserver === 'function'
+      ? new MutationObserver(updatePreference)
+      : null;
+    observer?.observe(document.documentElement, { attributes: true, attributeFilter: ['data-motion'] });
+
+    return () => {
+      if (query && typeof query.removeEventListener === 'function') {
+        query.removeEventListener('change', updatePreference);
+      } else {
+        query?.removeListener?.(updatePreference);
+      }
+      observer?.disconnect();
+    };
   }, []);
 
   const isPaused = interacting || manuallyPaused || prefersReducedMotion;
