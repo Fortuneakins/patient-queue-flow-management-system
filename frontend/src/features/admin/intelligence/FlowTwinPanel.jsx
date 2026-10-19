@@ -24,8 +24,8 @@ function Metric({ label, value, suffix = '', icon = 'chart' }) {
   );
 }
 
-function showDelta(value, suffix = '') {
-  if (value === null || value === undefined) return 'Not available';
+function showDelta(value, suffix = '', unavailableText = 'Not available') {
+  if (value === null || value === undefined) return unavailableText;
   const n = Number(value);
   return (n > 0 ? '+' : '') + n + suffix;
 }
@@ -40,6 +40,12 @@ function displayValue(value, suffix = '') {
   return value === null || value === undefined || !Number.isFinite(Number(value))
     ? '—'
     : Number(value).toLocaleString(undefined, { maximumFractionDigits: 1 }) + suffix;
+}
+
+function displayDeltaFallback(baselineValue, scenarioValue) {
+  if (baselineValue === null || baselineValue === undefined) return 'No baseline sample';
+  if (scenarioValue === null || scenarioValue === undefined) return 'No scenario sample';
+  return 'Not available';
 }
 
 // Older saved runs may predate the persisted comparison-delta fields. Rebuild
@@ -58,17 +64,19 @@ function resolveDelta(savedDelta, baselineValue, scenarioValue) {
   return Number((scenarioNumber - baselineNumber).toFixed(1));
 }
 
-function ComparisonBar({ label, baseline, scenario, suffix = '' }) {
+function ComparisonBar({ label, baseline, scenario, suffix = '', baselineMissingLabel = '—' }) {
   const base = numericValue(baseline);
   const projected = numericValue(scenario);
+  const baselineDisplay = base === null ? baselineMissingLabel : displayValue(base, suffix);
+  const scenarioDisplay = displayValue(projected, suffix);
   const scale = Math.max(base ?? 0, projected ?? 0);
   const barWidth = value => !value || scale === 0 ? 0 : Math.max(2, (value / scale) * 100);
 
   return (
-    <div className="flowtwin-comparison-row" role="group" aria-label={`${label}: baseline ${displayValue(base, suffix)}, scenario ${displayValue(projected, suffix)}`}>
+    <div className="flowtwin-comparison-row" role="group" aria-label={`${label}: baseline ${baselineDisplay}, scenario ${scenarioDisplay}`}>
       <div className="flowtwin-comparison-row-heading">
         <span>{label}</span>
-        <span className="flowtwin-comparison-values"><strong>{displayValue(base, suffix)}</strong><span aria-hidden="true">→</span><strong>{displayValue(projected, suffix)}</strong></span>
+        <span className="flowtwin-comparison-values"><strong className={base === null ? 'flowtwin-comparison-value-missing' : ''}>{baselineDisplay}</strong><span aria-hidden="true">→</span><strong>{scenarioDisplay}</strong></span>
       </div>
       <div className="flowtwin-comparison-track" aria-hidden="true">
         <span className="flowtwin-comparison-bar flowtwin-comparison-bar--baseline" style={{ width: barWidth(base) + '%' }} />
@@ -185,11 +193,12 @@ export default function FlowTwinPanel({ token }) {
         {baseline && scenario && <section className="flowtwin-comparison-visual">
           <div className="flowtwin-section-title"><div><p className="eyebrow">Baseline vs scenario</p><h3>Compare projected outcomes</h3><p>Each pair uses its own scale so you can compare the baseline and scenario for that measure.</p></div></div>
           <div className="flowtwin-comparison-legend"><span><i className="flowtwin-legend-dot flowtwin-legend-dot--baseline" /> Baseline</span><span><i className="flowtwin-legend-dot flowtwin-legend-dot--scenario" /> Scenario</span></div>
+          {(baseline.p50_additional_wait_minutes === null || baseline.p50_additional_wait_minutes === undefined || baseline.p90_additional_wait_minutes === null || baseline.p90_additional_wait_minutes === undefined) && <p className="flowtwin-baseline-note"><Icon name="info" size={15} /><span><strong>No baseline wait sample.</strong> This saved baseline had no waiting visits from which to estimate a wait-time distribution. The scenario values are shown, but median/P90 changes cannot be calculated; missing baseline data is not treated as zero.</span></p>}
           <div className="flowtwin-comparison-grid">
             <ComparisonBar label="Projected completions" baseline={baseline.projected_completed} scenario={scenario.projected_completed} />
             <ComparisonBar label="Remaining queue" baseline={baseline.projected_remaining} scenario={scenario.projected_remaining} />
-            <ComparisonBar label="Median wait" baseline={baseline.p50_additional_wait_minutes} scenario={scenario.p50_additional_wait_minutes} suffix=" min" />
-            <ComparisonBar label="P90 wait" baseline={baseline.p90_additional_wait_minutes} scenario={scenario.p90_additional_wait_minutes} suffix=" min" />
+            <ComparisonBar label="Median wait" baseline={baseline.p50_additional_wait_minutes} scenario={scenario.p50_additional_wait_minutes} suffix=" min" baselineMissingLabel="No baseline sample" />
+            <ComparisonBar label="P90 wait" baseline={baseline.p90_additional_wait_minutes} scenario={scenario.p90_additional_wait_minutes} suffix=" min" baselineMissingLabel="No baseline sample" />
           </div>
         </section>}
 
@@ -198,8 +207,8 @@ export default function FlowTwinPanel({ token }) {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <Metric label="Change in completions" value={showDelta(resolvedDeltas.completed)} icon="checkCircle" />
             <Metric label="Change in remaining queue" value={showDelta(resolvedDeltas.remaining)} icon="users" />
-            <Metric label="Change in P90 wait" value={showDelta(resolvedDeltas.p90Wait, ' min')} icon="history" />
-            <Metric label="Change in mean wait" value={showDelta(resolvedDeltas.meanWait, ' min')} icon="clock" />
+            <Metric label="Change in P90 wait" value={showDelta(resolvedDeltas.p90Wait, ' min', displayDeltaFallback(baseline?.p90_additional_wait_minutes, scenario?.p90_additional_wait_minutes))} icon="history" />
+            <Metric label="Change in mean wait" value={showDelta(resolvedDeltas.meanWait, ' min', displayDeltaFallback(baseline?.mean_additional_wait_minutes, scenario?.mean_additional_wait_minutes))} icon="clock" />
             <Metric label="Server utilisation change" value={showDelta(resolvedDeltas.utilisation, ' pp')} icon="chart" />
             <Metric label="Available modelled servers" value={scenario?.available_servers} icon="settings" />
           </div>
