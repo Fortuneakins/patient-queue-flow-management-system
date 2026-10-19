@@ -24,7 +24,7 @@ function normalizeScenario(input = {}) {
   return {
     scenario_code: scenarioCode,
     seed: integerInRange(input.seed, 20261019, 1, 2147483647, 'seed'),
-    outage_minutes: integerInRange(input.outage_minutes, 45, 15, 240, 'outage_minutes')
+    outage_minutes: integerInRange(input.outage_minutes, 45, 45, 240, 'outage_minutes')
   };
 }
 
@@ -157,18 +157,27 @@ function reconstructScenario(input = {}) {
     });
   }
 
-  const recordedOrder = sourceEvents.filter(event => !anomalies.some(item => item.type === 'DUPLICATE_EVENT' && item.event_ref === event.source_event_ref));
-  let maxOccurredMinute = -1;
-  for (const event of recordedOrder) {
-    if (event.occurred_minute < maxOccurredMinute) {
-      anomalies.push({
-        type: 'RECORDING_ORDER_DIFFERS_FROM_OCCURRENCE_ORDER', severity: 'MEDIUM',
-        visit_ref: event.visit_ref, event_ref: event.source_event_ref,
-        message: 'The event was recorded after another event that occurred later; use occurrence times and source evidence when reviewing the reconstructed sequence.',
-        requires_review: true
-      });
+  for (const visitRef of visitRefs) {
+    const byRecordingTime = uniqueEvents.filter(event => event.visit_ref === visitRef)
+      .sort((a, b) => a.recorded_minute - b.recorded_minute || a.source_event_ref.localeCompare(b.source_event_ref));
+    let maxOccurredMinute = -1;
+    for (const event of byRecordingTime) {
+      if (event.occurred_minute < maxOccurredMinute) {
+        anomalies.push({
+          type: 'RECORDING_ORDER_DIFFERS_FROM_OCCURRENCE_ORDER', severity: 'MEDIUM',
+          visit_ref: visitRef, event_ref: event.source_event_ref,
+          message: 'For this visit, a later-entered event appears to have occurred before an event already recorded. The reconstructed timeline is ordered by occurrence time; review the source evidence.',
+          requires_review: true
+        });
+      }
+      maxOccurredMinute = Math.max(maxOccurredMinute, event.occurred_minute);
     }
-    maxOccurredMinute = Math.max(maxOccurredMinute, event.occurred_minute);
+  }
+
+  for (const visit of visits) {
+    if (anomalies.some(item => item.visit_ref === visit.visit_ref && item.requires_review)) {
+      visit.disposition = 'REVIEW_REQUIRED';
+    }
   }
 
   const counts = type => anomalies.filter(item => item.type === type).length;
