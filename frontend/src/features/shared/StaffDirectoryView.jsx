@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Badge, Card, EmptyState } from '../../components/ui';
+import { Card, EmptyState } from '../../components/ui';
 import Icon from '../../components/ui/Icon';
 
 const ROLE_OPTIONS = [
@@ -126,7 +126,7 @@ export default function StaffDirectoryView({ staff = [] }) {
                 <div className="staff-directory-person">
                   <h3>{item.username}</h3>
                   <div className="staff-directory-employee">
-                    <Icon name="id-card" size={13} />
+                    <Icon name="idCard" size={13} />
                     <span>{item.employee_id || 'No employee ID provided'}</span>
                   </div>
                 </div>
