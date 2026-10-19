@@ -1,18 +1,108 @@
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button, Card, Field, inputClass } from '../../components/ui';
 import Icon from '../../components/ui/Icon';
 
 export default function SchedulingView({ staff, shifts, onCreateShift, onDeleteShift }) {
   const [form, setForm] = useState({ staff_id: '', shift_date: '', start_time: '', end_time: '' });
   const [error, setError] = useState('');
+  const [staffPickerOpen, setStaffPickerOpen] = useState(false);
+  const [activeStaffIndex, setActiveStaffIndex] = useState(0);
+  const staffPickerRef = useRef(null);
+  const staffPickerId = useId().replace(/:/g, '');
+
+  const activeStaff = staff.filter(member => member.is_active);
+  const selectedStaffIndex = activeStaff.findIndex(member => String(member.staff_id) === String(form.staff_id));
+  const selectedStaff = selectedStaffIndex >= 0 ? activeStaff[selectedStaffIndex] : null;
+
+  useEffect(() => {
+    function closeOnOutsidePointer(event) {
+      if (!staffPickerRef.current?.contains(event.target)) setStaffPickerOpen(false);
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);
+  }, []);
 
   async function save() {
     setError('');
     try {
       await onCreateShift(form);
       setForm({ staff_id: '', shift_date: '', start_time: '', end_time: '' });
+      setStaffPickerOpen(false);
     } catch (e) {
       setError(e.message);
+    }
+  }
+
+  function openStaffPicker(preferSelected = true) {
+    const initialIndex = preferSelected && selectedStaffIndex >= 0
+      ? selectedStaffIndex
+      : 0;
+    setActiveStaffIndex(Math.max(0, Math.min(initialIndex, activeStaff.length - 1)));
+    setStaffPickerOpen(true);
+  }
+
+  function chooseStaff(member) {
+    setForm(current => ({ ...current, staff_id: String(member.staff_id) }));
+    setActiveStaffIndex(activeStaff.findIndex(option => String(option.staff_id) === String(member.staff_id)));
+    setStaffPickerOpen(false);
+    setError('');
+  }
+
+  function handleStaffPickerKeyDown(event) {
+    if (event.key === 'Escape' && staffPickerOpen) {
+      event.preventDefault();
+      setStaffPickerOpen(false);
+      return;
+    }
+
+    if (event.key === 'Tab') {
+      setStaffPickerOpen(false);
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (!staffPickerOpen) {
+        openStaffPicker(true);
+      } else {
+        setActiveStaffIndex(index => Math.min(index + 1, activeStaff.length - 1));
+      }
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!staffPickerOpen) {
+        const lastIndex = Math.max(activeStaff.length - 1, 0);
+        setActiveStaffIndex(lastIndex);
+        setStaffPickerOpen(true);
+      } else {
+        setActiveStaffIndex(index => Math.max(index - 1, 0));
+      }
+      return;
+    }
+
+    if (event.key === 'Home' && staffPickerOpen) {
+      event.preventDefault();
+      setActiveStaffIndex(0);
+      return;
+    }
+
+    if (event.key === 'End' && staffPickerOpen) {
+      event.preventDefault();
+      setActiveStaffIndex(Math.max(activeStaff.length - 1, 0));
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      if (!staffPickerOpen) {
+        event.preventDefault();
+        openStaffPicker(true);
+      } else if (activeStaff[activeStaffIndex]) {
+        event.preventDefault();
+        chooseStaff(activeStaff[activeStaffIndex]);
+      }
     }
   }
 
@@ -22,17 +112,94 @@ export default function SchedulingView({ staff, shifts, onCreateShift, onDeleteS
         <div className="scheduling-form-heading">
           <p className="eyebrow">Shift planning</p>
           <h2 className="font-display text-lg font-bold">Schedule a shift</h2>
-          <p>Schedule shifts for active staff. Doctor availability informs the wait-time estimate.</p>
+          <p>Select an active staff member and set the shift date and hours to build the roster.</p>
         </div>
 
         <div className="scheduling-form-fields">
-          <Field label="Staff member" required>
-            <select className={inputClass} value={form.staff_id} onChange={e => setForm({ ...form, staff_id: e.target.value })}>
-              <option value="">Select staff</option>
-              {staff.filter(s => s.is_active).map(s => (
-                <option key={s.staff_id} value={s.staff_id}>{s.username} ({s.role})</option>
-              ))}
-            </select>
+          <Field label="Staff member" required htmlFor={staffPickerId}>
+            <div className="scheduling-staff-picker" ref={staffPickerRef}>
+              <button
+                id={staffPickerId}
+                type="button"
+                className={`scheduling-staff-trigger ${staffPickerOpen ? 'is-open' : ''} ${selectedStaff ? 'has-selection' : ''}`}
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded={staffPickerOpen}
+                aria-controls={`${staffPickerId}-listbox`}
+                aria-required="true"
+                aria-activedescendant={staffPickerOpen && activeStaff[activeStaffIndex] ? `${staffPickerId}-option-${activeStaffIndex}` : undefined}
+                onClick={() => staffPickerOpen ? setStaffPickerOpen(false) : openStaffPicker(true)}
+                onKeyDown={handleStaffPickerKeyDown}
+                disabled={!activeStaff.length}
+              >
+                <span className={`scheduling-staff-trigger-avatar ${selectedStaff ? 'is-selected' : ''}`} aria-hidden="true">
+                  <Icon name={selectedStaff ? 'user' : 'users'} size={18} />
+                </span>
+                {selectedStaff ? (
+                  <span className="scheduling-staff-selected-copy">
+                    <strong>{selectedStaff.username}</strong>
+                    <span>{selectedStaff.role.replace(/_/g, ' ')}</span>
+                  </span>
+                ) : (
+                  <span className="scheduling-staff-placeholder">
+                    {activeStaff.length ? 'Select a staff member' : 'No active staff available'}
+                    <small>{activeStaff.length ? `${activeStaff.length} active ${activeStaff.length === 1 ? 'member' : 'members'} available` : 'Activate a staff account to schedule a shift'}</small>
+                  </span>
+                )}
+                <span className={`scheduling-staff-chevron ${staffPickerOpen ? 'is-open' : ''}`} aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="none"><path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </span>
+              </button>
+
+              {staffPickerOpen && (
+                <div
+                  id={`${staffPickerId}-listbox`}
+                  className="scheduling-staff-menu"
+                  role="listbox"
+                  aria-label="Active staff members"
+                >
+                  <div className="scheduling-staff-menu-header">
+                    <span>Choose a staff member</span>
+                    <span>{activeStaff.length} available</span>
+                  </div>
+                  <div className="scheduling-staff-options">
+                    {activeStaff.map((member, index) => {
+                      const selected = String(member.staff_id) === String(form.staff_id);
+                      const active = index === activeStaffIndex;
+                      const roleClass = String(member.role || 'staff').toLowerCase().replace(/[^a-z0-9-]/g, '-');
+
+                      return (
+                        <div
+                          id={`${staffPickerId}-option-${index}`}
+                          key={member.staff_id}
+                          className={`scheduling-staff-option ${selected ? 'is-selected' : ''} ${active ? 'is-active' : ''}`}
+                          role="option"
+                          aria-selected={selected}
+                          onMouseEnter={() => setActiveStaffIndex(index)}
+                          onMouseDown={event => event.preventDefault()}
+                          onClick={() => chooseStaff(member)}
+                        >
+                          <span className={`scheduling-staff-option-avatar scheduling-staff-option-avatar--${roleClass}`} aria-hidden="true">
+                            <Icon name={member.role === 'DOCTOR' ? 'heart' : member.role === 'NURSE' ? 'checkCircle' : member.role === 'ADMIN' ? 'shield' : 'user'} size={17} />
+                          </span>
+                          <span className="scheduling-staff-option-copy">
+                            <strong>{member.username}</strong>
+                            <span>{member.role.replace(/_/g, ' ')}</span>
+                          </span>
+                          <span className={`scheduling-staff-role scheduling-staff-role--${roleClass}`}>{member.role}</span>
+                          {selected && <Icon name="checkCircle" size={17} className="scheduling-staff-option-check" />}
+                        </div>
+                      );
+                    })}
+                    {!activeStaff.length && <p className="scheduling-staff-empty">No active staff members are available.</p>}
+                  </div>
+                  <div className="scheduling-staff-menu-footer">
+                    <Icon name="info" size={14} />
+                    Only active staff accounts can be scheduled.
+                  </div>
+                </div>
+              )}
+            </div>
           </Field>
 
           <Field label="Date" required>
@@ -46,6 +213,11 @@ export default function SchedulingView({ staff, shifts, onCreateShift, onDeleteS
             <Field label="End" required>
               <input type="time" className={inputClass} value={form.end_time} onChange={e => setForm({ ...form, end_time: e.target.value })} />
             </Field>
+          </div>
+
+          <div className="scheduling-availability-note">
+            <span className="scheduling-availability-note-icon" aria-hidden="true"><Icon name="info" size={16} /></span>
+            <p><strong>How waiting-time estimates work</strong> Doctor availability helps inform estimates. Estimates use scheduled doctors currently on duty and may fall back to the configured staffing default when no active doctor shift is found.</p>
           </div>
 
           {error && (
@@ -107,7 +279,7 @@ export default function SchedulingView({ staff, shifts, onCreateShift, onDeleteS
             <p className="scheduling-empty-copy">Create a shift for an active staff member and it will appear here, ready for a quick review.</p>
             <div className="scheduling-empty-hint">
               <Icon name="info" size={15} />
-              <span>Doctor availability informs the wait-time estimate.</span>
+              <span>Doctor availability helps inform waiting-time estimates; these use scheduled doctors currently on duty or the configured staffing fallback.</span>
             </div>
           </div>
         )}
