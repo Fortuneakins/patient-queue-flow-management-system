@@ -10,7 +10,7 @@ if (!dbConfigured) {
   process.env.SMS_ENABLED = 'false';
 
   const { httpServer } = require('../../src/app');
-  const { query, pool } = require('../../src/db/pool');
+  const { pool } = require('../../src/db/pool');
   let baseUrl;
   let listening = false;
 
