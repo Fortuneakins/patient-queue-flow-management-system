@@ -13,7 +13,6 @@ if (!dbConfigured) {
   const { query, pool } = require('../../src/db/pool');
   let baseUrl;
   let listening = false;
-  const runIds = [];
 
   async function request(path, options = {}) {
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
@@ -40,7 +39,6 @@ if (!dbConfigured) {
   });
 
   test.after(async () => {
-    for (const runId of runIds) await query('DELETE FROM continuity_runs WHERE continuity_run_id=$1', [runId]);
     if (listening) await new Promise(resolve => httpServer.close(resolve));
     await pool.end();
   });
@@ -85,7 +83,6 @@ if (!dbConfigured) {
       assert.equal(JSON.stringify(result.body).includes('identification_number'), false);
       assert.equal(JSON.stringify(result.body).includes('patient_id'), false);
       created = result.body;
-      runIds.push(created.continuity_run_id);
     });
 
     await t.test('saved run can be retrieved and its event is audited', async () => {
