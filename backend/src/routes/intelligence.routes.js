@@ -7,6 +7,7 @@ const offline = require('../services/offlineSyncService');
 const flow = require('../services/flowAnalyticsService');
 const referrals = require('../services/referralService');
 const contacts = require('../services/contactService');
+const continuity = require('../services/continuityService');
 const { createRateLimiter } = require('../utils/rateLimit');
 const router = express.Router();
 router.use(authenticate, requireReadyPassword);
@@ -19,6 +20,8 @@ const endpoint = (handler, status = 200) => async (req, res, next) => {
 };
 
 router.get('/overview', admin, endpoint(() => overview.getOverview()));
+router.post('/continuity/run', admin, endpoint(req => continuity.runSyntheticRecovery(req.body || {}, req.user.staff_id), 201));
+router.get('/continuity/runs', admin, endpoint(req => continuity.listRecoveryRuns(req.query.limit)));
 router.get('/events', admin, endpoint(req => overview.listEvents({ limit: req.query.limit, eventType: req.query.event_type })));
 router.get('/active-visits', clinical, endpoint(() => overview.listActiveVisits()));
 router.get('/pathways', clinical, endpoint(() => pathways.listPathways()));
