@@ -1,0 +1,529 @@
+/* PQFMS Signature UI Refresh — visual layer only.
+   Keeps the established deep-teal / hospital-green / muted-gold palette.
+   No application state, routes, permissions, or workflow behaviour is changed. */
+
+/* A quiet, dimensional canvas that makes the interface feel like a considered
+   clinical operations product rather than a stack of unrelated panels. */
+.app-root {
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
+}
+.app-root::before {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 12% 3%, rgba(18, 102, 94, 0.09), transparent 34rem),
+    radial-gradient(ellipse at 91% 15%, rgba(214, 181, 120, 0.075), transparent 27rem),
+    linear-gradient(rgba(18, 102, 94, 0.023) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(18, 102, 94, 0.023) 1px, transparent 1px);
+  background-size: auto, auto, 34px 34px, 34px 34px;
+  content: "";
+  pointer-events: none;
+  mask-image: linear-gradient(to bottom, black 0%, rgba(0, 0, 0, 0.62) 42%, transparent 88%);
+}
+.app-root > .app-header,
+.app-root > .app-content,
+.app-root > .app-toast-stack {
+  position: relative;
+  z-index: 1;
+}
+.app-root[data-theme="dark"]::before {
+  background:
+    radial-gradient(ellipse at 12% 3%, rgba(71, 194, 165, 0.11), transparent 34rem),
+    radial-gradient(ellipse at 91% 15%, rgba(214, 181, 120, 0.055), transparent 27rem),
+    linear-gradient(rgba(94, 199, 177, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(94, 199, 177, 0.03) 1px, transparent 1px);
+  background-size: auto, auto, 34px 34px, 34px 34px;
+}
+.app-content { min-height: calc(100vh - 76px); }
+
+/* Signature masthead: a thin gold-to-teal signal line, softer glass, and a
+   lively seal. It remains compact so the application keeps its working space. */
+.app-header {
+  overflow: clip;
+  border-bottom-color: color-mix(in srgb, var(--brand-muted) 45%, var(--line));
+  box-shadow: 0 10px 34px rgba(9, 58, 48, 0.055);
+  transition: background-color 240ms ease, border-color 240ms ease, box-shadow 240ms ease;
+}
+.app-header::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--gold) 17%, #168b78 47%, #5fcab0 72%, transparent 100%);
+  content: "";
+  opacity: 0.9;
+}
+.app-header::after {
+  position: absolute;
+  top: -4rem;
+  right: 14%;
+  width: 18rem;
+  height: 7rem;
+  border-radius: 50%;
+  background: rgba(37, 145, 122, 0.045);
+  content: "";
+  filter: blur(24px);
+  pointer-events: none;
+}
+.app-header-inner { position: relative; z-index: 1; min-height: 78px; }
+.brand-lockup { gap: 0.95rem; }
+.brand-mark {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+  border: 1px solid rgba(214, 181, 120, 0.47);
+  border-radius: 1.02rem;
+  background: linear-gradient(145deg, #1b786a 0%, #12594f 45%, #093d37 100%);
+  box-shadow: 0 9px 24px rgba(8, 69, 59, 0.22), inset 0 1px rgba(255, 255, 255, 0.24);
+  transition: border-color 220ms ease, box-shadow 220ms ease, transform 220ms cubic-bezier(.2,.8,.2,1);
+}
+.brand-mark::before {
+  position: absolute;
+  inset: -5px;
+  z-index: -1;
+  border: 1px solid rgba(22, 139, 120, 0.22);
+  border-radius: 1.23rem;
+  content: "";
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+.brand-mark::after {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #f1d79e;
+  box-shadow: 0 0 0 3px rgba(241, 215, 158, 0.12);
+  content: "";
+}
+.brand-lockup:hover .brand-mark {
+  transform: translateY(-1px) rotate(-2deg);
+  border-color: rgba(241, 215, 158, 0.8);
+  box-shadow: 0 13px 28px rgba(8, 69, 59, 0.25), inset 0 1px rgba(255, 255, 255, 0.27);
+}
+.brand-lockup:hover .brand-mark::before { opacity: 1; transform: scale(1); }
+.brand-mark svg { position: relative; z-index: 1; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18)); }
+.brand-name { letter-spacing: -0.04em; font-size: 1.03rem; }
+.brand-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #a07b40;
+  letter-spacing: 0.13em;
+}
+.brand-subtitle::before {
+  width: 1.1rem;
+  height: 1px;
+  background: var(--gold);
+  content: "";
+  opacity: 0.88;
+}
+.app-navigation { gap: 0.28rem; }
+.app-nav-link, .app-icon-button {
+  position: relative;
+  border-radius: 0.78rem;
+  transition: color 190ms ease, background 190ms ease, border-color 190ms ease, transform 190ms ease, box-shadow 190ms ease;
+}
+.app-nav-link:not(.is-active):hover,
+.app-icon-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(11, 56, 49, 0.055);
+}
+.app-nav-link.is-active,
+.app-nav-workspace {
+  border-color: rgba(214, 181, 120, 0.23);
+  background: linear-gradient(115deg, #176e62 0%, #11574e 58%, #0c4740 100%);
+  box-shadow: 0 7px 19px rgba(13, 93, 81, 0.18), inset 0 1px rgba(255, 255, 255, 0.15);
+}
+.app-nav-link.is-active::after {
+  position: absolute;
+  right: 0.8rem;
+  bottom: 4px;
+  left: 0.8rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(240, 215, 164, 0.85), transparent);
+  content: "";
+}
+.header-user-pill { border-left-color: color-mix(in srgb, var(--gold) 34%, var(--line)); }
+.header-user-avatar {
+  position: relative;
+  border: 2px solid color-mix(in srgb, var(--gold) 50%, var(--brand-muted));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-muted) 18%, transparent), inset 0 1px rgba(255, 255, 255, 0.14);
+}
+.connection-status { border: 1px solid transparent; border-radius: 999px; }
+.connection-status.is-connected {
+  border-color: color-mix(in srgb, var(--green) 18%, transparent);
+  color: var(--green);
+  background: color-mix(in srgb, var(--green-pale) 72%, transparent);
+}
+.connection-status.is-connected .connection-dot { animation: pqfms-signal-breathe 2.8s ease-in-out infinite; }
+.connection-status.is-disconnected { color: var(--warning); background: color-mix(in srgb, var(--warning-pale) 72%, transparent); }
+
+/* Workspace frame: a floating navigation rail, a premium work surface, and
+   clean layered depth without changing any role's available tabs. */
+.workspace-page { padding-top: clamp(1.05rem, 2.2vw, 1.8rem); }
+.workspace-toolbar { margin-bottom: 1.35rem; }
+.workspace-breadcrumbs { gap: 0.72rem; }
+.workspace-breadcrumb-home {
+  padding: 0.5rem 0.74rem;
+  border: 1px solid color-mix(in srgb, var(--brand-muted) 48%, var(--line));
+  border-radius: 999px;
+  color: var(--brand-strong);
+  background: color-mix(in srgb, var(--brand-pale) 58%, var(--surface));
+}
+.workspace-toolbar-actions { gap: 0.6rem; }
+.toolbar-button { min-height: 2.58rem; box-shadow: 0 2px 4px rgba(16, 48, 41, 0.025); }
+.toolbar-button:hover { transform: translateY(-1px); }
+.workspace-layout { gap: clamp(1rem, 1.8vw, 1.55rem); }
+.workspace-sidebar {
+  position: sticky;
+  top: 96px;
+  border-radius: 1.45rem;
+  padding: 0.72rem;
+  background: color-mix(in srgb, var(--surface-solid) 82%, transparent);
+  box-shadow: 0 14px 38px rgba(13, 68, 57, 0.055), inset 0 1px rgba(255, 255, 255, 0.55);
+}
+.workspace-sidebar::before {
+  display: block;
+  height: 3px;
+  margin: -0.72rem -0.72rem 0.62rem;
+  background: linear-gradient(90deg, var(--brand), color-mix(in srgb, var(--gold) 82%, white), var(--brand-muted));
+  content: "";
+}
+.workspace-sidebar-heading { padding-top: 0.8rem; padding-bottom: 1rem; }
+.workspace-sidebar-kicker { color: #a4824d; letter-spacing: 0.2em; }
+.workspace-sidebar-role { font-size: 1.38rem; }
+.workspace-tab-list { gap: 0.28rem; }
+.workspace-tab {
+  min-height: 3rem;
+  border-radius: 0.9rem;
+  font-weight: 720;
+  transition: color 190ms ease, background 190ms ease, border-color 190ms ease, transform 190ms ease, box-shadow 190ms ease;
+}
+.workspace-tab:hover { transform: translateX(2px); }
+.workspace-tab-icon { transition: transform 220ms cubic-bezier(.2,.8,.2,1), background 190ms ease; }
+.workspace-tab:hover .workspace-tab-icon { transform: scale(1.06) rotate(-3deg); }
+.workspace-tab.is-active {
+  position: relative;
+  background: linear-gradient(118deg, #1a7567, #10564d 58%, #0b4942);
+  box-shadow: 0 7px 17px rgba(12, 78, 67, 0.17), inset 0 1px rgba(255, 255, 255, 0.15);
+}
+.workspace-tab.is-active::before {
+  position: absolute;
+  top: 0.55rem;
+  bottom: 0.55rem;
+  left: -0.72rem;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: #dfc18a;
+  content: "";
+}
+.workspace-tab.is-active .workspace-tab-icon { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+.workspace-sidebar-note {
+  border-top-style: solid;
+  border-top-color: color-mix(in srgb, var(--gold) 30%, var(--line));
+  margin-top: 0.85rem;
+}
+.workspace-security-icon { border: 1px solid color-mix(in srgb, var(--brand-muted) 45%, transparent); }
+.ui-card.workspace-main-card {
+  position: relative;
+  isolation: isolate;
+  border-radius: 1.65rem !important;
+  background: color-mix(in srgb, var(--surface-solid) 80%, transparent) !important;
+  box-shadow: 0 18px 55px rgba(12, 59, 50, 0.07), 0 3px 10px rgba(12, 59, 50, 0.025), inset 0 1px rgba(255, 255, 255, 0.78) !important;
+}
+.ui-card.workspace-main-card::before {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  right: 0;
+  width: min(30rem, 78%);
+  height: 18rem;
+  background: radial-gradient(ellipse at top right, color-mix(in srgb, var(--brand-pale) 48%, transparent), transparent 70%);
+  content: "";
+  pointer-events: none;
+}
+.workspace-main-content { position: relative; min-height: 37rem; }
+.workspace-main-content::before {
+  position: absolute;
+  top: 0;
+  left: clamp(1.15rem, 2.5vw, 2.05rem);
+  width: 4.3rem;
+  height: 3px;
+  border-radius: 0 0 5px 5px;
+  background: linear-gradient(90deg, var(--brand), var(--gold));
+  content: "";
+  opacity: 0.85;
+}
+.ui-card.workspace-main-card:hover { border-color: var(--line) !important; box-shadow: 0 18px 55px rgba(12, 59, 50, 0.07), 0 3px 10px rgba(12, 59, 50, 0.025) !important; }
+
+/* Surface grammar: consistent edges, subtle iridescent tops and deliberate
+   hover lift. Data panels remain calm and readable under clinical time pressure. */
+.ui-card:not(.workspace-main-card) {
+  position: relative;
+  border-radius: 1.3rem !important;
+  box-shadow: 0 6px 21px rgba(15, 65, 55, 0.045), 0 1px 3px rgba(15, 65, 55, 0.025), inset 0 1px rgba(255, 255, 255, 0.42) !important;
+  transition: border-color 230ms ease, box-shadow 230ms ease, transform 230ms cubic-bezier(.2,.8,.2,1), background-color 230ms ease !important;
+}
+.ui-card:not(.workspace-main-card)::after {
+  position: absolute;
+  top: 0;
+  right: 1.3rem;
+  left: 1.3rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--brand-muted) 42%, transparent), transparent);
+  content: "";
+  pointer-events: none;
+}
+.ui-card:not(.workspace-main-card):hover {
+  border-color: color-mix(in srgb, var(--brand-muted) 62%, var(--line)) !important;
+  box-shadow: 0 14px 34px rgba(15, 65, 55, 0.075), 0 3px 7px rgba(15, 65, 55, 0.035), inset 0 1px rgba(255, 255, 255, 0.5) !important;
+}
+.app-root[data-theme="dark"] .ui-card:not(.workspace-main-card) {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14), inset 0 1px rgba(255, 255, 255, 0.025) !important;
+}
+.app-root[data-theme="dark"] .ui-card.workspace-main-card {
+  background: color-mix(in srgb, var(--surface-solid) 91%, transparent) !important;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.19), inset 0 1px rgba(255, 255, 255, 0.035) !important;
+}
+
+/* High-information workspaces get a stronger heading rhythm and consistent
+   premium form/table treatment. */
+.app-content h1 {
+  letter-spacing: -0.045em;
+  line-height: 1.08;
+}
+.app-content h1.font-display { font-size: clamp(1.7rem, 2.35vw, 2.35rem); }
+.app-content h2.font-display { letter-spacing: -0.04em; }
+.app-content h2, .app-content h3 { letter-spacing: -0.025em; }
+.app-content .eyebrow { letter-spacing: 0.2em; }
+.app-content .font-display { text-wrap: balance; }
+.app-content .ui-field label { display: inline-block; margin-bottom: 0.16rem; }
+.ui-input {
+  min-height: 3rem;
+  border-radius: 0.92rem !important;
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease !important;
+}
+.ui-input:focus { transform: translateY(-1px); }
+.ui-button {
+  min-height: 2.85rem;
+  border-radius: 0.9rem !important;
+  transition: transform 180ms cubic-bezier(.2,.8,.2,1), box-shadow 180ms ease, filter 180ms ease, background-color 180ms ease !important;
+}
+.ui-button[data-variant="primary"] {
+  border-color: color-mix(in srgb, var(--brand) 68%, var(--gold)) !important;
+  background: linear-gradient(118deg, #1b796a 0%, #12665e 54%, #0c514a 100%) !important;
+  box-shadow: 0 6px 15px rgba(13, 93, 81, 0.17), inset 0 1px rgba(255, 255, 255, 0.17) !important;
+}
+.ui-button[data-variant="primary"]:hover:not(:disabled) {
+  filter: saturate(1.08) brightness(1.04);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 23px rgba(13, 93, 81, 0.23), inset 0 1px rgba(255, 255, 255, 0.2) !important;
+}
+.ui-button[data-variant="secondary"]:hover:not(:disabled) { transform: translateY(-1px); }
+.ui-button[data-variant="danger"]:hover:not(:disabled),
+.ui-button[data-variant="success"]:hover:not(:disabled),
+.ui-button[data-variant="gold"]:hover:not(:disabled) { transform: translateY(-1px); filter: saturate(1.06); }
+.ui-badge { box-shadow: inset 0 1px rgba(255, 255, 255, 0.38); }
+.ui-empty-state { box-shadow: inset 0 1px rgba(255, 255, 255, 0.45); }
+.ui-modal {
+  border-radius: 1.55rem !important;
+  box-shadow: 0 32px 90px rgba(2, 31, 27, 0.35), 0 4px 18px rgba(2, 31, 27, 0.12) !important;
+}
+.ui-modal-header--fixed { box-shadow: 0 5px 15px rgba(12, 59, 50, 0.025); }
+
+/* Local section tabs become a compact, polished segmented navigation. */
+.app-content .flex.flex-wrap.gap-2.border-b { gap: 0.42rem; padding: 0.35rem 0.35rem 0.75rem; }
+.app-content .flex.flex-wrap.gap-2.border-b > button {
+  position: relative;
+  border-radius: 0.78rem !important;
+  padding-inline: 1rem;
+  transition: all 190ms ease;
+}
+.app-content .flex.flex-wrap.gap-2.border-b > button:hover { transform: translateY(-1px); }
+.app-content .flex.flex-wrap.gap-2.border-b > button.bg-teal-800 {
+  background: linear-gradient(118deg, #1a7567, #10564d) !important;
+  box-shadow: 0 6px 15px rgba(13, 93, 81, 0.14), inset 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* Tables & data rows: quiet header tint, stronger alignment, and a row highlight
+   that makes scanning event histories and reconstructed timelines easier. */
+.app-content table { border-collapse: separate; border-spacing: 0; }
+.app-content table thead { color: var(--muted); }
+.app-content table thead th {
+  background: color-mix(in srgb, var(--brand-pale) 37%, var(--surface-raised)) !important;
+  border-color: var(--line) !important;
+  font-size: 0.66rem;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+}
+.app-content table tbody tr { transition: background-color 160ms ease; }
+.app-content table tbody tr:hover { background: color-mix(in srgb, var(--brand-pale) 42%, transparent); }
+.app-content table th, .app-content table td { border-color: var(--line) !important; }
+.app-content details {
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+.app-content details[open] {
+  border-color: color-mix(in srgb, var(--brand-muted) 65%, var(--line));
+  background: color-mix(in srgb, var(--surface-raised) 75%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-muted) 18%, transparent);
+}
+.app-content details summary { transition: color 150ms ease; }
+.app-content details summary:hover { color: var(--brand); }
+
+/* Purposeful micro-motion: focus, entry and feedback feel alive, but motion is
+   short and never required to understand state. Core data remains still. */
+.app-page-enter { animation: pqfms-page-arrive 420ms cubic-bezier(.18,.78,.22,1) both; }
+.app-content > .workspace-page { animation: pqfms-page-arrive 390ms cubic-bezier(.18,.78,.22,1) both; }
+.app-content .ui-card:not(.workspace-main-card) { animation: pqfms-panel-arrive 420ms cubic-bezier(.18,.78,.22,1) both; }
+.app-content .ui-card:not(.workspace-main-card):nth-child(2) { animation-delay: 35ms; }
+.app-content .ui-card:not(.workspace-main-card):nth-child(3) { animation-delay: 70ms; }
+.app-toast { border-radius: 1.05rem; border-color: color-mix(in srgb, var(--brand-muted) 48%, var(--line)); }
+.app-toast--success { box-shadow: 0 18px 50px rgba(10, 93, 70, 0.18); }
+.app-toast--error { box-shadow: 0 18px 50px rgba(142, 41, 51, 0.16); }
+.pulse-dot, .consultation-live-dot { animation: pqfms-signal-breathe 2.8s ease-in-out infinite; }
+
+/* Patient-facing displays are intentionally calmer: the announcement has
+   presence, but never flashes or pulses at the visitor. */
+.kiosk-intro-icon, .kiosk-section-symbol, .display-hospital-mark {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--gold) 48%, var(--brand-muted));
+  box-shadow: 0 10px 23px rgba(12, 78, 67, 0.17), inset 0 1px rgba(255, 255, 255, 0.18);
+}
+.kiosk-intro-icon::after, .kiosk-section-symbol::after, .display-hospital-mark::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 15%, rgba(255, 255, 255, 0.13) 48%, transparent 77%);
+  content: "";
+  transform: translateX(-120%);
+  transition: transform 500ms ease;
+  pointer-events: none;
+}
+.kiosk-intro-icon:hover::after, .kiosk-section-symbol:hover::after, .display-hospital-mark:hover::after { transform: translateX(120%); }
+.now-serving-card {
+  border-color: rgba(76, 166, 139, 0.42);
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(47, 159, 128, 0.24), transparent 67%),
+    linear-gradient(145deg, #0e2a23, #071612 78%);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.07), 0 12px 26px rgba(5, 34, 27, 0.1);
+}
+.now-serving-card::after {
+  position: absolute;
+  top: 0;
+  left: 18%;
+  width: 64%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(214, 181, 120, 0.78), transparent);
+  content: "";
+}
+.now-serving-ticket, .display-ticket-number { text-shadow: 0 4px 24px rgba(89, 208, 176, 0.12); }
+.queue-tier-card, .estimate-tile, .display-estimate-tile {
+  border-radius: 0.95rem;
+  transition: transform 200ms cubic-bezier(.2,.8,.2,1), box-shadow 200ms ease, border-color 200ms ease;
+}
+.queue-tier-card:hover, .estimate-tile:hover, .display-estimate-tile:hover { transform: translateY(-2px); box-shadow: 0 8px 19px rgba(15, 65, 55, 0.07); }
+.queue-entry-card { border-radius: 1.2rem !important; }
+.queue-entry-card::before { width: 0.29rem; }
+.queue-entry-ticket { font-size: 1.22rem; }
+.queue-entry-actions .ui-button { box-shadow: 0 3px 10px rgba(12, 59, 50, 0.055); }
+.verified-patient-banner { box-shadow: inset 0 1px rgba(255, 255, 255, 0.5); }
+.app-root[data-theme="dark"] .verified-patient-banner { box-shadow: inset 0 1px rgba(255, 255, 255, 0.035); }
+
+/* Continuity Lab gets an editorial test-bench feel while preserving every
+   metric, warning, input and evidence panel already wired into the workflow. */
+.app-content .ui-card h2.font-display { line-height: 1.16; }
+.app-content .ui-card .rounded-xl.border.border-stone-200.p-4 {
+  border-radius: 1rem;
+  background: linear-gradient(145deg, var(--surface-solid), color-mix(in srgb, var(--surface-raised) 76%, transparent));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.45);
+  transition: transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+}
+.app-content .ui-card .rounded-xl.border.border-stone-200.p-4:hover {
+  transform: translateY(-2px);
+  border-color: var(--brand-muted) !important;
+  box-shadow: 0 8px 18px rgba(15, 65, 55, 0.055);
+}
+.app-root[data-theme="dark"] .app-content .ui-card .rounded-xl.border.border-stone-200.p-4 {
+  background: linear-gradient(145deg, var(--surface-solid), var(--surface-raised));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
+}
+.app-content .border-amber-200.bg-amber-50 {
+  border-color: color-mix(in srgb, var(--gold) 54%, #edcf9e) !important;
+  border-radius: 1rem;
+  box-shadow: inset 3px 0 #c69d59;
+}
+.app-root[data-theme="dark"] .border-amber-200.bg-amber-50 {
+  border-color: #6c5532 !important;
+  background: #352c1d !important;
+  color: #f0d7a7 !important;
+}
+.app-root[data-theme="dark"] .border-amber-200.bg-amber-50 * { color: inherit; }
+
+/* Small but important details: live connection, keyboard focus, and loading
+   states should stay visible, elegant and compatible with the preference panel. */
+.app-root :is(button, a, input, textarea, select) { scroll-margin-top: 6rem; }
+.app-root button:focus-visible, .app-root a:focus-visible { border-radius: 0.8rem; }
+.app-root [aria-busy="true"] { cursor: progress; }
+.app-root .animate-spin { animation-duration: 850ms; }
+.app-root .connection-status.is-connected, .app-root .connection-chip.is-connected { animation: pqfms-soft-arrive 400ms ease both; }
+
+@keyframes pqfms-page-arrive {
+  from { opacity: 0; transform: translate3d(0, 11px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes pqfms-panel-arrive {
+  from { opacity: 0; transform: translate3d(0, 9px, 0) scale(0.995); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes pqfms-soft-arrive { from { opacity: 0.5; } to { opacity: 1; } }
+@keyframes pqfms-signal-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(32, 165, 120, 0.04); }
+  50% { box-shadow: 0 0 0 4px rgba(32, 165, 120, 0.12); }
+}
+
+/* Preserve the existing responsive composition on tablets and phones. */
+@media (max-width: 940px) {
+  .workspace-sidebar::before { margin-bottom: 0.5rem; }
+  .workspace-tab:hover { transform: translateY(-1px); }
+  .ui-card.workspace-main-card { border-radius: 1.35rem !important; }
+}
+@media (max-width: 640px) {
+  .app-header::after { right: -5rem; }
+  .brand-subtitle { gap: 0.3rem; font-size: 0.49rem; }
+  .workspace-breadcrumb-home { padding: 0.4rem 0.58rem; }
+  .workspace-layout { gap: 0.8rem; }
+  .workspace-sidebar { border-radius: 1.1rem; }
+  .workspace-main-content { min-height: 24rem; }
+  .workspace-main-content::before { left: 1rem; }
+  .ui-card:not(.workspace-main-card) { border-radius: 1.05rem !important; }
+  .app-content .flex.flex-wrap.gap-2.border-b { padding-inline: 0.1rem; }
+  .app-content .flex.flex-wrap.gap-2.border-b > button { padding-inline: 0.72rem; }
+}
+
+/* Respect Windows/macOS accessibility preferences as well as the in-app
+   reduced-motion toggle. This override remains the final word on animations. */
+@media (prefers-reduced-motion: reduce) {
+  .app-root *, .app-root *::before, .app-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+:root[data-motion="reduced"] .app-root *,
+:root[data-motion="reduced"] .app-root *::before,
+:root[data-motion="reduced"] .app-root *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
