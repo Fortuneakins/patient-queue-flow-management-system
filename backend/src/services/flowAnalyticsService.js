@@ -11,7 +11,7 @@ function positiveMinutes(value, label, min = 0, max = 1440) {
 async function currentSnapshot() {
   const queueResult = await query(
     "SELECT queue_id, status, priority_level, queued_at, GREATEST(0, EXTRACT(EPOCH FROM (NOW() - queued_at)) / 60.0) AS waiting_minutes " +
-    "FROM queue_entries WHERE status IN ('Waiting','In-Consultation') ORDER BY COALESCE(priority_level,4), queued_at LIMIT 1000"
+    "FROM queue_entries WHERE status IN ('Waiting','In-Consultation') AND data_provenance NOT IN ('SYNTHETIC_TEST','DEMO') ORDER BY COALESCE(priority_level,4), queued_at LIMIT 1000"
   );
   const waiting = queueResult.rows.filter(row => row.status === 'Waiting').map(row => ({
     priority_level: row.priority_level || 4, queued_at: row.queued_at, waiting_minutes: Number(row.waiting_minutes)
@@ -20,7 +20,7 @@ async function currentSnapshot() {
   const durationResult = await query(
     "SELECT ROUND((EXTRACT(EPOCH FROM (discharged_at - called_at)) / 60.0)::numeric,2) AS minutes " +
     "FROM queue_entries WHERE status = 'Discharged' AND called_at IS NOT NULL AND discharged_at > called_at " +
-    "AND discharged_at >= NOW() - INTERVAL '90 days' ORDER BY discharged_at DESC LIMIT 500"
+    "AND data_provenance = 'OPERATIONAL' AND discharged_at >= NOW() - INTERVAL '90 days' ORDER BY discharged_at DESC LIMIT 500"
   );
   const durations = durationResult.rows.map(row => Number(row.minutes)).filter(value => Number.isFinite(value) && value >= 1 && value <= 240);
   const meanService = durations.length ? durations.reduce((sum, value) => sum + value, 0) / durations.length : 12;
@@ -117,7 +117,7 @@ async function recordForecast(input, actorStaffId) {
     if (estimates[tier] === undefined) throw httpError('tier_estimates must contain predictions for tiers 1 to 4.');
     tierEstimates[tier] = positiveMinutes(estimates[tier], 'Tier ' + tier + ' estimate');
   }
-  const snapshot = await query("SELECT queue_id, COALESCE(priority_level,4)::int AS tier FROM queue_entries WHERE status = 'Waiting' ORDER BY queued_at LIMIT 1000");
+  const snapshot = await query("SELECT queue_id, COALESCE(priority_level,4)::int AS tier FROM queue_entries WHERE status = 'Waiting' AND data_provenance NOT IN ('SYNTHETIC_TEST','DEMO') ORDER BY queued_at LIMIT 1000");
   const stored = await withTransaction(async client => {
     const row = await client.query(
       'INSERT INTO flow_forecasts (model_version,horizon_minutes,tier_estimates,waiting_snapshot,created_by_staff_id) VALUES ($1,$2,$3::jsonb,$4,$5) RETURNING forecast_id,created_at',
@@ -145,11 +145,19 @@ async function getForecastTruth(limit = 20) {
     'SELECT f.forecast_id,f.model_version,f.horizon_minutes,f.tier_estimates,f.waiting_snapshot,f.created_at, ' +
     'COUNT(s.sample_id)::int AS tracked_samples,COUNT(s.actual_wait_minutes)::int AS observed_samples, ' +
     'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NULL)::int AS pending_samples, ' +
-    'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND s.actual_wait_minutes <= f.horizon_minutes)::int AS within_horizon_samples, ' +
-    'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes > f.horizon_minutes)::int AS out_of_horizon_samples, ' +
+    'COUNT(s.sample_id) FILTER (WHERE q.data_provenance = \'OPERATIONAL\')::int AS operational_tracked_samples, ' +
+    'COUNT(s.actual_wait_minutes) FILTER (WHERE q.data_provenance = \'OPERATIONAL\')::int AS operational_observed_samples, ' +
+    'COUNT(s.actual_wait_minutes) FILTER (WHERE COALESCE(q.data_provenance,\'UNCLASSIFIED\') = \'UNCLASSIFIED\')::int AS unclassified_observed_samples, ' +
+    'COUNT(s.sample_id) FILTER (WHERE q.data_provenance IN (\'SYNTHETIC_TEST\',\'DEMO\'))::int AS excluded_synthetic_samples, ' +
+    'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\' AND s.actual_wait_minutes <= f.horizon_minutes)::int AS within_horizon_samples, ' +
+    'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\' AND s.actual_wait_minutes > f.horizon_minutes)::int AS out_of_horizon_samples, ' +
+    'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND COALESCE(q.data_provenance,\'UNCLASSIFIED\') = \'UNCLASSIFIED\' AND s.actual_wait_minutes > f.horizon_minutes)::int AS unclassified_out_of_horizon_samples, ' +
     'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL)::numeric,1) AS mean_absolute_error_minutes, ' +
-    'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND s.actual_wait_minutes <= f.horizon_minutes)::numeric,1) AS within_horizon_mean_absolute_error_minutes ' +
+    'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\')::numeric,1) AS operational_mean_absolute_error_minutes, ' +
+    'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\' AND s.actual_wait_minutes <= f.horizon_minutes)::numeric,1) AS within_horizon_mean_absolute_error_minutes, ' +
+    'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND COALESCE(q.data_provenance,\'UNCLASSIFIED\') = \'UNCLASSIFIED\')::numeric,1) AS unclassified_mean_absolute_error_minutes ' +
     'FROM flow_forecasts f LEFT JOIN flow_forecast_samples s ON s.forecast_id = f.forecast_id ' +
+    'LEFT JOIN queue_entries q ON q.queue_id = s.queue_id ' +
     'GROUP BY f.forecast_id ORDER BY f.created_at DESC LIMIT $1', [safeLimit]
   );
   return { forecasts: result.rows, methodology: 'Observed elapsed time from queue entry to first consultation call is compared with the per-tier wait estimate captured at forecast time. This is descriptive operational monitoring, not clinical validation.' };
@@ -157,20 +165,27 @@ async function getForecastTruth(limit = 20) {
 async function fairnessMetrics() {
   const result = await query(
     'WITH tiers AS (SELECT generate_series(1,4)::int AS tier), ' +
-    "history AS (SELECT COALESCE(priority_level,4)::int AS tier, COUNT(*)::int AS sample_size, " +
-    'ROUND(AVG(EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0)::numeric,1) AS mean_wait_minutes, ' +
-    'ROUND(percentile_cont(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0)::numeric,1) AS p90_wait_minutes ' +
+    "history AS (SELECT COALESCE(priority_level,4)::int AS tier, " +
+    "COUNT(*) FILTER (WHERE data_provenance = 'OPERATIONAL')::int AS sample_size, " +
+    "ROUND(AVG(EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0) FILTER (WHERE data_provenance = 'OPERATIONAL')::numeric,1) AS mean_wait_minutes, " +
+    "ROUND((percentile_cont(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0) FILTER (WHERE data_provenance = 'OPERATIONAL'))::numeric,1) AS p90_wait_minutes, " +
+    "COUNT(*) FILTER (WHERE data_provenance = 'UNCLASSIFIED')::int AS unclassified_sample_size, " +
+    "COUNT(*) FILTER (WHERE data_provenance IN ('SYNTHETIC_TEST','DEMO'))::int AS excluded_synthetic_sample_size " +
     "FROM queue_entries WHERE status = 'Discharged' AND called_at IS NOT NULL AND called_at >= queued_at AND discharged_at >= NOW() - INTERVAL '30 days' GROUP BY COALESCE(priority_level,4)), " +
-    "active AS (SELECT COALESCE(priority_level,4)::int AS tier, COUNT(*) FILTER (WHERE queued_at < NOW() - INTERVAL '60 minutes')::int AS overdue_waiting " +
-    "FROM queue_entries WHERE status = 'Waiting' GROUP BY COALESCE(priority_level,4)) " +
+    "active AS (SELECT COALESCE(priority_level,4)::int AS tier, " +
+    "COUNT(*) FILTER (WHERE queued_at < NOW() - INTERVAL '60 minutes')::int AS overdue_waiting, " +
+    "COUNT(*) FILTER (WHERE data_provenance = 'UNCLASSIFIED')::int AS unclassified_waiting " +
+    "FROM queue_entries WHERE status = 'Waiting' AND data_provenance NOT IN ('SYNTHETIC_TEST','DEMO') GROUP BY COALESCE(priority_level,4)) " +
     'SELECT t.tier,COALESCE(h.sample_size,0)::int AS sample_size,h.mean_wait_minutes,h.p90_wait_minutes, ' +
-    'COALESCE(a.overdue_waiting,0)::int AS overdue_waiting, ' +
+    'COALESCE(h.unclassified_sample_size,0)::int AS unclassified_sample_size, ' +
+    'COALESCE(h.excluded_synthetic_sample_size,0)::int AS excluded_synthetic_sample_size, ' +
+    'COALESCE(a.overdue_waiting,0)::int AS overdue_waiting,COALESCE(a.unclassified_waiting,0)::int AS unclassified_waiting, ' +
     'CASE WHEN COALESCE(a.overdue_waiting,0) > 0 THEN TRUE ELSE FALSE END AS review_required ' +
     'FROM tiers t LEFT JOIN history h ON h.tier=t.tier LEFT JOIN active a ON a.tier=t.tier ORDER BY t.tier'
   );
   return {
     tiers: result.rows, threshold_minutes: 60,
-    interpretation: 'This is an operational delay review, not a determination of clinical fairness or discrimination. Small samples and patient complexity can affect comparisons. Staff should review context without automatically changing clinician-assigned priority.'
+    interpretation: 'Historical mean and P90 waits use only visits explicitly reviewed and classified as OPERATIONAL. Unclassified completed visits are shown separately and do not contribute to those summaries; records explicitly marked SYNTHETIC_TEST or DEMO are excluded. Active unclassified waiting visits remain visible for delay review until provenance is checked. These are operational monitoring indicators, not a determination of clinical fairness or discrimination. Small samples and patient complexity can affect comparisons. Staff should review context without automatically changing clinician-assigned priority.'
   };
 }
 module.exports = { currentSnapshot, runScenario, listSimulations, listBenchmarkProfiles, runLab, recordForecast, getForecastTruth, fairnessMetrics, MODEL_VERSION };
