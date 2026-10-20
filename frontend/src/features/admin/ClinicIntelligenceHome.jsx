@@ -225,7 +225,7 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
 
   return (
     <div className="space-y-5">
-      <Card className="overflow-hidden border-0 bg-[#073a32] text-white">
+      <Card dark className="overflow-hidden border-0 text-white">
         <div className="grid gap-5 p-5 md:grid-cols-[1fr_auto] md:items-end md:p-7">
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2">
