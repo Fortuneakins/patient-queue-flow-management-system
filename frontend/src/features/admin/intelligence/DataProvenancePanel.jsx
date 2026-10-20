@@ -21,8 +21,8 @@ function toneFor(value) {
 
 function sourceLabel(value) {
   if (value === 'SERVER_POLICY') return 'Assigned automatically';
-  if (value === 'ADMIN_REVIEW') return 'Administrator reviewed';
-  return 'Historical / review required';
+  if (value === 'ADMIN_REVIEW') return 'Set by administrator';
+  return 'Legacy / review required';
 }
 
 function sourceTone(value) {
