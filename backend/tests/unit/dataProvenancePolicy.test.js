@@ -69,12 +69,18 @@ test('queue visibility follows the server mode while retaining unclassified lega
   );
   assert.equal(
     queueVisibilityPredicate('SYNTHETIC_TEST', 'q'),
-    "(q.data_provenance = 'UNCLASSIFIED' OR q.data_provenance = 'SYNTHETIC_TEST')"
+    "q.data_provenance <> 'DEMO'"
   );
   assert.equal(
     queueVisibilityPredicate('DEMO', 'queue_entry'),
-    "(queue_entry.data_provenance = 'UNCLASSIFIED' OR queue_entry.data_provenance = 'DEMO')"
+    "queue_entry.data_provenance <> 'SYNTHETIC_TEST'"
   );
+});
+
+test('test mode keeps operational and legacy records visible while hiding the other demo class', () => {
+  const predicate = queueVisibilityPredicate('SYNTHETIC_TEST', 'q');
+  assert.ok(predicate.includes("<> 'DEMO'"));
+  assert.ok(!predicate.includes("= 'SYNTHETIC_TEST'"));
 });
 
 test('queue visibility rejects unsafe aliases and unsupported modes', () => {
