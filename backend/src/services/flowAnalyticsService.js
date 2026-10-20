@@ -144,7 +144,11 @@ async function getForecastTruth(limit = 20) {
   const result = await query(
     'SELECT f.forecast_id,f.model_version,f.horizon_minutes,f.tier_estimates,f.waiting_snapshot,f.created_at, ' +
     'COUNT(s.sample_id)::int AS tracked_samples,COUNT(s.actual_wait_minutes)::int AS observed_samples, ' +
-    'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL)::numeric,1) AS mean_absolute_error_minutes ' +
+    'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NULL)::int AS pending_samples, ' +
+    'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND s.actual_wait_minutes <= f.horizon_minutes)::int AS within_horizon_samples, ' +
+    'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes > f.horizon_minutes)::int AS out_of_horizon_samples, ' +
+    'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL)::numeric,1) AS mean_absolute_error_minutes, ' +
+    'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND s.actual_wait_minutes <= f.horizon_minutes)::numeric,1) AS within_horizon_mean_absolute_error_minutes ' +
     'FROM flow_forecasts f LEFT JOIN flow_forecast_samples s ON s.forecast_id = f.forecast_id ' +
     'GROUP BY f.forecast_id ORDER BY f.created_at DESC LIMIT $1', [safeLimit]
   );
