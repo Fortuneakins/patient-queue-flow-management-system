@@ -4601,3 +4601,85 @@
   .clinic-tool-switcher-trigger { transition-duration: .01ms !important; }
   .clinic-tool-switcher-menu { animation-duration: .01ms !important; }
 }
+
+
+/* Keep the specialist menu above animated workbench panels and make every state legible. */
+.ui-card.clinic-tool-switcher-shell {
+  position: relative !important;
+  z-index: 120 !important;
+  overflow: visible !important;
+  isolation: isolate;
+}
+.clinic-intelligence-view > .clinic-tool-switcher-shell {
+  position: relative;
+  z-index: 120;
+}
+.clinic-intelligence-panel-enter {
+  position: relative;
+  z-index: 1;
+}
+.clinic-tool-switcher-menu {
+  isolation: isolate;
+}
+.clinic-tool-switcher-option:hover,
+.clinic-tool-switcher-option:focus-visible {
+  border-color: #78b9a9;
+  color: #103b33;
+  background: #eaf7f2;
+}
+.clinic-tool-switcher-option:hover .clinic-tool-switcher-option-copy strong,
+.clinic-tool-switcher-option:focus-visible .clinic-tool-switcher-option-copy strong {
+  color: #103b33;
+}
+.clinic-tool-switcher-option:hover .clinic-tool-switcher-option-copy small,
+.clinic-tool-switcher-option:focus-visible .clinic-tool-switcher-option-copy small {
+  color: #3f6258;
+}
+.clinic-tool-switcher-option.is-selected,
+.clinic-tool-switcher-option.is-selected:hover,
+.clinic-tool-switcher-option.is-selected:focus-visible {
+  border-color: #238875;
+  color: #103b33;
+  background: #dff4ec;
+}
+.clinic-tool-switcher-option.is-selected .clinic-tool-switcher-option-copy strong,
+.clinic-tool-switcher-option.is-selected:hover .clinic-tool-switcher-option-copy strong {
+  color: #103b33;
+}
+.clinic-tool-switcher-option.is-selected .clinic-tool-switcher-option-copy small,
+.clinic-tool-switcher-option.is-selected:hover .clinic-tool-switcher-option-copy small {
+  color: #3e6258;
+}
+.app-root[data-theme="dark"] .clinic-tool-switcher-option:hover,
+.app-root[data-theme="dark"] .clinic-tool-switcher-option:focus-visible {
+  border-color: #4c927e;
+  color: #f5fff9;
+  background: #1a4035;
+}
+.app-root[data-theme="dark"] .clinic-tool-switcher-option:hover .clinic-tool-switcher-option-copy strong,
+.app-root[data-theme="dark"] .clinic-tool-switcher-option:focus-visible .clinic-tool-switcher-option-copy strong {
+  color: #f5fff9 !important;
+}
+.app-root[data-theme="dark"] .clinic-tool-switcher-option:hover .clinic-tool-switcher-option-copy small,
+.app-root[data-theme="dark"] .clinic-tool-switcher-option:focus-visible .clinic-tool-switcher-option-copy small {
+  color: #c5dfd4 !important;
+}
+.app-root[data-theme="dark"] .clinic-tool-switcher-option.is-selected,
+.app-root[data-theme="dark"] .clinic-tool-switcher-option.is-selected:hover,
+.app-root[data-theme="dark"] .clinic-tool-switcher-option.is-selected:focus-visible {
+  border-color: #58b59b;
+  color: #f5fff9;
+  background: #1a493b;
+}
+.app-root[data-theme="dark"] .clinic-tool-switcher-option.is-selected .clinic-tool-switcher-option-copy strong,
+.app-root[data-theme="dark"] .clinic-tool-switcher-option.is-selected:hover .clinic-tool-switcher-option-copy strong {
+  color: #f5fff9 !important;
+}
+.app-root[data-theme="dark"] .clinic-tool-switcher-option.is-selected .clinic-tool-switcher-option-copy small,
+.app-root[data-theme="dark"] .clinic-tool-switcher-option.is-selected:hover .clinic-tool-switcher-option-copy small {
+  color: #c5dfd4 !important;
+}
+@media (max-width: 640px) {
+  .ui-card.clinic-tool-switcher-shell { z-index: 120 !important; }
+  .clinic-tool-switcher-menu { max-height: min(68vh, 38rem); }
+}
