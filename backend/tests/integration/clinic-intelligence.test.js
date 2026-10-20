@@ -230,18 +230,12 @@ if (!dbConfigured) {
     assert.ok(evaluatedForecast, 'newly recorded forecast should appear in truth ledger');
     assert.ok(Number(evaluatedForecast.tracked_samples) >= 1);
     assert.ok(Number(evaluatedForecast.observed_samples) >= 1);
-    assert.ok(Number(evaluatedForecast.out_of_horizon_samples) >= 1, 'the 75-minute observation must be reported outside the 60-minute horizon');
-    assert.equal(
-      Number(evaluatedForecast.within_horizon_samples) + Number(evaluatedForecast.out_of_horizon_samples),
-      Number(evaluatedForecast.observed_samples),
-      'within- and outside-horizon sample counts must cover all observed samples'
-    );
-    if (Number(evaluatedForecast.within_horizon_samples) === 0) {
-      assert.equal(evaluatedForecast.within_horizon_mean_absolute_error_minutes, null);
-    } else {
-      assert.ok(Number(evaluatedForecast.within_horizon_mean_absolute_error_minutes) >= 0);
-    }
-    assert.ok(Number(evaluatedForecast.mean_absolute_error_minutes) >= 0, 'overall MAE should remain available for audit');
+    assert.equal(Number(evaluatedForecast.within_horizon_samples), 0, 'unclassified fixtures must not count as verified operational accuracy');
+    assert.equal(Number(evaluatedForecast.out_of_horizon_samples), 0, 'unclassified observations must not be represented as operational errors');
+    assert.ok(Number(evaluatedForecast.unclassified_observed_samples) >= 1);
+    assert.ok(Number(evaluatedForecast.unclassified_out_of_horizon_samples) >= 1, 'the 75-minute unclassified observation must be reported outside the 60-minute horizon');
+    assert.equal(evaluatedForecast.within_horizon_mean_absolute_error_minutes, null);
+    assert.ok(Number(evaluatedForecast.mean_absolute_error_minutes) >= 0, 'all-sample MAE should remain available for audit');
     const fairness = await request('/api/intelligence/fairness', { headers: auth(tokens.admin) });
     assert.equal(fairness.response.status, 200);
     assert.equal(fairness.body.tiers.length, 4);
