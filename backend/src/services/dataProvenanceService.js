@@ -1,5 +1,6 @@
 const { query, withTransaction } = require('../db/pool');
 const { appendOperationalEvent } = require('./operationalEventService');
+const env = require('../config/env');
 
 const PROVENANCE_VALUES = Object.freeze(['UNCLASSIFIED', 'OPERATIONAL', 'SYNTHETIC_TEST', 'DEMO']);
 const EXCLUDED_FROM_OPERATIONAL_METRICS = Object.freeze(['SYNTHETIC_TEST', 'DEMO']);
@@ -36,7 +37,7 @@ async function listQueueProvenance({ limit = 50, provenance = null } = {}) {
   const [records, counts] = await Promise.all([
     query(
       'SELECT queue_id, ticket_number, ticket_date, status, COALESCE(priority_level,4)::int AS priority_level, ' +
-      'data_provenance, data_provenance_note, provenance_updated_at, queued_at, called_at, discharged_at ' +
+      'data_provenance, data_provenance_source, data_provenance_note, provenance_updated_by_staff_id, provenance_updated_at, queued_at, called_at, discharged_at ' +
       'FROM queue_entries ' + filter + ' ORDER BY queued_at DESC, queue_id DESC LIMIT $' + params.length,
       params
     ),
@@ -51,7 +52,14 @@ async function listQueueProvenance({ limit = 50, provenance = null } = {}) {
     summary,
     limit: safeLimit,
     provenance_values: PROVENANCE_VALUES,
-    excluded_from_operational_metrics: EXCLUDED_FROM_OPERATIONAL_METRICS
+    excluded_from_operational_metrics: EXCLUDED_FROM_OPERATIONAL_METRICS,
+    policy: {
+      new_visit_mode: env.DATA_PROVENANCE_MODE,
+      assignment_source: 'SERVER_POLICY',
+      policy_source: env.DATA_PROVENANCE_MODE_SOURCE,
+      environment: env.NODE_ENV,
+      production_guarded: env.DATA_PROVENANCE_POLICY_PRODUCTION_GUARDED
+    }
   };
 }
 
@@ -63,7 +71,7 @@ async function updateQueueProvenance(queueIdValue, input = {}, actorStaffId) {
 
   return withTransaction(async client => {
     const current = await client.query(
-      'SELECT queue_id, ticket_number, status, data_provenance FROM queue_entries WHERE queue_id = $1 FOR UPDATE',
+      'SELECT queue_id, ticket_number, status, data_provenance, data_provenance_source FROM queue_entries WHERE queue_id = $1 FOR UPDATE',
       [queueId]
     );
     if (!current.rows[0]) throw httpError('Queue visit not found.', 404);
@@ -74,10 +82,10 @@ async function updateQueueProvenance(queueIdValue, input = {}, actorStaffId) {
     }
 
     const updated = await client.query(
-      'UPDATE queue_entries SET data_provenance=$1, data_provenance_note=$2, provenance_updated_by_staff_id=$3, provenance_updated_at=NOW() ' +
-      'WHERE queue_id=$4 RETURNING queue_id, ticket_number, ticket_date, status, COALESCE(priority_level,4)::int AS priority_level, ' +
-      'data_provenance, data_provenance_note, provenance_updated_by_staff_id, provenance_updated_at, queued_at, called_at, discharged_at',
-      [provenance, reason, actorStaffId, queueId]
+      'UPDATE queue_entries SET data_provenance=$1, data_provenance_source=$2, data_provenance_note=$3, provenance_updated_by_staff_id=$4, provenance_updated_at=NOW() ' +
+      'WHERE queue_id=$5 RETURNING queue_id, ticket_number, ticket_date, status, COALESCE(priority_level,4)::int AS priority_level, ' +
+      'data_provenance, data_provenance_source, data_provenance_note, provenance_updated_by_staff_id, provenance_updated_at, queued_at, called_at, discharged_at',
+      [provenance, provenance === 'UNCLASSIFIED' ? 'LEGACY_REVIEW_REQUIRED' : 'ADMIN_REVIEW', reason, actorStaffId, queueId]
     );
     await appendOperationalEvent(client, {
       eventType: 'QUEUE_DATA_PROVENANCE_UPDATED',
@@ -89,7 +97,9 @@ async function updateQueueProvenance(queueIdValue, input = {}, actorStaffId) {
       metadata: {
         ticket_number: visit.ticket_number,
         previous_provenance: visit.data_provenance,
+        previous_source: visit.data_provenance_source,
         new_provenance: provenance,
+        new_source: provenance === 'UNCLASSIFIED' ? 'LEGACY_REVIEW_REQUIRED' : 'ADMIN_REVIEW',
         reason
       }
     });
