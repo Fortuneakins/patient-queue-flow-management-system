@@ -8,9 +8,55 @@ function defaultRole(index) { return ['RECEPTION', 'NURSE', 'DOCTOR', 'DOCTOR'][
 function defaultResource(index) { return index === 1 ? 'SERVICE' : index === 2 ? 'ROOM' : null; }
 const stageTone = status => ({ COMPLETED: 'green', READY: 'teal', IN_PROGRESS: 'orange', BLOCKED: 'red', PENDING: 'neutral' }[status] || 'neutral');
 
+function resourceSignal(stage, resources) {
+  if (!stage.resource_type) return null;
+  const type = String(stage.resource_type).toUpperCase();
+  if (!Array.isArray(resources)) {
+    return {
+      tone: 'neutral',
+      title: 'Resource status unavailable',
+      detail: 'The resource registry could not be read. Confirm availability with the responsible administrator; this advisory does not block the stage.'
+    };
+  }
+
+  const matching = resources.filter(item => String(item.resource_type).toUpperCase() === type);
+  if (!matching.length) {
+    return {
+      tone: 'neutral',
+      title: `No ${type.toLowerCase()} resources registered`,
+      detail: 'No matching resource records exist in the registry. This is an inventory gap, not an automatic block on the patient journey.'
+    };
+  }
+
+  const available = matching.filter(item => item.status === 'AVAILABLE').length;
+  const limited = matching.filter(item => item.status === 'LIMITED').length;
+  const unavailable = matching.filter(item => item.status === 'UNAVAILABLE').length;
+  if (available === 0 && limited === 0) {
+    return {
+      tone: 'red',
+      title: 'All matching resources marked unavailable',
+      detail: `${matching.length} ${type.toLowerCase()} resource record(s) are registered, with none marked available. Confirm the current situation with the administrator; CareGraph does not automatically block the stage.`
+    };
+  }
+  if (available === 0) {
+    return {
+      tone: 'amber',
+      title: 'Only limited resources are recorded',
+      detail: `${limited} limited and ${unavailable} unavailable ${type.toLowerCase()} resource record(s). Confirm usable capacity with the responsible staff before relying on this status.`
+    };
+  }
+  const detail = `${available} available · ${limited} limited · ${unavailable} unavailable. Registry status is advisory; it does not reserve a resource for this visit.`;
+  return {
+    tone: limited > 0 || unavailable > 0 ? 'amber' : 'teal',
+    title: `${available} ${type.toLowerCase()} resource(s) marked available`,
+    detail
+  };
+}
+
 export default function CareGraphPanel({ token, canManage = false, currentRole = null }) {
   const [pathways, setPathways] = useState([]);
   const [visits, setVisits] = useState([]);
+  const [resources, setResources] = useState(null);
   const [queueId, setQueueId] = useState('');
   const [pathwayId, setPathwayId] = useState('');
   const [journey, setJourney] = useState(null);
@@ -21,10 +67,42 @@ export default function CareGraphPanel({ token, canManage = false, currentRole =
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [paths, active] = await Promise.all([api.listPathways(token), api.intelligenceActiveVisits(token)]);
-    setPathways(paths); setVisits(active);
-    setPathwayId(current => current || String(paths.find(item => item.pathway_code === 'OPD_STANDARD')?.pathway_id || paths[0]?.pathway_id || ''));
-    setQueueId(current => current || String(active[0]?.queue_id || ''));
+    setError('');
+    const [pathResult, visitsResult, resourcesResult] = await Promise.allSettled([
+      api.listPathways(token),
+      api.intelligenceActiveVisits(token),
+      api.listResources(token)
+    ]);
+    const issues = [];
+
+    if (pathResult.status === 'fulfilled') {
+      const paths = pathResult.value;
+      setPathways(paths);
+      setPathwayId(current => current || String(paths.find(item => item.pathway_code === 'OPD_STANDARD')?.pathway_id || paths[0]?.pathway_id || ''));
+    } else {
+      setPathways([]);
+      issues.push('Care pathways could not be loaded.');
+    }
+
+    if (visitsResult.status === 'fulfilled') {
+      const active = visitsResult.value;
+      setVisits(active);
+      setQueueId(current => active.some(item => String(item.queue_id) === current)
+        ? current
+        : String(active[0]?.queue_id || ''));
+    } else {
+      setVisits([]);
+      issues.push('Active queue visits could not be loaded.');
+    }
+
+    if (resourcesResult.status === 'fulfilled') {
+      setResources(resourcesResult.value);
+    } else {
+      setResources(null);
+      issues.push('Resource availability could not be loaded.');
+    }
+
+    if (issues.length) setError(issues.join(' '));
   }, [token]);
   useEffect(() => { refresh().catch(e => setError(e.message)); }, [refresh]);
   useEffect(() => {
@@ -102,10 +180,21 @@ export default function CareGraphPanel({ token, canManage = false, currentRole =
           {canManage && <div className="mt-3"><Button variant="secondary" onClick={assign} disabled={!queueId || !pathwayId}>Assign or confirm pathway</Button></div>}
           {journey?.pathway && <div className="mt-5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2"><div><div className="font-semibold">{journey.pathway.name}</div><div className="text-xs text-stone-500">Ticket #{journey.visit.ticket_number} · {journey.visit.visit_status}</div></div><Badge tone="teal">{journey.stages.filter(s => s.status === 'COMPLETED').length}/{journey.stages.length} complete</Badge></div>
-            {journey.stages.map(stage => <div key={stage.stage_id} className="rounded-xl border border-stone-200 p-4">
+            {journey.stages.map(stage => {
+              const resource = resourceSignal(stage, resources);
+              const resourceTone = resource?.tone === 'red'
+                ? 'border-red-200 bg-red-50 text-red-900'
+                : resource?.tone === 'amber'
+                  ? 'border-amber-200 bg-amber-50 text-amber-950'
+                  : resource?.tone === 'teal'
+                    ? 'border-teal-100 bg-teal-50 text-teal-950'
+                    : 'border-stone-200 bg-stone-50 text-stone-700';
+              return <div key={stage.stage_id} className="rounded-xl border border-stone-200 p-4">
               <div className="flex flex-wrap items-start justify-between gap-2"><div className="flex min-w-0 gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-stone-100 text-xs font-bold">{stage.sequence_no}</span><div><div className="font-semibold">{stage.name}</div><div className="mt-1 text-xs text-stone-500">{stage.required_role || 'Any authorised role'}{stage.resource_type ? ' · Resource: ' + stage.resource_type : ''}</div>{stage.status === 'BLOCKED' && <p className="mt-1 text-xs text-red-700">{stage.block_reason}</p>}</div></div><Badge tone={stageTone(stage.status)}>{stage.status.replaceAll('_', ' ')}</Badge></div>
+              {resource && <div className={`mt-3 rounded-lg border p-3 ${resourceTone}`} role="status"><div className="flex items-start gap-2"><Icon name="info" size={16}/><div><p className="text-xs font-bold">{resource.title}</p><p className="mt-1 text-xs leading-relaxed">{resource.detail}</p></div></div></div>}
               {journey.visit.visit_status !== 'Discharged' && <div className="mt-3 flex flex-wrap gap-2">{stage.status === 'READY' && canActOnStage(stage) && <Button onClick={() => stageAction(stage, 'IN_PROGRESS')}>Start stage</Button>}{stage.status === 'IN_PROGRESS' && canActOnStage(stage) && <Button variant="success" onClick={() => stageAction(stage, 'COMPLETED')}>Complete stage</Button>}{['PENDING','BLOCKED'].includes(stage.status) && <div className="text-xs text-stone-500">Waiting for the required earlier stages.</div>}{!canActOnStage(stage) && ['READY','IN_PROGRESS'].includes(stage.status) && <div className="text-xs text-stone-500">This stage is reserved for {stage.required_role} staff.</div>}{canActOnStage(stage) && !['COMPLETED','IN_PROGRESS','READY'].includes(stage.status) && <div className="basis-full"><input className={inputClass} maxLength={300} placeholder="Short, non-clinical reason for blocking a stage" value={blockReason} onChange={e => setBlockReason(e.target.value)}/><Button className="mt-2" variant="secondary" onClick={() => stageAction(stage, 'BLOCKED')} disabled={blockReason.trim().length < 3}>Mark blocked</Button></div>}</div>}
-            </div>)}
+            </div>;
+            })}
           </div>}
           {journey && !journey.pathway && <EmptyState title="No pathway assigned" message="Select an active pathway and assign it to this queue visit."/>}
           {!journey && <EmptyState title="Select a queue visit" message="The stage timeline will appear here."/>}
