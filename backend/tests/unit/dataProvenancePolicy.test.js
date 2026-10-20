@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { resolveDataProvenancePolicy } = require('../../src/config/dataProvenancePolicy');
+const { resolveDataProvenancePolicy, queueVisibilityPredicate } = require('../../src/config/dataProvenancePolicy');
 
 test('defaults production deployments to operational provenance', () => {
   const policy = resolveDataProvenancePolicy({ nodeEnv: 'production' });
@@ -59,4 +59,25 @@ test('does not permit the production override to legitimise an invalid mode', ()
     }),
     /DATA_PROVENANCE_MODE/
   );
+});
+
+
+test('queue visibility follows the server mode while retaining unclassified legacy visits for review', () => {
+  assert.equal(
+    queueVisibilityPredicate('OPERATIONAL', 'q'),
+    "q.data_provenance NOT IN ('SYNTHETIC_TEST','DEMO')"
+  );
+  assert.equal(
+    queueVisibilityPredicate('SYNTHETIC_TEST', 'q'),
+    "(q.data_provenance = 'UNCLASSIFIED' OR q.data_provenance = 'SYNTHETIC_TEST')"
+  );
+  assert.equal(
+    queueVisibilityPredicate('DEMO', 'queue_entry'),
+    "(queue_entry.data_provenance = 'UNCLASSIFIED' OR queue_entry.data_provenance = 'DEMO')"
+  );
+});
+
+test('queue visibility rejects unsafe aliases and unsupported modes', () => {
+  assert.throws(() => queueVisibilityPredicate('SYNTHETIC_TEST', 'q; DROP TABLE patients'));
+  assert.throws(() => queueVisibilityPredicate('UNCLASSIFIED', 'q'));
 });
