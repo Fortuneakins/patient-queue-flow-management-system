@@ -8,6 +8,7 @@ const PUBLIC_QUEUE_SELECT = `
   SELECT q.queue_id, q.ticket_number, q.status, q.priority_level, q.queued_at
   FROM queue_entries q
   WHERE q.status IN ('Waiting', 'In-Consultation')
+    AND q.data_provenance NOT IN ('SYNTHETIC_TEST','DEMO')
 `;
 
 async function getActiveTicket(client, patientId) {
@@ -90,6 +91,7 @@ async function listStaffQueue() {
     LEFT JOIN clinic_staff c ON c.staff_id = q.called_by_staff_id
     LEFT JOIN clinic_staff d ON d.staff_id = q.discharged_by_staff_id
     WHERE q.status IN ('Waiting', 'In-Consultation')
+      AND q.data_provenance NOT IN ('SYNTHETIC_TEST','DEMO')
     ORDER BY ${queueOrderSql('q')}`);
   return result.rows;
 }
@@ -104,7 +106,7 @@ async function listPublicQueue() {
 }
 
 async function findActiveForHistory() {
-  const result = await query(`SELECT q.queue_id, q.ticket_number, q.status, q.priority_level, q.symptoms, q.queued_at FROM queue_entries q WHERE q.status IN ('Waiting','In-Consultation') ORDER BY ${queueOrderSql('q')}`);
+  const result = await query(`SELECT q.queue_id, q.ticket_number, q.status, q.priority_level, q.symptoms, q.queued_at FROM queue_entries q WHERE q.status IN ('Waiting','In-Consultation') AND q.data_provenance NOT IN ('SYNTHETIC_TEST','DEMO') ORDER BY ${queueOrderSql('q')}`);
   return result.rows;
 }
 
