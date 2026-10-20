@@ -25,6 +25,12 @@ const sections = [
   { id: 'access', label: 'Access Bridge', icon: 'users', desc: 'Review contact consent and operational message controls' }
 ];
 
+const toolGroups = [
+  { title: 'Run today’s clinic', ids: ['journeys', 'resources', 'referrals'] },
+  { title: 'Plan and stress-test', ids: ['flow', 'lab', 'continuity'] },
+  { title: 'Prove and improve', ids: ['learning', 'events', 'access'] }
+];
+
 function ToolSwitcher({ active, sections, onSelect }) {
   const [open, setOpen] = useState(false);
   const [focusIndex, setFocusIndex] = useState(() => Math.max(0, sections.findIndex(section => section.id === active)));
@@ -95,9 +101,6 @@ function ToolSwitcher({ active, sections, onSelect }) {
     } else if (event.key === 'End') {
       event.preventDefault();
       setFocusIndex(sections.length - 1);
-    } else if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      choose(sections[index]);
     } else if (event.key === 'Escape') {
       event.preventDefault();
       setOpen(false);
@@ -108,7 +111,9 @@ function ToolSwitcher({ active, sections, onSelect }) {
   }
 
   return (
-    <div className="clinic-tool-switcher" ref={rootRef}>
+    <div className="clinic-tool-switcher" ref={rootRef} onBlur={event => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+    }}>
       <span className="clinic-tool-switcher-label" id="clinic-tool-switcher-label">Switch specialist tool</span>
       <button
         ref={triggerRef}
@@ -140,26 +145,38 @@ function ToolSwitcher({ active, sections, onSelect }) {
             <span className="clinic-tool-switcher-menu-count">{sections.length} available</span>
           </div>
           <div className="clinic-tool-switcher-options">
-            {sections.map((section, index) => (
-              <button
-                key={section.id}
-                ref={node => { optionRefs.current[index] = node; }}
-                type="button"
-                role="option"
-                aria-selected={section.id === active}
-                className={`clinic-tool-switcher-option${section.id === active ? ' is-selected' : ''}`}
-                onClick={() => choose(section)}
-                onKeyDown={event => handleOptionKeyDown(event, index)}
-                tabIndex={focusIndex === index ? 0 : -1}
-              >
-                <span className="clinic-tool-switcher-option-icon"><Icon name={section.icon} size={17} /></span>
-                <span className="clinic-tool-switcher-option-copy">
-                  <strong>{section.label}</strong>
-                  <small>{section.desc}</small>
-                </span>
-                {section.id === active && <span className="clinic-tool-switcher-current"><Icon name="checkCircle" size={15} /> Current</span>}
-                {section.id !== active && <Icon name="arrow" size={15} className="clinic-tool-switcher-option-arrow" />}
-              </button>
+            {toolGroups.map(group => (
+              <section key={group.title} className="clinic-tool-switcher-group" role="group" aria-label={group.title}>
+                <h3>{group.title}</h3>
+                <div className="clinic-tool-switcher-group-options">
+                  {group.ids.map(id => {
+                    const section = sections.find(item => item.id === id);
+                    const index = sections.findIndex(item => item.id === id);
+                    if (!section) return null;
+                    return (
+                      <button
+                        key={section.id}
+                        ref={node => { optionRefs.current[index] = node; }}
+                        type="button"
+                        role="option"
+                        aria-selected={section.id === active}
+                        className={`clinic-tool-switcher-option${section.id === active ? ' is-selected' : ''}`}
+                        onClick={() => choose(section)}
+                        onKeyDown={event => handleOptionKeyDown(event, index)}
+                        tabIndex={focusIndex === index ? 0 : -1}
+                      >
+                        <span className="clinic-tool-switcher-option-icon"><Icon name={section.icon} size={17} /></span>
+                        <span className="clinic-tool-switcher-option-copy">
+                          <strong>{section.label}</strong>
+                          <small>{section.desc}</small>
+                        </span>
+                        {section.id === active && <span className="clinic-tool-switcher-current"><Icon name="checkCircle" size={15} /> Current</span>}
+                        {section.id !== active && <Icon name="arrow" size={15} className="clinic-tool-switcher-option-arrow" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
             ))}
           </div>
           <div className="clinic-tool-switcher-menu-footer">
