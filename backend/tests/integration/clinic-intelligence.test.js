@@ -202,9 +202,26 @@ if (!dbConfigured) {
     });
     assert.equal(forecast.response.status, 201, JSON.stringify(forecast.body));
     forecastIds.push(forecast.body.forecast_id);
+
+    // Model an observation that arrives after its declared horizon. The overall
+    // MAE remains auditable, while the API must separately identify in-horizon
+    // accuracy so an outlier is not silently treated as a representative sample.
+    const delayedSample = await query(
+      'UPDATE flow_forecast_samples SET actual_wait_minutes=$1, observed_at=NOW() WHERE forecast_id=$2 AND queue_id=$3 RETURNING sample_id',
+      [75, forecast.body.forecast_id, queueId]
+    );
+    assert.equal(delayedSample.rowCount, 1, 'forecast should track the newly checked-in waiting visit');
     const truth = await request('/api/intelligence/forecasts/truth', { headers: auth(tokens.admin) });
     assert.equal(truth.response.status, 200);
     assert.ok(Array.isArray(truth.body.forecasts));
+    const evaluatedForecast = truth.body.forecasts.find(item => Number(item.forecast_id) === Number(forecast.body.forecast_id));
+    assert.ok(evaluatedForecast, 'newly recorded forecast should appear in truth ledger');
+    assert.equal(Number(evaluatedForecast.tracked_samples), 1);
+    assert.equal(Number(evaluatedForecast.observed_samples), 1);
+    assert.equal(Number(evaluatedForecast.within_horizon_samples), 0);
+    assert.equal(Number(evaluatedForecast.out_of_horizon_samples), 1);
+    assert.equal(evaluatedForecast.within_horizon_mean_absolute_error_minutes, null);
+    assert.equal(Number(evaluatedForecast.mean_absolute_error_minutes), 55);
     const fairness = await request('/api/intelligence/fairness', { headers: auth(tokens.admin) });
     assert.equal(fairness.response.status, 200);
     assert.equal(fairness.body.tiers.length, 4);
