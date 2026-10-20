@@ -26,7 +26,7 @@ function sourceLabel(value) {
 }
 
 function sourceTone(value) {
-  if (value === 'SERVER_POLICY') return 'blue';
+  if (value === 'SERVER_POLICY') return 'teal';
   if (value === 'ADMIN_REVIEW') return 'green';
   return 'orange';
 }
