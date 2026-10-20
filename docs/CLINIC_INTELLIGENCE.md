@@ -43,7 +43,9 @@ See [Operational Continuity Lab design and verification](CONTINUITY_LAB_DESIGN.m
 
 ### Prediction truth and safety review
 
-A forecast capture stores per-tier estimates against the current waiting-visit snapshot. Once a visit has a first-call timestamp, the ledger compares the remaining time from forecast capture until first call with the captured per-tier estimate and reports mean absolute error. The review panel also displays sample sizes, queue-to-first-call wait among completed visits by tier, and currently waiting visits past an operational threshold.
+A forecast capture stores per-tier estimates against the current waiting-visit snapshot. Once a tracked visit has a first-call timestamp, the ledger compares the elapsed time from forecast capture until first call with the captured per-tier estimate. It reports overall mean absolute error across all observed samples and separately reports the sample count and mean absolute error for observations completed within the configured forecast horizon. Samples whose observed time exceeds the horizon remain included in the overall diagnostic metric and are counted separately; they are not silently discarded or represented as in-horizon accuracy.
+
+The review panel also displays tracked and observed sample counts, the forecast horizon, queue-to-first-call wait among completed visits by tier, and currently waiting visits past an operational threshold. An observation outside the forecast horizon can reflect a very long wait, stale test data or changed operating conditions and warrants contextual review.
 
 These are operational monitoring indicators. They cannot prove the model is clinically accurate, unbiased or fair; low sample counts and patient complexity must be considered. The module must not automatically change clinical priority.
 
