@@ -14,7 +14,7 @@ async function getOverview() {
     "COUNT(*) FILTER (WHERE status = 'In-Consultation')::int AS in_consultation, " +
     "COUNT(*) FILTER (WHERE status = 'Discharged' AND discharged_at::date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::int AS discharged_today, " +
     "ROUND((EXTRACT(EPOCH FROM (NOW() - MIN(queued_at) FILTER (WHERE status = 'Waiting'))) / 60.0)::numeric, 1) AS oldest_wait_minutes, " +
-    "COUNT(*) FILTER (WHERE status = 'Waiting' AND queued_at < NOW() - INTERVAL '60 minutes')::int AS overdue_waiting FROM queue_entries WHERE data_provenance NOT IN ('SYNTHETIC_TEST','DEMO')"
+    "COUNT(*) FILTER (WHERE status = 'Waiting' AND queued_at < NOW() - INTERVAL '60 minutes')::int AS overdue_waiting FROM queue_entries q WHERE " + queueVisibility
   );
   const resources = await query(
     'SELECT resource_type, status, COUNT(*)::int AS resource_count, COALESCE(SUM(capacity),0)::int AS capacity ' +
@@ -49,10 +49,11 @@ async function listEvents({ limit = 100, eventType = null } = {}) {
 }
 async function listActiveVisits() {
   const result = await query(
-    "SELECT q.queue_id, q.patient_id, p.full_name, q.ticket_number, q.status, q.priority_level, q.queued_at, " +
-    "ROUND((EXTRACT(EPOCH FROM (NOW() - q.queued_at)) / 60.0)::numeric, 1) AS elapsed_wait_minutes " +
-    "FROM queue_entries q JOIN patients p ON p.patient_id = q.patient_id WHERE q.status IN ('Waiting','In-Consultation') " +
-    "AND ${queueVisibility} ORDER BY CASE WHEN q.status = 'In-Consultation' THEN 0 ELSE 1 END, COALESCE(q.priority_level,4), q.queued_at"
+    `SELECT q.queue_id, q.patient_id, p.full_name, q.ticket_number, q.status, q.priority_level, q.queued_at,
+            ROUND((EXTRACT(EPOCH FROM (NOW() - q.queued_at)) / 60.0)::numeric, 1) AS elapsed_wait_minutes
+     FROM queue_entries q JOIN patients p ON p.patient_id = q.patient_id
+     WHERE q.status IN ('Waiting','In-Consultation') AND ${queueVisibility}
+     ORDER BY CASE WHEN q.status = 'In-Consultation' THEN 0 ELSE 1 END, COALESCE(q.priority_level,4), q.queued_at`
   );
   return result.rows;
 }
