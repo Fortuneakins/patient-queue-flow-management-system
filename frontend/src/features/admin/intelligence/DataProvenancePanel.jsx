@@ -19,6 +19,18 @@ function toneFor(value) {
   return 'neutral';
 }
 
+function sourceLabel(value) {
+  if (value === 'SERVER_POLICY') return 'Assigned automatically';
+  if (value === 'ADMIN_REVIEW') return 'Administrator reviewed';
+  return 'Historical / review required';
+}
+
+function sourceTone(value) {
+  if (value === 'SERVER_POLICY') return 'blue';
+  if (value === 'ADMIN_REVIEW') return 'green';
+  return 'orange';
+}
+
 function dateTime(value) {
   if (!value) return '—';
   const parsed = new Date(value);
@@ -29,6 +41,7 @@ export default function DataProvenancePanel({ token }) {
   const [filter, setFilter] = useState('UNCLASSIFIED');
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState({ UNCLASSIFIED: 0, OPERATIONAL: 0, SYNTHETIC_TEST: 0, DEMO: 0 });
+  const [policy, setPolicy] = useState(null);
   const [edits, setEdits] = useState({});
   const [busy, setBusy] = useState(false);
   const [savingId, setSavingId] = useState(null);
@@ -42,6 +55,7 @@ export default function DataProvenancePanel({ token }) {
       const result = await api.queueProvenance(token, 100, filter === 'ALL' ? '' : filter);
       setRecords(result.records || []);
       setSummary(result.summary || { UNCLASSIFIED: 0, OPERATIONAL: 0, SYNTHETIC_TEST: 0, DEMO: 0 });
+      setPolicy(result.policy || null);
       setEdits(current => {
         const next = { ...current };
         for (const row of result.records || []) {
@@ -105,7 +119,7 @@ export default function DataProvenancePanel({ token }) {
           <div className="max-w-3xl">
             <p className="eyebrow">Data quality workbench</p>
             <h2 className="font-display text-xl font-bold">Queue data provenance</h2>
-            <p className="mt-2 text-sm leading-relaxed text-stone-600">Review whether a visit is an operational record, an acceptance-test record, or demonstration data before it contributes to historical operational analytics. Legacy records remain Unclassified until an authorised administrator reviews them.</p>
+            <p className="mt-2 text-sm leading-relaxed text-stone-600">New check-ins receive a provenance classification automatically from the server's configured policy. Existing historical records are never silently reclassified; ambiguous legacy records remain Unclassified until an authorised administrator reviews them.</p>
           </div>
           <Button variant="secondary" icon="refresh" onClick={refresh} disabled={busy}>{busy ? 'Refreshing…' : 'Refresh records'}</Button>
         </div>
@@ -116,6 +130,18 @@ export default function DataProvenancePanel({ token }) {
               <p className="mt-1 font-display text-2xl font-bold text-stone-900">{summary[option.value] ?? '—'}</p>
             </div>
           ))}
+        </div>
+        <div className="mt-4 rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm leading-relaxed text-teal-950">
+          <div className="flex flex-wrap items-center gap-2">
+            <strong>Automatic check-in policy</strong>
+            {policy && <Badge tone={toneFor(policy.new_visit_mode)}>{labelFor(policy.new_visit_mode)}</Badge>}
+            {policy && <Badge tone="neutral">{policy.policy_source === 'ENVIRONMENT_CONFIG' ? 'Explicit server setting' : 'Environment default'}</Badge>}
+          </div>
+          {policy ? (
+            <p className="mt-1">The server currently assigns new visits as <strong>{labelFor(policy.new_visit_mode)}</strong> using <code>DATA_PROVENANCE_MODE</code> ({policy.environment}). This is server-controlled and cannot be chosen in a check-in request. Status, triage and discharge updates preserve the classification; only an authorised provenance review changes it.</p>
+          ) : (
+            <p className="mt-1">Loading the server-controlled policy…</p>
+          )}
         </div>
         <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-950">
           <strong>Review rule:</strong> do not classify a record from a name, ticket number or symptom text alone. Use your test notes or other reliable context. Classification changes analytic inclusion only; it does not delete a visit, edit clinical notes, change visit status or alter triage priority. Every saved change requires a reason and is recorded in the append-only event log.
@@ -159,9 +185,11 @@ export default function DataProvenancePanel({ token }) {
                       <div className="flex flex-wrap items-center gap-2">
                         <h4 className="font-semibold text-stone-900">{row.ticket_number}</h4>
                         <Badge tone={toneFor(row.data_provenance)}>{labelFor(row.data_provenance)}</Badge>
+                        <Badge tone={sourceTone(row.data_provenance_source)}>{sourceLabel(row.data_provenance_source)}</Badge>
                         <Badge tone="neutral">{row.status}</Badge>
                       </div>
                       <p className="mt-1 text-xs text-stone-500">Queue record #{row.queue_id} · Tier {row.priority_level} · Ticket date {row.ticket_date}</p>
+                      {row.provenance_updated_by_staff_id && <p className="mt-1 text-xs text-stone-500">Last reviewed by staff record #{row.provenance_updated_by_staff_id}</p>}
                     </div>
                     <div className="text-xs leading-relaxed text-stone-500">
                       <p>Queued: {dateTime(row.queued_at)}</p>
