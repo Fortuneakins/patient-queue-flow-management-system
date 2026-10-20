@@ -225,7 +225,8 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
 
   return (
     <div className="space-y-5">
-      <Card dark className="overflow-hidden border-0 text-white">
+      <Card className="overflow-hidden border-0 p-0">
+        <div className="rounded-2xl bg-[#102b27] text-white">
         <div className="grid gap-5 p-5 md:grid-cols-[1fr_auto] md:items-end md:p-7">
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2">
@@ -243,6 +244,7 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
             </div>
           </div>
           <Button onClick={refresh} disabled={busy} icon="refresh" variant="secondary">{busy ? 'Refreshing…' : 'Refresh snapshot'}</Button>
+        </div>
         </div>
       </Card>
 
