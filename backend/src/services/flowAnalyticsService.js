@@ -159,8 +159,8 @@ async function getForecastTruth(limit = 20) {
     'COUNT(s.actual_wait_minutes) FILTER (WHERE q.data_provenance = \'OPERATIONAL\')::int AS operational_observed_samples, ' +
     'COUNT(s.actual_wait_minutes) FILTER (WHERE COALESCE(q.data_provenance,\'UNCLASSIFIED\') = \'UNCLASSIFIED\')::int AS unclassified_observed_samples, ' +
     'COUNT(s.sample_id) FILTER (WHERE q.data_provenance IN (\'SYNTHETIC_TEST\',\'DEMO\'))::int AS excluded_synthetic_samples, ' +
-    'COUNT(s.actual_wait_minutes) FILTER (WHERE q.data_provenance IN (\\'SYNTHETIC_TEST\\',\\'DEMO\\'))::int AS excluded_synthetic_observed_samples, ' +
-    'COUNT(s.actual_wait_minutes) FILTER (WHERE q.data_provenance IN (\\'SYNTHETIC_TEST\\',\\'DEMO\\') AND s.actual_wait_minutes > f.horizon_minutes)::int AS excluded_synthetic_out_of_horizon_samples, ' +
+    'COUNT(s.actual_wait_minutes) FILTER (WHERE q.data_provenance IN (\'SYNTHETIC_TEST\',\'DEMO\'))::int AS excluded_synthetic_observed_samples, ' +
+    'COUNT(s.actual_wait_minutes) FILTER (WHERE q.data_provenance IN (\'SYNTHETIC_TEST\',\'DEMO\') AND s.actual_wait_minutes > f.horizon_minutes)::int AS excluded_synthetic_out_of_horizon_samples, ' +
     'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\' AND s.actual_wait_minutes <= f.horizon_minutes)::int AS within_horizon_samples, ' +
     'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\' AND s.actual_wait_minutes > f.horizon_minutes)::int AS out_of_horizon_samples, ' +
     'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND COALESCE(q.data_provenance,\'UNCLASSIFIED\') = \'UNCLASSIFIED\' AND s.actual_wait_minutes > f.horizon_minutes)::int AS unclassified_out_of_horizon_samples, ' +
