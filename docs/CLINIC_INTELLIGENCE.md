@@ -7,7 +7,7 @@ This document describes the optional Clinic Intelligence module on `feat/clinic-
 On an existing local PQFMS checkout:
 
 1. Pull the feature branch and install dependencies with `npm ci --prefix backend` and `npm ci --prefix frontend`.
-2. Run the sorted database migrations using `scripts\\database.ps1`. The script applies migrations in filename order. Migration 003 creates the event log, pathway graph, resource registry, simulation/forecast tables, referral records, contact preferences and the constrained offline-sync receipt table. Migration 004 adds communication-delivery attempt records.
+2. For a fresh local database, run the sorted migrations using `scripts\\database.ps1`. For an existing database, take a backup and apply only new migrations that have not yet been applied; migration 006 adds queue data-provenance fields.
 3. Start PQFMS normally with `scripts\\start-all.ps1`.
 4. Sign in. Administrators can open **Clinic Intelligence** in the admin sidebar; Nurses and Doctors have CareGraph in their workspace, Doctors have Referral Relay, and Reception has Access Bridge contact preferences.
 
@@ -49,6 +49,14 @@ The review panel also displays tracked and observed sample counts, the forecast 
 
 These are operational monitoring indicators. They cannot prove the model is clinically accurate, unbiased or fair; low sample counts and patient complexity must be considered. The module must not automatically change clinical priority.
 
+### Queue data provenance
+
+Migration 006 adds an explicit provenance classification for queue visits: `UNCLASSIFIED`, `OPERATIONAL`, `SYNTHETIC_TEST` or `DEMO`. Existing records default to `UNCLASSIFIED`; their source is never guessed from names, ticket numbers or symptom text. An administrator can review queue metadata in **Data provenance review**, select a classification and provide a reason. The API records each change in the append-only Flight Recorder. Patient names, identification numbers and symptom descriptions are not exposed in the provenance list.
+
+Historical mean/P90 queue-to-call statistics and service-duration samples use records explicitly classified as `OPERATIONAL`. Unclassified completed visits are counted separately and do not contribute to those historical summaries. Records labelled `SYNTHETIC_TEST` or `DEMO` are excluded from operational queue displays and analytics, while remaining in the underlying history and audit trail. Active visits cannot be relabelled as synthetic/demo; they must be completed through the normal workflow first. Classification does not modify status, triage priority, clinical notes or historical timestamps.
+
+Forecast Truth retains an all-sample error for auditability, but separately reports operational-only and unclassified samples. The overall audit metric can still reflect stale or test observations, so it must not be presented as operational accuracy without checking the provenance breakdown.
+
 ### Flight Recorder
 
 Important queue actions and new-module actions append compact event records. The database rejects direct UPDATE and DELETE statements on this event table. Metadata deliberately excludes free-text symptoms, consultation-note contents and contact numbers. An append-only table is not a substitute for backup, retention rules, privileged database controls or a formal audit policy.
@@ -76,6 +84,7 @@ The new API is mounted at `/api/intelligence`. All endpoints require a valid bea
 | Scenarios and synthetic lab | `POST /simulations`, `GET /simulations`, `GET /benchmarks`, `POST /synthetic-lab/run` | Admin |
 | Synthetic continuity recovery and run history | `POST /continuity/run`, `GET /continuity/runs` | Admin |
 | Forecast truth and delay review | `POST /forecasts`, `GET /forecasts/truth`, `GET /fairness` | Admin |
+| Queue data provenance | `GET /data-provenance/queue-records`, `PATCH /data-provenance/queue-records/:queue_id` | Admin |
 | Referrals | `GET /referrals` | Nurse, Doctor, Admin |
 | Create/update referrals | `POST /referrals`, `PATCH /referrals/:referral_id` | Doctor, Admin |
 | Contact preferences | `GET /contact-preferences/:patient_id` | Reception, Nurse, Doctor, Admin |
