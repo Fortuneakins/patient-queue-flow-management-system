@@ -231,13 +231,13 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="teal">Operations cockpit</Badge>
-              <span className="text-xs text-teal-100/80">Server snapshot · read-only summary</span>
+              <span className="text-xs font-medium text-teal-100">Server snapshot · read-only summary</span>
             </div>
-            <h2 className="mt-3 font-display text-2xl font-bold md:text-3xl">See what needs attention.</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-teal-50/90">
+            <h2 style={{ color: '#ffffff' }} className="mt-3 font-display text-2xl font-bold md:text-3xl">See what needs attention.</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#e0f2ef]">
               One starting point for queue pressure, recorded resource constraints, referrals and evidence quality. Signals are prompts for human review, not clinical decisions.
             </p>
-            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-teal-100/80">
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-teal-100">
               <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-300" /> API-backed data</span>
               <span>{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Waiting for first snapshot'}</span>
               {overview?.model_version && <span>Model {overview.model_version}</span>}
@@ -344,23 +344,31 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
         </div>
       </section>
 
-      <Card className="p-4 md:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+      <details className="rounded-2xl border border-stone-200 bg-white/90 shadow-sm">
+        <summary className="flex cursor-pointer list-none flex-col gap-3 rounded-2xl p-4 transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 md:flex-row md:items-center md:justify-between md:p-5">
+          <div className="min-w-0">
             <p className="eyebrow">Evidence and system footing</p>
-            <h3 className="font-display text-lg font-bold">Know what the intelligence is based on</h3>
-            <p className="mt-1 text-sm text-stone-500">These counts describe the available evidence. They do not certify prediction accuracy or clinical safety.</p>
+            <h3 className="font-display text-base font-bold text-stone-900">Data quality and model context</h3>
+            <p className="mt-1 text-sm text-stone-600">Inspect the evidence behind the operational summary; these counts do not certify prediction accuracy or clinical safety.</p>
           </div>
-          <Button variant="secondary" icon="history" onClick={() => go('events')}>Inspect event trace</Button>
+          <div className="flex flex-wrap gap-2 text-xs font-semibold text-stone-700">
+            <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1">Pathways: {activePathways === null ? '—' : activePathways}</span>
+            <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1">Service samples: {sampleCount === null ? '—' : sampleCount}</span>
+            <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1">Scenarios: {scenarios === null ? '—' : scenarios}</span>
+            <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1">Events: {overview?.event_count == null ? '—' : count(overview.event_count).toLocaleString()}</span>
+          </div>
+        </summary>
+        <div className="border-t border-stone-200 p-4 md:p-5">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-stone-200 bg-stone-50 p-3"><p className="text-xs text-stone-600">Active pathways</p><p className="mt-1 font-display text-2xl font-bold text-stone-900">{activePathways === null ? '—' : activePathways}</p></div>
+            <div className="rounded-xl border border-stone-200 bg-stone-50 p-3"><p className="text-xs text-stone-600">Eligible service samples</p><p className="mt-1 font-display text-2xl font-bold text-stone-900">{sampleCount === null ? '—' : sampleCount}</p><p className="mt-1 text-xs text-stone-600">Used to inform operational service-time estimates when available.</p></div>
+            <div className="rounded-xl border border-stone-200 bg-stone-50 p-3"><p className="text-xs text-stone-600">Saved FlowTwin scenarios</p><p className="mt-1 font-display text-2xl font-bold text-stone-900">{scenarios === null ? '—' : scenarios}</p><p className="mt-1 text-xs text-stone-600">{syntheticBatches === null ? '—' : syntheticBatches} synthetic batches also saved.</p></div>
+            <div className="rounded-xl border border-stone-200 bg-stone-50 p-3"><p className="text-xs text-stone-600">Latest operational event</p><p className="mt-1 text-sm font-semibold text-stone-900">{formatTimestamp(latestEvent?.created_at || overview?.last_event_at)}</p><p className="mt-1 text-xs text-stone-600">{overview?.event_count == null ? 'Event count unavailable' : `${count(overview.event_count).toLocaleString()} events recorded in total`}</p></div>
+          </div>
+          {snapshot.visits && <p className="mt-3 text-xs text-stone-600">The active queue query returned {snapshot.visits.length} active visit(s), including waiting and in-consultation states. Patient names are intentionally not displayed on this aggregate landing page.</p>}
+          <div className="mt-4 flex justify-end"><Button variant="secondary" icon="history" onClick={() => go('events')}>Inspect event trace</Button></div>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-stone-200 p-3"><p className="text-xs text-stone-500">Active pathways</p><p className="mt-1 font-display text-2xl font-bold">{activePathways === null ? '—' : activePathways}</p></div>
-          <div className="rounded-xl border border-stone-200 p-3"><p className="text-xs text-stone-500">Eligible service samples</p><p className="mt-1 font-display text-2xl font-bold">{sampleCount === null ? '—' : sampleCount}</p><p className="mt-1 text-xs text-stone-500">Used to inform operational service-time estimates when available.</p></div>
-          <div className="rounded-xl border border-stone-200 p-3"><p className="text-xs text-stone-500">Saved FlowTwin scenarios</p><p className="mt-1 font-display text-2xl font-bold">{scenarios === null ? '—' : scenarios}</p><p className="mt-1 text-xs text-stone-500">{syntheticBatches === null ? '—' : syntheticBatches} synthetic batches also saved.</p></div>
-          <div className="rounded-xl border border-stone-200 p-3"><p className="text-xs text-stone-500">Latest operational event</p><p className="mt-1 text-sm font-semibold">{formatTimestamp(latestEvent?.created_at || overview?.last_event_at)}</p><p className="mt-1 text-xs text-stone-500">{overview?.event_count == null ? 'Event count unavailable' : `${count(overview.event_count).toLocaleString()} events recorded in total`}</p></div>
-        </div>
-        {snapshot.visits && <p className="mt-3 text-xs text-stone-500">The live queue query returned {snapshot.visits.length} active visit(s), including waiting and in-consultation states. Patient names are intentionally not displayed on this aggregate landing page.</p>}
-      </Card>
+      </details>
 
       <p className="text-xs leading-relaxed text-stone-500">
         Safety boundary: Clinic Intelligence provides operational summaries, simulations and audit views. It does not diagnose patients, automatically assign clinical priority, guarantee waiting times, or send Referral Relay records to another health system.
