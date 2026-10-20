@@ -60,7 +60,11 @@ For SMS, set `SMS_ENABLED=true` and provide Twilio credentials. With SMS disable
 .\scripts\database.ps1
 ```
 
-The sorted migration set creates the schema and constraints. Migrations `003_clinic_intelligence.sql` and `004_patient_communications.sql` add Clinic Intelligence modules; migration `006_data_provenance.sql` adds auditable classifications so synthetic/demo queue visits can be kept out of operational analytics. Existing queue records begin as `UNCLASSIFIED` and must be reviewed explicitly; the application does not guess provenance from names or symptoms. The seed script uses synthetic patient data and demo staff accounts. For an existing local database, back it up and apply only unapplied migrations rather than re-running the full initialisation script against retained data.
+The sorted migration set creates the schema and constraints. Migrations `003_clinic_intelligence.sql` and `004_patient_communications.sql` add Clinic Intelligence modules; migration `006_data_provenance.sql` adds auditable provenance classifications, and migration `007_data_provenance_source.sql` records whether each classification came from the server policy, an administrator review, or an outstanding legacy review. Existing queue records remain `UNCLASSIFIED` until reviewed; their origin is never guessed from names, ticket numbers or symptom text.
+
+New check-ins are classified automatically by the **server-only** `DATA_PROVENANCE_MODE` setting: `OPERATIONAL`, `SYNTHETIC_TEST` or `DEMO`. The safe default is `OPERATIONAL` when `NODE_ENV=production`, and `SYNTHETIC_TEST` otherwise. Production refuses a non-operational mode unless `ALLOW_NON_OPERATIONAL_PROVENANCE_MODE=true` is explicitly set for a deliberate demonstration. Do not expose either setting to clients. Status, triage and discharge transitions preserve the assigned provenance; every manual correction requires an administrator reason and is written to Flight Recorder. Only explicitly reviewed `OPERATIONAL` history contributes to historical operational wait/service statistics.
+
+The seed script uses synthetic patient data and demo staff accounts. For an existing local database, take a backup and apply only unapplied migrations `006_data_provenance.sql` and `007_data_provenance_source.sql` as appropriate; do not reset or re-seed a database that contains records you need to keep.
 
 ## Run the system
 
