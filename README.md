@@ -60,7 +60,7 @@ For SMS, set `SMS_ENABLED=true` and provide Twilio credentials. With SMS disable
 .\scripts\database.ps1
 ```
 
-The sorted migration set creates the schema and constraints. Migrations `003_clinic_intelligence.sql` and `004_patient_communications.sql` add the optional Clinic Intelligence modules and are applied automatically by `scripts\\database.ps1`. The seed script uses synthetic patient data and demo staff accounts.
+The sorted migration set creates the schema and constraints. Migrations `003_clinic_intelligence.sql` and `004_patient_communications.sql` add Clinic Intelligence modules; migration `006_data_provenance.sql` adds auditable classifications so synthetic/demo queue visits can be kept out of operational analytics. Existing queue records begin as `UNCLASSIFIED` and must be reviewed explicitly; the application does not guess provenance from names or symptoms. The seed script uses synthetic patient data and demo staff accounts. For an existing local database, back it up and apply only unapplied migrations rather than re-running the full initialisation script against retained data.
 
 ## Run the system
 
