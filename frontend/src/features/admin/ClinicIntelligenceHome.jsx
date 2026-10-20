@@ -326,16 +326,16 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
                     key={tool.id}
                     type="button"
                     onClick={() => go(tool.id)}
-                    className="group flex w-full items-start gap-3 rounded-xl border border-stone-200 p-3 text-left transition hover:border-teal-300 hover:bg-teal-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
+                    className="clinic-intelligence-workbench-tool group flex w-full items-start gap-3 rounded-xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
                   >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-stone-100 text-stone-700 transition group-hover:bg-white">
+                    <span className="clinic-intelligence-workbench-tool-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition">
                       <Icon name={tool.icon} size={17} />
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold text-stone-900">{tool.label}</span>
-                      <span className="mt-0.5 block text-xs leading-relaxed text-stone-500">{tool.detail}</span>
+                    <span className="clinic-intelligence-workbench-tool-copy min-w-0 flex-1">
+                      <span className="block text-sm font-semibold">{tool.label}</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed">{tool.detail}</span>
                     </span>
-                    <Icon name="arrow" size={15} className="mt-1 shrink-0 text-stone-400 transition group-hover:text-teal-800" />
+                    <Icon name="arrow" size={15} className="clinic-intelligence-workbench-tool-arrow mt-1 shrink-0 transition" />
                   </button>
                 ))}
               </div>
