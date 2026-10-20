@@ -36,7 +36,7 @@ BEGIN
       ADD CONSTRAINT chk_queue_data_provenance_note
       CHECK (char_length(data_provenance_note) <= 300);
   END IF;
-END
+END;
 $migration$;
 
 CREATE INDEX IF NOT EXISTS idx_queue_provenance_status_time
