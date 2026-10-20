@@ -230,7 +230,7 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="teal">Operations cockpit</Badge>
-              <span className="text-xs text-teal-100/80">Live operational snapshot · read-only summary</span>
+              <span className="text-xs text-teal-100/80">Server snapshot · read-only summary</span>
             </div>
             <h2 className="mt-3 font-display text-2xl font-bold md:text-3xl">See what needs attention.</h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-teal-50/90">
