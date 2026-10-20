@@ -15,7 +15,12 @@ const PUBLIC_QUEUE_SELECT = `
 `;
 
 async function getActiveTicket(client, patientId) {
-  const result = await client.query(`SELECT ticket_number FROM queue_entries WHERE patient_id = $1 AND status <> 'Discharged' LIMIT 1`, [patientId]);
+  const result = await client.query(
+    `SELECT q.ticket_number FROM queue_entries q
+     WHERE q.patient_id = $1 AND q.status <> 'Discharged' AND ${queueVisibility}
+     LIMIT 1`,
+    [patientId]
+  );
   return result.rows[0]?.ticket_number || null;
 }
 
@@ -271,7 +276,7 @@ async function dischargeLog({ limit = 100, offset = 0 }) {
     FROM queue_entries q
     JOIN patients p ON p.patient_id = q.patient_id
     LEFT JOIN clinic_staff d ON d.staff_id = q.discharged_by_staff_id
-    WHERE q.status = 'Discharged'
+    WHERE q.status = 'Discharged' AND ${queueVisibility}
     ORDER BY q.discharged_at DESC LIMIT $1 OFFSET $2`, [Math.min(Number(limit) || 100, 200), Math.max(Number(offset) || 0, 0)]);
   return result.rows;
 }
