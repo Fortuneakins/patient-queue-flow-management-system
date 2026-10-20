@@ -13,6 +13,33 @@ const numberFields = [
   ['seed', 'Repeatable scenario seed', 1, 2147483647]
 ];
 
+const scenarioPresets = [
+  {
+    name: 'Demand surge',
+    description: 'Test a sudden rise in arrivals with current modelled capacity.',
+    icon: 'users',
+    values: { name: 'Demand surge', horizon_minutes: '90', extra_arrivals: '20', additional_stations: '0', station_loss: '0', doctor_delay_minutes: '0', seed: '20261015' }
+  },
+  {
+    name: 'Reduced capacity',
+    description: 'Explore a scenario where one station is temporarily unavailable.',
+    icon: 'settings',
+    values: { name: 'Reduced capacity', horizon_minutes: '90', extra_arrivals: '0', additional_stations: '0', station_loss: '1', doctor_delay_minutes: '0', seed: '20261015' }
+  },
+  {
+    name: 'Consultation delay',
+    description: 'Explore the impact of a 30-minute doctor delay.',
+    icon: 'clock',
+    values: { name: 'Consultation delay', horizon_minutes: '90', extra_arrivals: '0', additional_stations: '0', station_loss: '0', doctor_delay_minutes: '30', seed: '20261015' }
+  },
+  {
+    name: 'Capacity response',
+    description: 'Compare a demand rise with one additional hypothetical station.',
+    icon: 'checkCircle',
+    values: { name: 'Capacity response', horizon_minutes: '90', extra_arrivals: '20', additional_stations: '1', station_loss: '0', doctor_delay_minutes: '0', seed: '20261015' }
+  }
+];
+
 function Metric({ label, value, suffix = '', icon = 'chart' }) {
   const missing = value === null || value === undefined;
   const explanatory = typeof value === 'string' && value.length > 12;
@@ -148,6 +175,32 @@ export default function FlowTwinPanel({ token }) {
           </div>
           <Badge tone="teal">Deterministic model</Badge>
         </div>
+        <section className="mt-5 rounded-2xl border border-teal-100 bg-teal-50/50 p-4 md:p-5" aria-labelledby="flowtwin-presets-title">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="eyebrow">Guided start</p>
+              <h3 id="flowtwin-presets-title" className="font-display text-base font-bold">Choose a what-if scenario</h3>
+              <p className="mt-1 text-sm text-stone-600">Load a sensible starting point first, then adjust any values below before running it.</p>
+            </div>
+            <Badge tone="teal">No live queue changes</Badge>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {scenarioPresets.map(preset => (
+              <button
+                key={preset.name}
+                type="button"
+                onClick={() => { setForm(preset.values); setResult(null); setError(''); }}
+                aria-label={`Use the ${preset.name} scenario preset`}
+                className="group flex h-full flex-col items-start rounded-xl border border-stone-200 bg-white p-3 text-left transition hover:border-teal-400 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 text-teal-800"><Icon name={preset.icon} size={18} /></span>
+                <strong className="mt-3 text-sm text-stone-900">{preset.name}</strong>
+                <span className="mt-1 flex-1 text-xs leading-relaxed text-stone-500">{preset.description}</span>
+                <span className="mt-3 text-xs font-bold text-teal-800">Use starting values →</span>
+              </button>
+            ))}
+          </div>
+        </section>
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <div className="md:col-span-2 xl:col-span-3">
             <Field label="Scenario name" required><input className={inputClass} maxLength={120} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
