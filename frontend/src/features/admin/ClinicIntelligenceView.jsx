@@ -11,6 +11,7 @@ import SyntheticLabPanel from './intelligence/SyntheticLabPanel';
 import ReferralRelayPanel from './intelligence/ReferralRelayPanel';
 import AccessBridgePanel from './intelligence/AccessBridgePanel';
 import ContinuityLabPanel from './intelligence/ContinuityLabPanel';
+import DataProvenancePanel from './intelligence/DataProvenancePanel';
 
 const homeSection = { id: 'home', label: 'Overview', icon: 'chart', desc: 'Live operational pulse, review prompts and guided next actions' };
 const sections = [
@@ -22,13 +23,14 @@ const sections = [
   { id: 'continuity', label: 'Continuity Lab', icon: 'refresh', desc: 'Inspect synthetic downtime-recovery discrepancies' },
   { id: 'learning', label: 'Safety and prediction truth', icon: 'shield', desc: 'Review operational delays and observed forecast errors' },
   { id: 'events', label: 'Flight Recorder', icon: 'history', desc: 'Trace recorded operational events and state transitions' },
-  { id: 'access', label: 'Access Bridge', icon: 'users', desc: 'Review contact consent and operational message controls' }
+  { id: 'access', label: 'Access Bridge', icon: 'users', desc: 'Review contact consent and operational message controls' },
+  { id: 'provenance', label: 'Data provenance review', icon: 'database', desc: 'Classify legacy visits before using them in operational metrics' }
 ];
 
 const toolGroups = [
   { title: 'Run today’s clinic', ids: ['journeys', 'resources', 'referrals'] },
   { title: 'Plan and stress-test', ids: ['flow', 'lab', 'continuity'] },
-  { title: 'Prove and improve', ids: ['learning', 'events', 'access'] }
+  { title: 'Prove and improve', ids: ['learning', 'events', 'access', 'provenance'] }
 ];
 
 function ToolSwitcher({ active, sections, onSelect }) {
@@ -131,7 +133,7 @@ function ToolSwitcher({ active, sections, onSelect }) {
           <strong>{selected.label}</strong>
           <small>{selected.desc}</small>
         </span>
-        <span className="clinic-tool-switcher-trigger-meta">9 tools</span>
+        <span className="clinic-tool-switcher-trigger-meta">{sections.length} tools</span>
         <Icon name="chevronDown" size={17} className={`clinic-tool-switcher-chevron${open ? ' is-open' : ''}`} />
       </button>
 
@@ -205,6 +207,7 @@ export default function ClinicIntelligenceView({ token, currentUser }) {
   else if (active === 'continuity') panel = <ContinuityLabPanel token={token} />;
   else if (active === 'referrals') panel = <ReferralRelayPanel token={token} canManage={true} />;
   else if (active === 'access') panel = <AccessBridgePanel token={token} />;
+  else if (active === 'provenance') panel = <DataProvenancePanel token={token} />;
 
   return (
     <div className="clinic-intelligence-view space-y-4">
