@@ -2,6 +2,8 @@ const { query, withTransaction } = require('../db/pool');
 const { appendOperationalEvent } = require('./operationalEventService');
 const { MODEL_VERSION, normalizeScenario, runClinicSimulation, runSyntheticLab } = require('../utils/flowSimulation');
 const env = require('../config/env');
+const { queueVisibilityPredicate } = require('../config/dataProvenancePolicy');
+const queueVisibility = queueVisibilityPredicate(env.DATA_PROVENANCE_MODE, 'queue_entry');
 function httpError(message, status = 400) { return Object.assign(new Error(message), { status }); }
 function positiveMinutes(value, label, min = 0, max = 1440) {
   const number = Number(value);
@@ -11,7 +13,7 @@ function positiveMinutes(value, label, min = 0, max = 1440) {
 async function currentSnapshot() {
   const queueResult = await query(
     "SELECT queue_id, status, priority_level, queued_at, GREATEST(0, EXTRACT(EPOCH FROM (NOW() - queued_at)) / 60.0) AS waiting_minutes " +
-    "FROM queue_entries WHERE status IN ('Waiting','In-Consultation') AND data_provenance NOT IN ('SYNTHETIC_TEST','DEMO') ORDER BY COALESCE(priority_level,4), queued_at LIMIT 1000"
+    `FROM queue_entries queue_entry WHERE status IN ('Waiting','In-Consultation') AND ${queueVisibility} ORDER BY COALESCE(priority_level,4), queued_at LIMIT 1000`
   );
   const waiting = queueResult.rows.filter(row => row.status === 'Waiting').map(row => ({
     priority_level: row.priority_level || 4, queued_at: row.queued_at, waiting_minutes: Number(row.waiting_minutes)
@@ -117,7 +119,7 @@ async function recordForecast(input, actorStaffId) {
     if (estimates[tier] === undefined) throw httpError('tier_estimates must contain predictions for tiers 1 to 4.');
     tierEstimates[tier] = positiveMinutes(estimates[tier], 'Tier ' + tier + ' estimate');
   }
-  const snapshot = await query("SELECT queue_id, COALESCE(priority_level,4)::int AS tier FROM queue_entries WHERE status = 'Waiting' AND data_provenance NOT IN ('SYNTHETIC_TEST','DEMO') ORDER BY queued_at LIMIT 1000");
+  const snapshot = await query(`SELECT queue_id, COALESCE(priority_level,4)::int AS tier FROM queue_entries queue_entry WHERE status = 'Waiting' AND ${queueVisibility} ORDER BY queued_at LIMIT 1000`);
   const stored = await withTransaction(async client => {
     const row = await client.query(
       'INSERT INTO flow_forecasts (model_version,horizon_minutes,tier_estimates,waiting_snapshot,created_by_staff_id) VALUES ($1,$2,$3::jsonb,$4,$5) RETURNING forecast_id,created_at',
@@ -130,10 +132,18 @@ async function recordForecast(input, actorStaffId) {
         [forecast.forecast_id, item.queue_id, item.tier, tierEstimates[item.tier]]
       );
     }
-    await appendOperationalEvent(client, { eventType: 'WAIT_FORECAST_RECORDED', entityType: 'FLOW_FORECAST', entityId: forecast.forecast_id, actorStaffId, toState: 'RECORDED', metadata: { waiting_snapshot: snapshot.rowCount, horizon_minutes: horizon } });
+    await appendOperationalEvent(client, { eventType: 'WAIT_FORECAST_RECORDED', entityType: 'FLOW_FORECAST', entityId: forecast.forecast_id, actorStaffId, toState: 'RECORDED', metadata: {
+      waiting_snapshot: snapshot.rowCount,
+      horizon_minutes: horizon,
+      provenance_mode: env.DATA_PROVENANCE_MODE
+    } });
     return forecast;
   });
-  return { ...stored, horizon_minutes: horizon, waiting_snapshot: snapshot.rowCount, tier_estimates: tierEstimates, tracked_visits: snapshot.rowCount };
+  return {
+    ...stored, horizon_minutes: horizon, waiting_snapshot: snapshot.rowCount,
+    tier_estimates: tierEstimates, tracked_visits: snapshot.rowCount,
+    provenance_mode: env.DATA_PROVENANCE_MODE
+  };
 }
 async function getForecastTruth(limit = 20) {
   await query(
@@ -175,7 +185,7 @@ async function fairnessMetrics() {
     "active AS (SELECT COALESCE(priority_level,4)::int AS tier, " +
     "COUNT(*) FILTER (WHERE queued_at < NOW() - INTERVAL '60 minutes')::int AS overdue_waiting, " +
     "COUNT(*) FILTER (WHERE data_provenance = 'UNCLASSIFIED')::int AS unclassified_waiting " +
-    "FROM queue_entries WHERE status = 'Waiting' AND data_provenance NOT IN ('SYNTHETIC_TEST','DEMO') GROUP BY COALESCE(priority_level,4)) " +
+    "FROM queue_entries q WHERE status = 'Waiting' AND " + queueVisibilityPredicate(env.DATA_PROVENANCE_MODE, 'q') + " GROUP BY COALESCE(priority_level,4)) " +
     'SELECT t.tier,COALESCE(h.sample_size,0)::int AS sample_size,h.mean_wait_minutes,h.p90_wait_minutes, ' +
     'COALESCE(h.unclassified_sample_size,0)::int AS unclassified_sample_size, ' +
     'COALESCE(h.excluded_synthetic_sample_size,0)::int AS excluded_synthetic_sample_size, ' +
