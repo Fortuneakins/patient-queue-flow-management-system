@@ -201,7 +201,7 @@ export default function ClinicIntelligenceView({ token, currentUser }) {
   else if (active === 'flow') panel = <FlowTwinPanel token={token} />;
   else if (active === 'journeys') panel = <CareGraphPanel token={token} canManage={true} currentRole="ADMIN" />;
   else if (active === 'resources') panel = <ResourcesPanel token={token} currentUser={currentUser} canManage={true} />;
-  else if (active === 'learning') panel = <LearningPanel token={token} />;
+  else if (active === 'learning') panel = <LearningPanel token={token} onOpenTool={setActive} />;
   else if (active === 'lab') panel = <SyntheticLabPanel token={token} />;
   else if (active === 'events') panel = <FlightRecorderPanel token={token} />;
   else if (active === 'continuity') panel = <ContinuityLabPanel token={token} />;
