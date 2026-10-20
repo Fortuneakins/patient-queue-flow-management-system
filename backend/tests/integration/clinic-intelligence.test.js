@@ -88,6 +88,12 @@ if (!dbConfigured) {
       assert.equal(nurseReferrals.response.status, 200);
       const nurseEventLog = await request('/api/intelligence/events', { headers: auth(tokens.nurse) });
       assert.equal(nurseEventLog.response.status, 403);
+      const adminProvenance = await request('/api/intelligence/data-provenance/queue-records', { headers: auth(tokens.admin) });
+      assert.equal(adminProvenance.response.status, 200);
+      assert.ok(Array.isArray(adminProvenance.body.records));
+      assert.ok(adminProvenance.body.summary.UNCLASSIFIED >= 0);
+      const nurseProvenance = await request('/api/intelligence/data-provenance/queue-records', { headers: auth(tokens.nurse) });
+      assert.equal(nurseProvenance.response.status, 403);
       const nurseCreateResource = await request('/api/intelligence/resources', {
         method: 'POST', headers: auth(tokens.nurse), body: JSON.stringify({ resource_code: 'DENIED', name: 'Denied resource', resource_type: 'ROOM' })
       });
@@ -124,6 +130,12 @@ if (!dbConfigured) {
     const queueId = checkedIn.body.queue_id;
     queueIds.push(queueId);
     assert.ok(checkedIn.body.care_pathway_id, 'a new visit should automatically receive the standard pathway');
+
+    const cannotHideActiveTestVisit = await request('/api/intelligence/data-provenance/queue-records/' + queueId, {
+      method: 'PATCH', headers: auth(tokens.admin),
+      body: JSON.stringify({ provenance: 'SYNTHETIC_TEST', reason: 'CI test classification must not hide an active visit.' })
+    });
+    assert.equal(cannotHideActiveTestVisit.response.status, 409, 'active visits must complete normally before being marked as test/demo data');
 
     const journey = await request('/api/intelligence/journeys/' + queueId, { headers: auth(tokens.nurse) });
     assert.equal(journey.response.status, 200);
@@ -283,6 +295,12 @@ if (!dbConfigured) {
       "discharged_by_staff_id=$2, discharged_at=NOW() - INTERVAL '5 minutes' WHERE queue_id=$1",
       [queueId, doctor.rows[0].staff_id]
     );
+    const explicitlyOperational = await request('/api/intelligence/data-provenance/queue-records/' + queueId, {
+      method: 'PATCH', headers: auth(tokens.admin),
+      body: JSON.stringify({ provenance: 'OPERATIONAL', reason: 'CI fixture explicitly marked operational to test verified metric inclusion.' })
+    });
+    assert.equal(explicitlyOperational.response.status, 200, JSON.stringify(explicitlyOperational.body));
+    assert.equal(explicitlyOperational.body.data_provenance, 'OPERATIONAL');
     const fairnessRegression = await request('/api/intelligence/fairness', { headers: auth(tokens.admin) });
     assert.equal(fairnessRegression.response.status, 200);
     const tierTwo = fairnessRegression.body.tiers.find(item => item.tier === 2);
@@ -292,7 +310,7 @@ if (!dbConfigured) {
       "ROUND(AVG(EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0)::numeric,1) AS mean_wait_minutes, " +
       "ROUND(percentile_cont(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0)::numeric,1) AS p90_queue_to_call_minutes, " +
       "ROUND(percentile_cont(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (discharged_at - queued_at)) / 60.0)::numeric,1) AS p90_queue_to_discharge_minutes " +
-      "FROM queue_entries WHERE status='Discharged' AND COALESCE(priority_level,4)=2 " +
+      "FROM queue_entries WHERE status='Discharged' AND data_provenance='OPERATIONAL' AND COALESCE(priority_level,4)=2 " +
       "AND called_at IS NOT NULL AND called_at >= queued_at AND discharged_at >= NOW() - INTERVAL '30 days'"
     );
     assert.equal(tierTwo.sample_size, expectedTierTwo.rows[0].sample_size);
@@ -307,5 +325,24 @@ if (!dbConfigured) {
       Number(expectedTierTwo.rows[0].p90_queue_to_call_minutes),
       'P90 must use called_at - queued_at, not discharged_at - queued_at'
     );
+
+    const classifiedAsSynthetic = await request('/api/intelligence/data-provenance/queue-records/' + queueId, {
+      method: 'PATCH', headers: auth(tokens.admin),
+      body: JSON.stringify({ provenance: 'SYNTHETIC_TEST', reason: 'CI verifies synthetic records are excluded from operational history.' })
+    });
+    assert.equal(classifiedAsSynthetic.response.status, 200, JSON.stringify(classifiedAsSynthetic.body));
+    assert.equal(classifiedAsSynthetic.body.data_provenance, 'SYNTHETIC_TEST');
+    assert.equal(classifiedAsSynthetic.body.status, 'Discharged', 'provenance classification must not change visit status');
+    assert.equal(Number(classifiedAsSynthetic.body.priority_level), 2, 'provenance classification must not change assigned tier');
+    const filteredRecords = await request('/api/intelligence/data-provenance/queue-records?provenance=SYNTHETIC_TEST', { headers: auth(tokens.admin) });
+    assert.equal(filteredRecords.response.status, 200);
+    assert.ok(filteredRecords.body.records.some(item => Number(item.queue_id) === Number(queueId)));
+    const fairnessAfterClassification = await request('/api/intelligence/fairness', { headers: auth(tokens.admin) });
+    assert.equal(fairnessAfterClassification.response.status, 200);
+    const syntheticTierTwo = fairnessAfterClassification.body.tiers.find(item => item.tier === 2);
+    assert.ok(Number(syntheticTierTwo.excluded_synthetic_sample_size) >= 1);
+    const provenanceEvents = await request('/api/intelligence/events?event_type=QUEUE_DATA_PROVENANCE_UPDATED&limit=20', { headers: auth(tokens.admin) });
+    assert.equal(provenanceEvents.response.status, 200);
+    assert.ok(provenanceEvents.body.some(event => Number(event.entity_id) === Number(queueId)));
   });
 }
