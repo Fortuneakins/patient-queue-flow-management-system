@@ -93,6 +93,8 @@ export const api = {
   recordFlowForecast: (token, body) => request('/api/intelligence/forecasts', authJsonOptions(token, body)),
   forecastTruth: (token, limit = 20) => request(`/api/intelligence/forecasts/truth?limit=${limit}`, authOptions(token)),
   fairnessMetrics: token => request('/api/intelligence/fairness', authOptions(token)),
+  queueProvenance: (token, limit = 50, provenance = '') => request(`/api/intelligence/data-provenance/queue-records?limit=${limit}${provenance ? `&provenance=${encodeURIComponent(provenance)}` : ''}`, authOptions(token)),
+  updateQueueProvenance: (token, queueId, body) => request(`/api/intelligence/data-provenance/queue-records/${queueId}`, authJsonOptions(token, body, 'PATCH')),
   listReferrals: (token, status = '') => request(`/api/intelligence/referrals${status ? `?status=${encodeURIComponent(status)}` : ''}`, authOptions(token)),
   createReferral: (token, body) => request('/api/intelligence/referrals', authJsonOptions(token, body)),
   updateReferral: (token, id, body) => request(`/api/intelligence/referrals/${id}`, authJsonOptions(token, body, 'PATCH')),
