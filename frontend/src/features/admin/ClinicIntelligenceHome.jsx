@@ -38,7 +38,8 @@ const workbenches = [
     tools: [
       { id: 'learning', label: 'Safety and prediction truth', detail: 'Review long waits and forecast observations.', icon: 'shield' },
       { id: 'events', label: 'Flight Recorder', detail: 'Trace recorded operational events and transitions.', icon: 'history' },
-      { id: 'access', label: 'Access Bridge', detail: 'Review consent and operational message controls.', icon: 'users' }
+      { id: 'access', label: 'Access Bridge', detail: 'Review consent and operational message controls.', icon: 'users' },
+      { id: 'provenance', label: 'Data provenance review', detail: 'Separate verified operational visits from test and demo records.', icon: 'database' }
     ]
   }
 ];
