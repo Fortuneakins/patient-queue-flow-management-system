@@ -3,6 +3,8 @@ import { Card, EmptyState } from '../../components/ui';
 import Icon from '../../components/ui/Icon';
 import { formatDateTime } from '../../utils/format';
 
+const EMPTY_ROWS = [];
+
 function localDateKey(value) {
   if (!value) return '';
   const date = new Date(value);
@@ -13,11 +15,11 @@ function localDateKey(value) {
   return `${year}-${month}-${day}`;
 }
 
-export default function DischargeLogView({ rows = [] }) {
+export default function DischargeLogView({ rows = EMPTY_ROWS }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [dischargeDate, setDischargeDate] = useState('');
 
-  const dischargeRows = Array.isArray(rows) ? rows : [];
+  const dischargeRows = Array.isArray(rows) ? rows : EMPTY_ROWS;
   const query = searchQuery.trim().toLocaleLowerCase();
 
   const filteredRows = useMemo(() => dischargeRows.filter(row => {
