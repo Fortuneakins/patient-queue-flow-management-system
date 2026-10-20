@@ -197,7 +197,7 @@ async function fairnessMetrics() {
   );
   return {
     tiers: result.rows, threshold_minutes: 60,
-    interpretation: 'Historical mean and P90 waits use only visits explicitly reviewed and classified as OPERATIONAL. Unclassified completed visits are shown separately and do not contribute to those summaries; records explicitly marked SYNTHETIC_TEST or DEMO are excluded. Active unclassified waiting visits remain visible for delay review until provenance is checked. These are operational monitoring indicators, not a determination of clinical fairness or discrimination. Small samples and patient complexity can affect comparisons. Staff should review context without automatically changing clinician-assigned priority.'
+    interpretation: 'Historical mean and P90 waits use only visits classified OPERATIONAL by server policy at check-in or by authorised administrator review. Unclassified completed visits are shown separately and do not contribute to those summaries; records explicitly marked SYNTHETIC_TEST or DEMO are excluded. Active unclassified waiting visits remain visible for delay review until provenance is checked. These are operational monitoring indicators, not a determination of clinical fairness or discrimination. Small samples and patient complexity can affect comparisons. Staff should review context without automatically changing clinician-assigned priority.'
   };
 }
 module.exports = { currentSnapshot, runScenario, listSimulations, listBenchmarkProfiles, runLab, recordForecast, getForecastTruth, fairnessMetrics, MODEL_VERSION };
