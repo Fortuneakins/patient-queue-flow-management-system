@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../services/api';
 import { Badge, Button, Card, EmptyState, Field, inputClass } from '../../../components/ui';
+import Icon from '../../../components/ui/Icon';
 
 const defaultStages = 'Registration and identity check\nNurse triage\nClinical consultation\nDischarge and next-step instructions';
 function codeFor(index) { return 'STAGE_' + (index + 1); }
