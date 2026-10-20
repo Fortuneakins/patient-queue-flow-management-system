@@ -291,6 +291,22 @@ if (!dbConfigured) {
     assert.ok(events.body.some(event => event.event_type === 'FLOWTWIN_SIMULATION_RUN'));
     assert.ok(events.body.some(event => event.event_type === 'REFERRAL_CREATED'));
 
+    // Normal workflow state changes must preserve the provenance assigned by server policy.
+    const callResponse = await request('/api/queue/' + queueId + '/call', {
+      method: 'PUT', headers: auth(tokens.doctor), body: JSON.stringify({})
+    });
+    assert.equal(callResponse.response.status, 200, JSON.stringify(callResponse.body));
+    const dischargeResponse = await request('/api/queue/' + queueId + '/discharge', {
+      method: 'PUT', headers: auth(tokens.doctor), body: JSON.stringify({})
+    });
+    assert.equal(dischargeResponse.response.status, 200, JSON.stringify(dischargeResponse.body));
+    const preservedProvenance = await query(
+      'SELECT data_provenance, data_provenance_source FROM queue_entries WHERE queue_id=$1',
+      [queueId]
+    );
+    assert.equal(preservedProvenance.rows[0].data_provenance, 'SYNTHETIC_TEST');
+    assert.equal(preservedProvenance.rows[0].data_provenance_source, 'SERVER_POLICY');
+
     // Regression: P90 labelled queue-to-call must not include time from call to discharge.
     const doctor = await query("SELECT staff_id FROM clinic_staff WHERE username = 'doctor_demo' LIMIT 1");
     assert.ok(doctor.rows[0], 'doctor_demo must exist in integration seed data');
@@ -306,6 +322,7 @@ if (!dbConfigured) {
     });
     assert.equal(explicitlyOperational.response.status, 200, JSON.stringify(explicitlyOperational.body));
     assert.equal(explicitlyOperational.body.data_provenance, 'OPERATIONAL');
+    assert.equal(explicitlyOperational.body.data_provenance_source, 'ADMIN_REVIEW');
     const fairnessRegression = await request('/api/intelligence/fairness', { headers: auth(tokens.admin) });
     assert.equal(fairnessRegression.response.status, 200);
     const tierTwo = fairnessRegression.body.tiers.find(item => item.tier === 2);
@@ -337,6 +354,7 @@ if (!dbConfigured) {
     });
     assert.equal(classifiedAsSynthetic.response.status, 200, JSON.stringify(classifiedAsSynthetic.body));
     assert.equal(classifiedAsSynthetic.body.data_provenance, 'SYNTHETIC_TEST');
+    assert.equal(classifiedAsSynthetic.body.data_provenance_source, 'ADMIN_REVIEW');
     assert.equal(classifiedAsSynthetic.body.status, 'Discharged', 'provenance classification must not change visit status');
     assert.equal(Number(classifiedAsSynthetic.body.priority_level), 2, 'provenance classification must not change assigned tier');
     const filteredRecords = await request('/api/intelligence/data-provenance/queue-records?provenance=SYNTHETIC_TEST', { headers: auth(tokens.admin) });
