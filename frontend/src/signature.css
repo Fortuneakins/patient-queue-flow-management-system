@@ -4683,3 +4683,40 @@
   .ui-card.clinic-tool-switcher-shell { z-index: 120 !important; }
   .clinic-tool-switcher-menu { max-height: min(68vh, 38rem); }
 }
+
+
+/* Prediction Truth: retain readable guidance and make out-of-horizon observations explicit. */
+.prediction-truth-guidance {
+  border-color: #b9dfd3;
+  color: #214b40;
+  background: #edf8f3;
+  line-height: 1.6;
+}
+.prediction-truth-warning {
+  border-color: #e7c68b;
+  color: #69420e;
+  background: #fff7e8;
+  line-height: 1.6;
+}
+.prediction-truth-warning > p:first-child { color: #69420e; }
+.prediction-truth-warning > p + p { color: #765b32; }
+.app-root[data-theme="dark"] .prediction-truth-guidance {
+  border-color: #326c5b;
+  color: #d6eee5;
+  background: #173e33;
+}
+.app-root[data-theme="dark"] .prediction-truth-warning {
+  border-color: #7b6037;
+  color: #f8e4ba;
+  background: #3a2e1e;
+}
+.app-root[data-theme="dark"] .prediction-truth-warning > p:first-child { color: #ffe5af !important; }
+.app-root[data-theme="dark"] .prediction-truth-warning > p + p { color: #e6d2ad !important; }
+
+/* Slightly larger option typography improves scanability in the tool picker. */
+.clinic-tool-switcher-option-copy strong { font-size: .72rem; }
+.clinic-tool-switcher-option-copy small { font-size: .62rem; line-height: 1.45; }
+.clinic-tool-switcher-group > h3 { font-size: .62rem; }
+.clinic-tool-switcher-menu-header strong { font-size: .86rem; }
+.clinic-tool-switcher-menu-header span { font-size: .68rem; }
+.app-root[data-theme="dark"] .clinic-tool-switcher-option-copy small { color: #c5dfd4; }
