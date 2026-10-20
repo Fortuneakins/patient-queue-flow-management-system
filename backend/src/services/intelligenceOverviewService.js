@@ -1,5 +1,8 @@
 const { query } = require('../db/pool');
 const { MODEL_VERSION } = require('../utils/flowSimulation');
+const env = require('../config/env');
+const { queueVisibilityPredicate } = require('../config/dataProvenancePolicy');
+const queueVisibility = queueVisibilityPredicate(env.DATA_PROVENANCE_MODE, 'q');
 function requiredText(value, label, min, max) {
   const clean = String(value || '').trim();
   if (clean.length < min || clean.length > max) throw Object.assign(new Error(label + ' must contain between ' + min + ' and ' + max + ' characters.'), { status: 400 });
@@ -49,7 +52,7 @@ async function listActiveVisits() {
     "SELECT q.queue_id, q.patient_id, p.full_name, q.ticket_number, q.status, q.priority_level, q.queued_at, " +
     "ROUND((EXTRACT(EPOCH FROM (NOW() - q.queued_at)) / 60.0)::numeric, 1) AS elapsed_wait_minutes " +
     "FROM queue_entries q JOIN patients p ON p.patient_id = q.patient_id WHERE q.status IN ('Waiting','In-Consultation') " +
-    "AND q.data_provenance NOT IN ('SYNTHETIC_TEST','DEMO') ORDER BY CASE WHEN q.status = 'In-Consultation' THEN 0 ELSE 1 END, COALESCE(q.priority_level,4), q.queued_at"
+    "AND ${queueVisibility} ORDER BY CASE WHEN q.status = 'In-Consultation' THEN 0 ELSE 1 END, COALESCE(q.priority_level,4), q.queued_at"
   );
   return result.rows;
 }
