@@ -2,12 +2,28 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../../services/api';
 import { Badge, Button, Card, EmptyState } from '../../../components/ui';
 
+function formatErrorDuration(value) {
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes) || minutes < 0) return 'Unavailable';
+  if (minutes < 1440) return `${minutes.toLocaleString(undefined, { maximumFractionDigits: 1 })} min`;
+  const rounded = Math.round(minutes);
+  const days = Math.floor(rounded / 1440);
+  const hours = Math.floor((rounded % 1440) / 60);
+  const remainder = rounded % 60;
+  return `${days} d ${hours} h ${remainder} min (${minutes.toLocaleString(undefined, { maximumFractionDigits: 1 })} min)`;
+}
+
 export default function LearningPanel({ token }) {
   const [fairness, setFairness] = useState(null);
   const [truth, setTruth] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const outOfHorizonForecasts = (truth?.forecasts || []).filter(item =>
+    item.mean_absolute_error_minutes !== null
+    && item.mean_absolute_error_minutes !== undefined
+    && Number(item.mean_absolute_error_minutes) > Number(item.horizon_minutes)
+  );
   const refresh = useCallback(async () => {
     try {
       const [fair, ledger] = await Promise.all([api.fairnessMetrics(token), api.forecastTruth(token, 20)]);
@@ -36,8 +52,12 @@ export default function LearningPanel({ token }) {
     <div className="space-y-5">
       <Card className="p-5 md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-display text-lg font-bold">Prediction Truth Ledger</h2><p className="mt-1 max-w-3xl text-sm text-stone-500">Record the current wait estimate and later compare it with the observed remaining time from forecast capture to the first consultation call. Metrics are descriptive operational checks, not clinical validation.</p></div><Button icon="chart" onClick={captureForecast} disabled={busy}>{busy ? 'Recording…' : 'Capture current forecast'}</Button></div>
-        <div className="mt-4 rounded-xl border border-teal-100 bg-teal-50 p-4 text-sm text-teal-950">A forecast only becomes evaluable after a tracked visit reaches its observed first call. Small samples, incomplete timestamps and changing conditions should be considered before drawing conclusions.</div>
-        {truth?.forecasts?.length ? <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b border-stone-200 text-xs uppercase tracking-wide text-stone-500"><tr><th className="p-3">Forecast</th><th className="p-3">Captured</th><th className="p-3">Tracked visits</th><th className="p-3">Observed</th><th className="p-3">Mean absolute error</th></tr></thead><tbody className="divide-y divide-stone-100">{truth.forecasts.map(item => <tr key={item.forecast_id}><td className="p-3 font-semibold">#{item.forecast_id}<div className="text-xs font-normal text-stone-500">{item.model_version}</div></td><td className="p-3 text-stone-600">{new Date(item.created_at).toLocaleString()}</td><td className="p-3">{item.tracked_samples}</td><td className="p-3">{item.observed_samples}</td><td className="p-3">{item.mean_absolute_error_minutes === null ? 'Pending observations' : item.mean_absolute_error_minutes + ' min'}</td></tr>)}</tbody></table></div> : <EmptyState title="No forecasts recorded" message="Capture a forecast to start building an evidence ledger. Predictions are not scored until actual call times are observed."/>}
+        <div className="prediction-truth-guidance mt-4 rounded-xl border p-4 text-sm">A forecast only becomes evaluable after a tracked visit reaches its observed first call. Small samples, incomplete timestamps and changing conditions should be considered before drawing conclusions.</div>
+        {outOfHorizonForecasts.length > 0 && <div className="prediction-truth-warning mt-3 rounded-xl border p-4 text-sm" role="status">
+          <p className="font-bold">Review out-of-horizon observations</p>
+          <p className="mt-1 leading-relaxed"> {outOfHorizonForecasts.length} recorded forecast(s) have a mean absolute error larger than the stated forecast horizon. A long gap before the first call, legacy test visits, and a very small sample can dominate this figure. Review the capture timestamp, tracked/observed counts and operating context before interpreting it as typical forecast accuracy.</p>
+        </div>}
+        {truth?.forecasts?.length ? <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[820px] text-left text-sm"><thead className="border-b border-stone-200 text-xs uppercase tracking-wide text-stone-500"><tr><th className="p-3">Forecast</th><th className="p-3">Captured</th><th className="p-3">Horizon</th><th className="p-3">Tracked visits</th><th className="p-3">Observed</th><th className="p-3">Mean absolute error</th></tr></thead><tbody className="divide-y divide-stone-100">{truth.forecasts.map(item => <tr key={item.forecast_id}><td className="p-3 font-semibold">#{item.forecast_id}<div className="text-xs font-normal text-stone-500">{item.model_version}</div></td><td className="p-3 text-stone-600">{new Date(item.created_at).toLocaleString()}</td><td className="p-3">{Number(item.horizon_minutes).toLocaleString()} min</td><td className="p-3">{item.tracked_samples}</td><td className="p-3">{item.observed_samples}</td><td className="p-3">{item.mean_absolute_error_minutes === null ? 'Pending observations' : <><span className="block font-semibold">{formatErrorDuration(item.mean_absolute_error_minutes)}</span>{Number(item.mean_absolute_error_minutes) > Number(item.horizon_minutes) && <span className="mt-1 inline-flex rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-900">Outside horizon</span>}</>}</td></tr>)}</tbody></table></div> : <EmptyState title="No forecasts recorded" message="Capture a forecast to start building an evidence ledger. Predictions are not scored until actual call times are observed."/>}
       </Card>
       <Card className="overflow-hidden">
         <div className="border-b border-stone-100 p-5"><h2 className="font-display font-bold">Patient Fairness Sentinel</h2><p className="mt-1 text-xs text-stone-500">Operational delay review by clinician-assigned tier over the last 30 days, plus currently overdue waiting visits.</p></div>
