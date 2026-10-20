@@ -8,6 +8,8 @@ if (!dbConfigured) {
 } else {
   process.env.JWT_SECRET ||= 'integration-test-secret-with-at-least-32-characters-123';
   process.env.INTERNAL_SERVICE_TOKEN ||= 'integration-internal-token';
+  process.env.NODE_ENV ||= 'test';
+  process.env.DATA_PROVENANCE_MODE ||= 'SYNTHETIC_TEST';
   process.env.SMS_ENABLED = 'false';
 
   const { httpServer } = require('../../src/app');
@@ -130,10 +132,17 @@ if (!dbConfigured) {
     const queueId = checkedIn.body.queue_id;
     queueIds.push(queueId);
     assert.ok(checkedIn.body.care_pathway_id, 'a new visit should automatically receive the standard pathway');
+    assert.equal(checkedIn.body.data_provenance, 'SYNTHETIC_TEST', 'non-production check-ins must receive the server-configured provenance automatically');
+    assert.equal(checkedIn.body.data_provenance_source, 'SERVER_POLICY', 'automatic provenance source must be identifiable');
+    const checkInEvent = await request('/api/intelligence/events?event_type=VISIT_CHECKED_IN&limit=20', { headers: auth(tokens.admin) });
+    assert.equal(checkInEvent.response.status, 200);
+    const automaticProvenanceEvent = checkInEvent.body.find(event => Number(event.entity_id) === Number(queueId));
+    assert.equal(automaticProvenanceEvent.metadata.data_provenance, 'SYNTHETIC_TEST');
+    assert.equal(automaticProvenanceEvent.metadata.data_provenance_source, 'SERVER_POLICY');
 
     const cannotHideActiveTestVisit = await request('/api/intelligence/data-provenance/queue-records/' + queueId, {
       method: 'PATCH', headers: auth(tokens.admin),
-      body: JSON.stringify({ provenance: 'SYNTHETIC_TEST', reason: 'CI test classification must not hide an active visit.' })
+      body: JSON.stringify({ provenance: 'DEMO', reason: 'CI test must not reclassify an active visit.' })
     });
     assert.equal(cannotHideActiveTestVisit.response.status, 409, 'active visits must complete normally before being marked as test/demo data');
 
@@ -230,10 +239,12 @@ if (!dbConfigured) {
     assert.ok(evaluatedForecast, 'newly recorded forecast should appear in truth ledger');
     assert.ok(Number(evaluatedForecast.tracked_samples) >= 1);
     assert.ok(Number(evaluatedForecast.observed_samples) >= 1);
-    assert.equal(Number(evaluatedForecast.within_horizon_samples), 0, 'unclassified fixtures must not count as verified operational accuracy');
-    assert.equal(Number(evaluatedForecast.out_of_horizon_samples), 0, 'unclassified observations must not be represented as operational errors');
-    assert.ok(Number(evaluatedForecast.unclassified_observed_samples) >= 1);
-    assert.ok(Number(evaluatedForecast.unclassified_out_of_horizon_samples) >= 1, 'the 75-minute unclassified observation must be reported outside the 60-minute horizon');
+    assert.equal(Number(evaluatedForecast.within_horizon_samples), 0, 'synthetic fixtures must not count as verified operational accuracy');
+    assert.equal(Number(evaluatedForecast.out_of_horizon_samples), 0, 'synthetic observations must not be represented as operational errors');
+    assert.equal(Number(evaluatedForecast.unclassified_observed_samples), 0);
+    assert.equal(Number(evaluatedForecast.excluded_synthetic_observed_samples), 1);
+    assert.equal(Number(evaluatedForecast.excluded_synthetic_out_of_horizon_samples), 1, 'the 75-minute synthetic observation must remain explicitly outside the 60-minute horizon');
+    assert.equal(Number(evaluatedForecast.unclassified_out_of_horizon_samples), 0);
     assert.equal(evaluatedForecast.within_horizon_mean_absolute_error_minutes, null);
     assert.ok(Number(evaluatedForecast.mean_absolute_error_minutes) >= 0, 'all-sample MAE should remain available for audit');
     const fairness = await request('/api/intelligence/fairness', { headers: auth(tokens.admin) });
