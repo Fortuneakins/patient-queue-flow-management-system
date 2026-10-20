@@ -85,7 +85,7 @@ async function updateQueueProvenance(queueIdValue, input = {}, actorStaffId) {
       'UPDATE queue_entries SET data_provenance=$1, data_provenance_source=$2, data_provenance_note=$3, provenance_updated_by_staff_id=$4, provenance_updated_at=NOW() ' +
       'WHERE queue_id=$5 RETURNING queue_id, ticket_number, ticket_date, status, COALESCE(priority_level,4)::int AS priority_level, ' +
       'data_provenance, data_provenance_source, data_provenance_note, provenance_updated_by_staff_id, provenance_updated_at, queued_at, called_at, discharged_at',
-      [provenance, provenance === 'UNCLASSIFIED' ? 'LEGACY_REVIEW_REQUIRED' : 'ADMIN_REVIEW', reason, actorStaffId, queueId]
+      [provenance, 'ADMIN_REVIEW', reason, actorStaffId, queueId]
     );
     await appendOperationalEvent(client, {
       eventType: 'QUEUE_DATA_PROVENANCE_UPDATED',
@@ -99,7 +99,7 @@ async function updateQueueProvenance(queueIdValue, input = {}, actorStaffId) {
         previous_provenance: visit.data_provenance,
         previous_source: visit.data_provenance_source,
         new_provenance: provenance,
-        new_source: provenance === 'UNCLASSIFIED' ? 'LEGACY_REVIEW_REQUIRED' : 'ADMIN_REVIEW',
+        new_source: 'ADMIN_REVIEW',
         reason
       }
     });
