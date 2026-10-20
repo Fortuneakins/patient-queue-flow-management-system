@@ -52,10 +52,16 @@ function queueVisibilityPredicate(mode, alias = 'q') {
     throw new Error('Queue query alias must be a simple SQL identifier.');
   }
   const column = safeAlias + '.data_provenance';
+  // Operational mode hides both test/demo classes. A test-mode instance also
+  // keeps the ordinary operational/legacy queue visible so development setup
+  // never hides real work just because the server's new-visit default is synthetic.
   if (provenanceMode === 'OPERATIONAL') {
     return column + " NOT IN ('SYNTHETIC_TEST','DEMO')";
   }
-  return '(' + column + " = 'UNCLASSIFIED' OR " + column + " = '" + provenanceMode + "')";
+  if (provenanceMode === 'SYNTHETIC_TEST') {
+    return column + " <> 'DEMO'";
+  }
+  return column + " <> 'SYNTHETIC_TEST'";
 }
 
 module.exports = { ALLOWED_DATA_PROVENANCE_MODES, resolveDataProvenancePolicy, queueVisibilityPredicate, asBoolean };
