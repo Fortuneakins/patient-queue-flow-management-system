@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Icon from '../../components/ui/Icon';
 import { Badge, Button, Card } from '../../components/ui';
 import ClinicIntelligenceHome from './ClinicIntelligenceHome';
@@ -24,6 +24,153 @@ const sections = [
   { id: 'events', label: 'Flight Recorder', icon: 'history', desc: 'Trace recorded operational events and state transitions' },
   { id: 'access', label: 'Access Bridge', icon: 'users', desc: 'Review contact consent and operational message controls' }
 ];
+
+function ToolSwitcher({ active, sections, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const [focusIndex, setFocusIndex] = useState(() => Math.max(0, sections.findIndex(section => section.id === active)));
+  const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const optionRefs = useRef([]);
+  const selectedIndex = Math.max(0, sections.findIndex(section => section.id === active));
+  const selected = sections[selectedIndex] || sections[0];
+
+  useEffect(() => {
+    if (!open) return undefined;
+    function handlePointerDown(event) {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    }
+    function handleEscape(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+    optionRefs.current[focusIndex]?.focus();
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open, focusIndex]);
+
+  function showMenu(index = selectedIndex) {
+    setFocusIndex(Math.max(0, Math.min(sections.length - 1, index)));
+    setOpen(true);
+  }
+
+  function choose(section) {
+    onSelect(section.id);
+    setOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  function handleTriggerKeyDown(event) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      showMenu(selectedIndex);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      showMenu(selectedIndex);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      showMenu(0);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      showMenu(sections.length - 1);
+    }
+  }
+
+  function handleOptionKeyDown(event, index) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setFocusIndex((index + 1) % sections.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setFocusIndex((index - 1 + sections.length) % sections.length);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      setFocusIndex(0);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      setFocusIndex(sections.length - 1);
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      choose(sections[index]);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus();
+    } else if (event.key === 'Tab') {
+      setOpen(false);
+    }
+  }
+
+  return (
+    <div className="clinic-tool-switcher" ref={rootRef}>
+      <span className="clinic-tool-switcher-label" id="clinic-tool-switcher-label">Switch specialist tool</span>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`clinic-tool-switcher-trigger${open ? ' is-open' : ''}`}
+        aria-labelledby="clinic-tool-switcher-label"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls="clinic-tool-switcher-menu"
+        onClick={() => open ? setOpen(false) : showMenu()}
+        onKeyDown={handleTriggerKeyDown}
+      >
+        <span className="clinic-tool-switcher-trigger-icon"><Icon name={selected.icon} size={18} /></span>
+        <span className="clinic-tool-switcher-trigger-copy">
+          <strong>{selected.label}</strong>
+          <small>{selected.desc}</small>
+        </span>
+        <span className="clinic-tool-switcher-trigger-meta">9 tools</span>
+        <Icon name="chevronDown" size={17} className={`clinic-tool-switcher-chevron${open ? ' is-open' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="clinic-tool-switcher-menu" id="clinic-tool-switcher-menu" role="listbox" aria-labelledby="clinic-tool-switcher-label">
+          <div className="clinic-tool-switcher-menu-header">
+            <div>
+              <strong>Choose a workbench</strong>
+              <span>Switch tools without losing the clinic context.</span>
+            </div>
+            <span className="clinic-tool-switcher-menu-count">{sections.length} available</span>
+          </div>
+          <div className="clinic-tool-switcher-options">
+            {sections.map((section, index) => (
+              <button
+                key={section.id}
+                ref={node => { optionRefs.current[index] = node; }}
+                type="button"
+                role="option"
+                aria-selected={section.id === active}
+                className={`clinic-tool-switcher-option${section.id === active ? ' is-selected' : ''}`}
+                onClick={() => choose(section)}
+                onKeyDown={event => handleOptionKeyDown(event, index)}
+                tabIndex={focusIndex === index ? 0 : -1}
+              >
+                <span className="clinic-tool-switcher-option-icon"><Icon name={section.icon} size={17} /></span>
+                <span className="clinic-tool-switcher-option-copy">
+                  <strong>{section.label}</strong>
+                  <small>{section.desc}</small>
+                </span>
+                {section.id === active && <span className="clinic-tool-switcher-current"><Icon name="checkCircle" size={15} /> Current</span>}
+                {section.id !== active && <Icon name="arrow" size={15} className="clinic-tool-switcher-option-arrow" />}
+              </button>
+            ))}
+          </div>
+          <div className="clinic-tool-switcher-menu-footer">
+            <Icon name="info" size={15}/>
+            <span>Simulations are advisory and do not change live queue records or clinical priority.</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ClinicIntelligenceView({ token, currentUser }) {
   const [active, setActive] = useState('home');
@@ -59,21 +206,12 @@ export default function ClinicIntelligenceView({ token, currentUser }) {
       </header>
 
       {active !== 'home' && (
-        <Card className="p-3 md:p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Card className="clinic-tool-switcher-shell p-3 md:p-4">
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
             <Button variant="secondary" icon="arrow" onClick={() => setActive('home')}>Back to overview</Button>
-            <label className="flex flex-1 flex-col gap-1 sm:max-w-md">
-              <span className="text-xs font-bold uppercase tracking-wide text-stone-500">Switch specialist tool</span>
-              <select
-                aria-label="Switch Clinic Intelligence tool"
-                className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
-                value={active}
-                onChange={event => setActive(event.target.value)}
-              >
-                {sections.map(section => <option key={section.id} value={section.id}>{section.label}</option>)}
-              </select>
-            </label>
-            <p className="text-sm text-stone-500 sm:max-w-xs">{selected.desc}</p>
+            <div className="min-w-0 flex-1">
+              <ToolSwitcher active={active} sections={sections} onSelect={setActive} />
+            </div>
           </div>
         </Card>
       )}
