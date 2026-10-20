@@ -11,7 +11,7 @@ async function getOverview() {
     "COUNT(*) FILTER (WHERE status = 'In-Consultation')::int AS in_consultation, " +
     "COUNT(*) FILTER (WHERE status = 'Discharged' AND discharged_at::date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::int AS discharged_today, " +
     "ROUND((EXTRACT(EPOCH FROM (NOW() - MIN(queued_at) FILTER (WHERE status = 'Waiting'))) / 60.0)::numeric, 1) AS oldest_wait_minutes, " +
-    "COUNT(*) FILTER (WHERE status = 'Waiting' AND queued_at < NOW() - INTERVAL '60 minutes')::int AS overdue_waiting FROM queue_entries"
+    "COUNT(*) FILTER (WHERE status = 'Waiting' AND queued_at < NOW() - INTERVAL '60 minutes')::int AS overdue_waiting FROM queue_entries WHERE data_provenance NOT IN ('SYNTHETIC_TEST','DEMO')"
   );
   const resources = await query(
     'SELECT resource_type, status, COUNT(*)::int AS resource_count, COALESCE(SUM(capacity),0)::int AS capacity ' +
@@ -19,7 +19,7 @@ async function getOverview() {
   );
   const samples = await query(
     "SELECT COUNT(*)::int AS sample_count FROM queue_entries WHERE status = 'Discharged' AND called_at IS NOT NULL " +
-    "AND discharged_at > called_at AND discharged_at >= NOW() - INTERVAL '90 days'"
+    "AND discharged_at > called_at AND data_provenance = 'OPERATIONAL' AND discharged_at >= NOW() - INTERVAL '90 days'"
   );
   const events = await query('SELECT COUNT(*)::int AS event_count, MAX(created_at) AS last_event_at FROM operational_events');
   return {
@@ -49,7 +49,7 @@ async function listActiveVisits() {
     "SELECT q.queue_id, q.patient_id, p.full_name, q.ticket_number, q.status, q.priority_level, q.queued_at, " +
     "ROUND((EXTRACT(EPOCH FROM (NOW() - q.queued_at)) / 60.0)::numeric, 1) AS elapsed_wait_minutes " +
     "FROM queue_entries q JOIN patients p ON p.patient_id = q.patient_id WHERE q.status IN ('Waiting','In-Consultation') " +
-    "ORDER BY CASE WHEN q.status = 'In-Consultation' THEN 0 ELSE 1 END, COALESCE(q.priority_level,4), q.queued_at"
+    "AND q.data_provenance NOT IN ('SYNTHETIC_TEST','DEMO') ORDER BY CASE WHEN q.status = 'In-Consultation' THEN 0 ELSE 1 END, COALESCE(q.priority_level,4), q.queued_at"
   );
   return result.rows;
 }
