@@ -101,7 +101,7 @@ async function listStaffQueue() {
     LEFT JOIN clinic_staff c ON c.staff_id = q.called_by_staff_id
     LEFT JOIN clinic_staff d ON d.staff_id = q.discharged_by_staff_id
     WHERE q.status IN ('Waiting', 'In-Consultation')
-      AND q.data_provenance NOT IN ('SYNTHETIC_TEST','DEMO')
+      AND ${queueVisibility}
     ORDER BY ${queueOrderSql('q')}`);
   return result.rows;
 }
@@ -259,7 +259,8 @@ async function overview() {
       COUNT(*) FILTER (WHERE status = 'Discharged' AND priority_level = 2 AND discharged_at::date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::int AS discharged_tier_2,
       COUNT(*) FILTER (WHERE status = 'Discharged' AND priority_level = 3 AND discharged_at::date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::int AS discharged_tier_3,
       COUNT(*) FILTER (WHERE status = 'Discharged' AND priority_level = 4 AND discharged_at::date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::int AS discharged_tier_4
-    FROM queue_entries`);
+    FROM queue_entries
+    WHERE data_provenance = 'OPERATIONAL'`);
   return result.rows[0];
 }
 
@@ -281,6 +282,7 @@ async function staffPerformance() {
     FROM clinic_staff cs
     JOIN queue_entries q ON q.discharged_by_staff_id = cs.staff_id
       AND q.status = 'Discharged'
+      AND q.data_provenance = 'OPERATIONAL'
       AND q.discharged_at::date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date
     GROUP BY cs.staff_id, cs.username, cs.role
     ORDER BY discharged_today DESC, cs.username ASC`);
