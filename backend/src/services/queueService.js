@@ -259,8 +259,8 @@ async function overview() {
       COUNT(*) FILTER (WHERE status = 'Discharged' AND priority_level = 2 AND discharged_at::date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::int AS discharged_tier_2,
       COUNT(*) FILTER (WHERE status = 'Discharged' AND priority_level = 3 AND discharged_at::date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::int AS discharged_tier_3,
       COUNT(*) FILTER (WHERE status = 'Discharged' AND priority_level = 4 AND discharged_at::date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::int AS discharged_tier_4
-    FROM queue_entries
-    WHERE data_provenance = 'OPERATIONAL'`);
+    FROM queue_entries q
+    WHERE ${queueVisibility}`);
   return result.rows[0];
 }
 
