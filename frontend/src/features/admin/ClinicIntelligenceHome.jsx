@@ -48,11 +48,6 @@ function count(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function formatMinutes(value) {
-  if (value === null || value === undefined || !Number.isFinite(Number(value))) return '—';
-  return Math.round(Number(value)).toLocaleString();
-}
-
 function formatTimestamp(value) {
   if (!value) return 'No event recorded yet';
   const date = new Date(value);
@@ -157,6 +152,16 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
     : null;
   const latestEvent = snapshot.events?.[0] || null;
   const sampleCount = overview ? count(overview.service_history_samples) : null;
+  const sourceLabels = {
+    overview: 'operational overview',
+    visits: 'active visits',
+    resources: 'resource registry',
+    referrals: 'referrals',
+    pathways: 'care pathways',
+    simulations: 'simulation history',
+    events: 'event history'
+  };
+  const unavailableSources = sourceIssues.map(key => sourceLabels[key] || key);
 
   const signals = [];
   if (overdue !== null && overdue > 0) {
@@ -245,7 +250,7 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
         <SignalRow
           tone="amber"
           title="Some intelligence data could not be loaded"
-          detail={`Unavailable sources: ${sourceIssues.join(', ')}. Metrics from those sources are shown as unavailable rather than as zero. Refresh to try again.`}
+          detail={`Unavailable sources: ${unavailableSources.join(', ')}. Metrics from those sources are shown as unavailable rather than as zero. Refresh to try again.`}
           action="Retry"
           onClick={refresh}
         />
@@ -283,6 +288,14 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
           <Card className="p-5"><EmptyState title="Building the operational picture" message="Loading queue, resource, referral and evidence summaries from the server."/></Card>
         ) : signals.length ? (
           <div className="space-y-3">{signals.map(item => <SignalRow key={item.title} {...item} onClick={() => go(item.tool)} />)}</div>
+        ) : sourceIssues.length > 0 ? (
+          <SignalRow
+            tone="neutral"
+            title="Review prompts are incomplete"
+            detail="One or more data sources did not load, so this page cannot provide a complete operational summary. Retry the snapshot before relying on its signals."
+            action="Retry snapshot"
+            onClick={refresh}
+          />
         ) : (
           <SignalRow
             tone="teal"
