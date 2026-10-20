@@ -3,12 +3,15 @@ const { allocateDailyTicket } = require('./ticketService');
 const { validateSymptoms, validateTier } = require('../utils/validation');
 const { sendCallNotification } = require('./smsService');
 const { appendOperationalEvent } = require('./operationalEventService');
+const env = require('../config/env');
+const { queueVisibilityPredicate } = require('../config/dataProvenancePolicy');
 
+const queueVisibility = queueVisibilityPredicate(env.DATA_PROVENANCE_MODE, 'q');
 const PUBLIC_QUEUE_SELECT = `
   SELECT q.queue_id, q.ticket_number, q.status, q.priority_level, q.queued_at
   FROM queue_entries q
   WHERE q.status IN ('Waiting', 'In-Consultation')
-    AND q.data_provenance NOT IN ('SYNTHETIC_TEST','DEMO')
+    AND ${queueVisibility}
 `;
 
 async function getActiveTicket(client, patientId) {
@@ -33,10 +36,12 @@ async function checkIn({ patientId, identificationNumber, symptoms, requestedTic
     const ticketNumber = await allocateDailyTicket(client, ticketDate);
     try {
       const result = await client.query(
-        `INSERT INTO queue_entries (patient_id, ticket_date, ticket_number, status, priority_level, symptoms)
-         VALUES ($1, $2, $3, 'Waiting', NULL, $4)
-         RETURNING queue_id, patient_id, ticket_date, ticket_number, status, priority_level, symptoms, queued_at`,
-        [resolvedPatientId, ticketDate, ticketNumber, cleanSymptoms]
+        `INSERT INTO queue_entries
+           (patient_id, ticket_date, ticket_number, status, priority_level, symptoms, data_provenance, data_provenance_source)
+         VALUES ($1, $2, $3, 'Waiting', NULL, $4, $5, 'SERVER_POLICY')
+         RETURNING queue_id, patient_id, ticket_date, ticket_number, status, priority_level, symptoms,
+                   queued_at, data_provenance, data_provenance_source`,
+        [resolvedPatientId, ticketDate, ticketNumber, cleanSymptoms, env.DATA_PROVENANCE_MODE]
       );
       const visit = result.rows[0];
       const pathway = await client.query("SELECT pathway_id FROM care_pathways WHERE pathway_code = $1 AND is_active = TRUE LIMIT 1", ['OPD_STANDARD']);
@@ -58,7 +63,12 @@ async function checkIn({ patientId, identificationNumber, symptoms, requestedTic
         entityType: 'QUEUE_VISIT',
         entityId: visit.queue_id,
         toState: 'Waiting',
-        metadata: { ticket_number: ticketNumber }
+        metadata: {
+          ticket_number: ticketNumber,
+          data_provenance: visit.data_provenance,
+          data_provenance_source: visit.data_provenance_source,
+          provenance_policy_mode: env.DATA_PROVENANCE_MODE
+        }
       });
       return { duplicate: false, visit };
     } catch (error) {
@@ -106,7 +116,7 @@ async function listPublicQueue() {
 }
 
 async function findActiveForHistory() {
-  const result = await query(`SELECT q.queue_id, q.ticket_number, q.status, q.priority_level, q.symptoms, q.queued_at FROM queue_entries q WHERE q.status IN ('Waiting','In-Consultation') AND q.data_provenance NOT IN ('SYNTHETIC_TEST','DEMO') ORDER BY ${queueOrderSql('q')}`);
+  const result = await query(`SELECT q.queue_id, q.ticket_number, q.status, q.priority_level, q.symptoms, q.queued_at FROM queue_entries q WHERE q.status IN ('Waiting','In-Consultation') AND ${queueVisibility} ORDER BY ${queueOrderSql('q')}`);
   return result.rows;
 }
 
