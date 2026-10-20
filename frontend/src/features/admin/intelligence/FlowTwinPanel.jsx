@@ -76,6 +76,21 @@ function displayDeltaFallback(baselineValue, scenarioValue) {
   return 'Not available';
 }
 
+function plainEnglishDelta(baselineValue, scenarioValue, suffix = '') {
+  if (baselineValue === null || baselineValue === undefined || scenarioValue === null || scenarioValue === undefined) {
+    return 'Not comparable from the available baseline data.';
+  }
+  const baselineNumber = Number(baselineValue);
+  const scenarioNumber = Number(scenarioValue);
+  if (!Number.isFinite(baselineNumber) || !Number.isFinite(scenarioNumber)) {
+    return 'Not comparable from the available data.';
+  }
+  const delta = Number((scenarioNumber - baselineNumber).toFixed(1));
+  if (delta === 0) return `No modelled change (${displayValue(scenarioNumber, suffix)}).`;
+  const signed = `${delta > 0 ? '+' : ''}${delta}${suffix}`;
+  return `${displayValue(baselineNumber, suffix)} → ${displayValue(scenarioNumber, suffix)} (${signed} vs baseline).`;
+}
+
 // Older saved runs may predate the persisted comparison-delta fields. Rebuild
 // only the display delta from that run's own stored baseline and scenario;
 // never simulate again or change the persisted result.
@@ -147,6 +162,12 @@ export default function FlowTwinPanel({ token }) {
   // The API's recent-simulation feed also includes Synthetic Lab batches.
   // FlowTwin can only render its own SCENARIO output contract.
   const flowTwinRecent = recent.filter(item => item.simulation_kind === 'SCENARIO');
+  const scenarioDrivers = [
+    Number(result?.input?.extra_arrivals) > 0 ? `${result.input.extra_arrivals} additional arrivals` : null,
+    Number(result?.input?.additional_stations) > 0 ? `${result.input.additional_stations} hypothetical additional station(s)` : null,
+    Number(result?.input?.station_loss) > 0 ? `${result.input.station_loss} station(s) unavailable` : null,
+    Number(result?.input?.doctor_delay_minutes) > 0 ? `${result.input.doctor_delay_minutes}-minute doctor delay` : null
+  ].filter(Boolean);
   const resolvedDeltas = {
     completed: resolveDelta(compare?.projected_completed_delta, baseline?.projected_completed, scenario?.projected_completed),
     remaining: resolveDelta(compare?.projected_remaining_delta, baseline?.projected_remaining, scenario?.projected_remaining),
@@ -233,6 +254,27 @@ export default function FlowTwinPanel({ token }) {
 
       {result && <Card className="flowtwin-results-card space-y-5 p-5 md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eyebrow">Simulation result</p><h2 className="font-display text-lg font-bold">{result.name}</h2><p className="mt-1 text-xs text-stone-500">Simulation #{result.simulation_id} · {result.model_version} · seed {result.input?.seed}</p></div><Badge tone={scenario?.model_quality === 'OBSERVATION_BASED' ? 'green' : 'orange'}>{scenario?.model_quality?.replaceAll('_', ' ') || 'Estimate'}</Badge></div>
+
+        <section className="rounded-xl border border-teal-100 bg-teal-50/50 p-4 md:p-5" aria-labelledby="flowtwin-plain-summary">
+          <p className="eyebrow">Plain-English readout</p>
+          <h3 id="flowtwin-plain-summary" className="font-display text-base font-bold">What changed against the baseline?</h3>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="rounded-lg border border-white bg-white/80 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Projected completions</p>
+              <p className="mt-2 text-sm font-semibold text-stone-900">{plainEnglishDelta(baseline?.projected_completed, scenario?.projected_completed)}</p>
+            </div>
+            <div className="rounded-lg border border-white bg-white/80 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Remaining queue</p>
+              <p className="mt-2 text-sm font-semibold text-stone-900">{plainEnglishDelta(baseline?.projected_remaining, scenario?.projected_remaining)}</p>
+            </div>
+            <div className="rounded-lg border border-white bg-white/80 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">P90 wait to service start</p>
+              <p className="mt-2 text-sm font-semibold text-stone-900">{plainEnglishDelta(baseline?.p90_additional_wait_minutes, scenario?.p90_additional_wait_minutes, ' min')}</p>
+            </div>
+          </div>
+          <p className="mt-3 text-sm text-stone-700"><strong>Scenario drivers:</strong> {scenarioDrivers.length ? scenarioDrivers.join(' · ') : 'No additional demand, capacity loss, extra stations or doctor delay configured.'}</p>
+          <p className="mt-2 text-xs leading-relaxed text-stone-500">This is a comparison of model outputs, not a promise of actual clinic outcomes. A missing baseline measure is shown as not comparable rather than treated as zero.</p>
+        </section>
 
         <section className="flowtwin-projection-section">
           <div className="flowtwin-section-title"><div><p className="eyebrow">Projected scenario</p><h3>Estimated service picture</h3></div><span className="flowtwin-model-tag"><Icon name="info" size={14} /> Model output</span></div>
