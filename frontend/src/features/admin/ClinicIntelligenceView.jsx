@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Icon from '../../components/ui/Icon';
-import { Badge, Card } from '../../components/ui';
+import { Badge, Button, Card } from '../../components/ui';
 import ClinicIntelligenceHome from './ClinicIntelligenceHome';
 import FlowTwinPanel from './intelligence/FlowTwinPanel';
 import CareGraphPanel from './intelligence/CareGraphPanel';
@@ -58,31 +58,25 @@ export default function ClinicIntelligenceView({ token, currentUser }) {
         </div>
       </header>
 
-      <Card className="p-3 md:p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
-          <div>
-            <p className="eyebrow">Workspace</p>
-            <h2 className="font-display text-base font-bold">{active === 'home' ? 'Start with the operating picture' : selected.label}</h2>
+      {active !== 'home' && (
+        <Card className="p-3 md:p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Button variant="secondary" icon="arrow" onClick={() => setActive('home')}>Back to overview</Button>
+            <label className="flex flex-1 flex-col gap-1 sm:max-w-md">
+              <span className="text-xs font-bold uppercase tracking-wide text-stone-500">Switch specialist tool</span>
+              <select
+                aria-label="Switch Clinic Intelligence tool"
+                className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100"
+                value={active}
+                onChange={event => setActive(event.target.value)}
+              >
+                {sections.map(section => <option key={section.id} value={section.id}>{section.label}</option>)}
+              </select>
+            </label>
+            <p className="text-sm text-stone-500 sm:max-w-xs">{selected.desc}</p>
           </div>
-          <span className="text-xs text-stone-500">{sections.length} specialist tools</span>
-        </div>
-        <nav aria-label="Clinic intelligence sections" className="flex flex-wrap gap-2">
-          {[homeSection, ...sections].map(section => (
-            <button
-              key={section.id}
-              type="button"
-              onClick={() => setActive(section.id)}
-              aria-current={active === section.id ? 'page' : undefined}
-              aria-pressed={active === section.id}
-              title={section.desc}
-              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700 ${active === section.id ? 'border-teal-800 bg-teal-800 text-white shadow-sm' : 'border-stone-200 bg-white text-stone-600 hover:border-teal-300 hover:bg-teal-50'}`}
-            >
-              <Icon name={section.icon} size={16} />
-              <span>{section.label}</span>
-            </button>
-          ))}
-        </nav>
-      </Card>
+        </Card>
+      )}
 
       {active !== 'home' && (
         <section className="clinic-intelligence-context" aria-live="polite">
