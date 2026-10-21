@@ -73,7 +73,9 @@ jobs:
       - name: Frontend build
         run: npm run build --prefix frontend
       - name: Validate production Compose configuration
-        run: docker compose --env-file .env.production.example -f compose.production.yml config --quiet
+        run: |
+          docker compose --env-file .env.production.example -f compose.production.yml config --quiet
+          node scripts/verify-production-topology.js
       - name: Build production API image
         run: docker build --file backend/Dockerfile --tag pqfms-api:ci .
       - name: Build production analytics image
