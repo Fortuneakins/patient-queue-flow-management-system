@@ -19,6 +19,7 @@ function buildClinicInsights(snapshot = {}) {
   const unclassifiedCompleted = integer(snapshot.unclassified_completed);
   const unclassifiedActive = integer(snapshot.unclassified_active);
   const serviceSamples = integer(snapshot.service_history_samples);
+  const delayThresholdMinutes = integer(snapshot.delay_review_threshold_minutes) || 60;
   const insights = [];
 
   if (active > 0 && doctors === 0) {
@@ -44,9 +45,10 @@ function buildClinicInsights(snapshot = {}) {
       rule_id: 'FLOW-001',
       severity: doctors === 0 ? 'CRITICAL' : 'HIGH',
       title: `${overdue} waiting visit${overdue === 1 ? '' : 's'} crossed the delay-review threshold`,
-      summary: 'Waiting age crossed the configured 60-minute operational review threshold.',
+      summary: 'Waiting age crossed the configured ' + delayThresholdMinutes + '-minute operational review threshold.',
       evidence: [
-        `Visits over 60 minutes: ${overdue}.`,
+        'Visits over ' + delayThresholdMinutes + ' minutes: ' + overdue + '.',
+        'Configured delay-review threshold: ' + delayThresholdMinutes + ' minutes.',
         `Oldest waiting age: ${snapshot.oldest_wait_minutes == null ? 'unavailable' : `${Number(snapshot.oldest_wait_minutes).toFixed(1)} minutes`}.`
       ],
       recommended_action: 'Ask authorised clinical staff to review the operational context and roster. This is not a recommendation to change clinical priority.',
