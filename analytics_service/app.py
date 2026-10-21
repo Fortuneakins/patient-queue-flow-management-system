@@ -3,22 +3,33 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 import psycopg2
 import requests
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-from .estimator import estimate_waits
+from .estimator import estimate_waits, estimate_metadata
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 load_dotenv()
 
-app = Flask(__name__)
-allowed_origins = [v.strip() for v in os.getenv("CORS_ORIGIN", "http://localhost:5173").split(",") if v.strip()]
-CORS(app, origins=allowed_origins)
+NODE_ENV = os.getenv("NODE_ENV", "development").strip().lower()
+PROVENANCE_MODES = {"OPERATIONAL", "SYNTHETIC_TEST", "DEMO"}
+_requested_mode = os.getenv("DATA_PROVENANCE_MODE", "").strip().upper()
+DATA_PROVENANCE_MODE = _requested_mode or ("OPERATIONAL" if NODE_ENV == "production" else "SYNTHETIC_TEST")
+if DATA_PROVENANCE_MODE not in PROVENANCE_MODES:
+    raise RuntimeError("DATA_PROVENANCE_MODE must be OPERATIONAL, SYNTHETIC_TEST or DEMO.")
+if NODE_ENV == "production" and DATA_PROVENANCE_MODE != "OPERATIONAL":
+    raise RuntimeError("Production analytics must use DATA_PROVENANCE_MODE=OPERATIONAL.")
 
+app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024
+allowed_origins = [v.strip() for v in os.getenv("CORS_ORIGIN", "http://localhost:5173").split(",") if v.strip()]
+INTERNAL_SERVICE_TOKEN = os.getenv("INTERNAL_SERVICE_TOKEN", "").strip()
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "localhost"),
     "port": int(os.getenv("DB_PORT", "5432")),
@@ -26,30 +37,94 @@ DB_CONFIG = {
     "user": os.getenv("DB_USER", "postgres"),
     "password": os.getenv("DB_PASSWORD", ""),
 }
-NODE_SERVER_URL = os.getenv("NODE_SERVER_URL", "http://localhost:5000")
-INTERNAL_SERVICE_TOKEN = os.getenv("INTERNAL_SERVICE_TOKEN", "")
+DB_SSLMODE = os.getenv("DB_SSLMODE", "verify-full" if NODE_ENV == "production" else "prefer").strip().lower()
+NODE_SERVER_URL = os.getenv("NODE_SERVER_URL", "http://localhost:5000").rstrip("/")
 STAFFED_STATIONS = max(1, int(os.getenv("STAFFED_STATIONS", "1")))
+
+if NODE_ENV == "production":
+    if len(INTERNAL_SERVICE_TOKEN) < 32:
+        raise RuntimeError("Production analytics requires an INTERNAL_SERVICE_TOKEN of at least 32 characters.")
+    if not DATABASE_URL and not DB_CONFIG["password"]:
+        raise RuntimeError("Production analytics requires a database password or DATABASE_URL.")
+    if DB_SSLMODE not in {"require", "verify-ca", "verify-full"}:
+        raise RuntimeError("Production analytics requires DB_SSLMODE=require, verify-ca or verify-full.")
+    if not allowed_origins or any(urlparse(origin).scheme != "https" for origin in allowed_origins):
+        raise RuntimeError("Production analytics CORS_ORIGIN must contain only HTTPS origins.")
+
+CORS(app, origins=allowed_origins)
+
+
+def _connect():
+    if DATABASE_URL:
+        return psycopg2.connect(DATABASE_URL, connect_timeout=3, sslmode=DB_SSLMODE)
+    return psycopg2.connect(**DB_CONFIG, connect_timeout=3, sslmode=DB_SSLMODE)
+
+
+def _provenance_visibility(mode: str = DATA_PROVENANCE_MODE) -> str:
+    """Return SQL from an allow-list, never from request input."""
+    value = str(mode).strip().upper()
+    if value not in PROVENANCE_MODES:
+        raise ValueError("Unsupported data provenance mode.")
+    if value == "OPERATIONAL":
+        # Unclassified legacy visits stay visible to delay review; test/demo data do not.
+        return "data_provenance NOT IN ('SYNTHETIC_TEST', 'DEMO')"
+    if value == "SYNTHETIC_TEST":
+        return "data_provenance <> 'DEMO'"
+    return "data_provenance <> 'SYNTHETIC_TEST'"
 
 
 def db_rows() -> list[dict]:
-    with psycopg2.connect(**DB_CONFIG) as conn:
+    visibility = _provenance_visibility()
+    with _connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
-                SELECT status, priority_level, queued_at
+                f"""
+                SELECT status, priority_level, queued_at, called_at, data_provenance
                 FROM queue_entries
                 WHERE status IN ('Waiting', 'In-Consultation')
-                ORDER BY queued_at ASC
+                  AND {visibility}
+                ORDER BY COALESCE(priority_level, 4), queued_at ASC
+                LIMIT 1000
                 """
             )
             return [
-                {"status": row[0], "priority_level": row[1], "queued_at": row[2].astimezone(timezone.utc)}
+                {
+                    "status": row[0],
+                    "priority_level": row[1],
+                    "queued_at": row[2].astimezone(timezone.utc) if row[2] else None,
+                    "called_at": row[3].astimezone(timezone.utc) if row[3] else None,
+                    "data_provenance": row[4],
+                }
                 for row in cur.fetchall()
             ]
 
 
+def service_time_samples() -> list[float]:
+    """Only explicitly operational records may calibrate the public estimate."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT EXTRACT(EPOCH FROM (discharged_at - called_at)) / 60.0 AS service_minutes
+                FROM queue_entries
+                WHERE status = 'Discharged'
+                  AND data_provenance = 'OPERATIONAL'
+                  AND called_at IS NOT NULL
+                  AND discharged_at IS NOT NULL
+                  AND discharged_at > called_at
+                  AND discharged_at >= NOW() - INTERVAL '90 days'
+                  AND EXTRACT(EPOCH FROM (discharged_at - called_at)) / 60.0 BETWEEN 1 AND 240
+                ORDER BY discharged_at DESC
+                LIMIT 500
+                """
+            )
+            return [float(row[0]) for row in cur.fetchall() if row[0] is not None]
+
+
 def on_duty_count() -> int:
     if not INTERNAL_SERVICE_TOKEN:
+        if NODE_ENV == "production":
+            raise RuntimeError("Analytics-to-API internal authentication is not configured.")
         return STAFFED_STATIONS
     response = requests.get(
         f"{NODE_SERVER_URL}/api/shifts/on-duty",
@@ -58,12 +133,51 @@ def on_duty_count() -> int:
     )
     response.raise_for_status()
     value = int(response.json().get("on_duty", 0))
-    return value if value > 0 else STAFFED_STATIONS
+    # A configured zero is a real operational constraint; do not silently invent staff.
+    return max(0, value)
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Cache-Control", "no-store")
+    return response
 
 
 @app.get("/api/health/live")
 def live():
-    return jsonify({"status": "ok", "service": "pqfms-analytics", "timestamp": datetime.now(timezone.utc).isoformat()})
+    return jsonify({
+        "status": "ok",
+        "service": "pqfms-analytics",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+
+
+@app.get("/api/health/ready")
+def ready():
+    try:
+        with _connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+        if NODE_ENV == "production" and len(INTERNAL_SERVICE_TOKEN) < 32:
+            raise RuntimeError("Internal API authentication is not configured.")
+        return jsonify({
+            "status": "ready",
+            "service": "pqfms-analytics",
+            "database": "ok",
+            "provenance_mode": DATA_PROVENANCE_MODE,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:
+        app.logger.warning("Analytics readiness check failed.")
+        return jsonify({
+            "status": "not-ready",
+            "service": "pqfms-analytics",
+            "database": "unavailable",
+        }), 503
 
 
 @app.get("/api/predict")
@@ -71,22 +185,30 @@ def predict():
     try:
         visits = db_rows()
         staff = on_duty_count()
+        service_samples = service_time_samples()
+        estimates = estimate_waits(visits, staff, service_minutes=service_samples)
+        metadata = estimate_metadata(len(service_samples), staff, len(visits))
         return jsonify({
-            **estimate_waits(visits, staff),
-            "degraded": False,
-            "staffed_doctors": staff,
+            **estimates,
+            **metadata,
+            "degraded": metadata["degraded"],
+            "provenance_mode": DATA_PROVENANCE_MODE,
             "generated_at": datetime.now(timezone.utc).isoformat(),
         })
-    except Exception as exc:  # graceful degradation is a documented requirement
-        app.logger.warning("Analytics unavailable: %s", exc)
+    except Exception:
+        # Do not report zero-minute waits when the analytics service is broken.
+        app.logger.warning("Analytics estimate unavailable.", exc_info=True)
         return jsonify({
-            "1": 0, "2": 0, "3": 0, "4": 0,
+            "1": None, "2": None, "3": None, "4": None,
+            "model": "queue-workload-estimate",
+            "model_version": "queue-workload-2.0.0",
+            "estimate_quality": "UNAVAILABLE",
             "degraded": True,
-            "staffed_doctors": 0,
+            "reason": "The live estimate could not be calculated. Queue operations continue normally.",
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }), 200
 
 
 if __name__ == "__main__":
     port = int(os.getenv("ANALYTICS_PORT", "5001"))
-    app.run(host="127.0.0.1", port=port, debug=False)
+    app.run(host=os.getenv("ANALYTICS_BIND_HOST", "127.0.0.1"), port=port, debug=False)
