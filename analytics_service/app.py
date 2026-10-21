@@ -21,11 +21,13 @@ DATA_PROVENANCE_MODE = resolve_provenance_mode(NODE_ENV, os.getenv("DATA_PROVENA
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024
+configured_origins = []
 allowed_origins = []
 for origin_value in os.getenv("CORS_ORIGIN", "http://localhost:5173").split(","):
     origin_value = origin_value.strip()
     if not origin_value:
         continue
+    configured_origins.append(origin_value)
     parsed_origin = urlparse(origin_value)
     allowed_origins.append(f"{parsed_origin.scheme}://{parsed_origin.netloc}" if parsed_origin.scheme and parsed_origin.netloc else origin_value)
 INTERNAL_SERVICE_TOKEN = os.getenv("INTERNAL_SERVICE_TOKEN", "").strip()
@@ -49,7 +51,7 @@ validate_production_config(
     mode=DATA_PROVENANCE_MODE,
     internal_token=INTERNAL_SERVICE_TOKEN,
     sslmode=DB_SSLMODE,
-    cors_origins=allowed_origins,
+    cors_origins=configured_origins,
     api_database_user=API_DATABASE_USER,
     analytics_database_user=ANALYTICS_DATABASE_USER,
     analytics_database_password=ANALYTICS_DATABASE_PASSWORD,
