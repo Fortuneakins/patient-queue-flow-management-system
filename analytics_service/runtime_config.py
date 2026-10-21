@@ -50,10 +50,18 @@ def validate_production_config(
         analytics_url_user = unquote(parsed_database_url.username or "")
         if not analytics_url_user:
             raise RuntimeError("ANALYTICS_DATABASE_URL must identify a dedicated read-only analytics database user.")
+        if not parsed_database_url.password:
+            raise RuntimeError("ANALYTICS_DATABASE_URL must include the dedicated analytics database password.")
         if analytics_url_user == (api_database_user or "").strip():
             raise RuntimeError("The analytics database user must differ from the API database user.")
         if is_placeholder_secret(unquote(parsed_database_url.password or "")):
             raise RuntimeError("ANALYTICS_DATABASE_URL must not contain placeholder credentials.")
+        configured_ssl_mode = parsed_database_url.query
+        if configured_ssl_mode:
+            from urllib.parse import parse_qs
+            ssl_values = parse_qs(configured_ssl_mode).get("sslmode", [])
+            if ssl_values and ssl_values[-1].lower() not in {"require", "verify-ca", "verify-full"}:
+                raise RuntimeError("ANALYTICS_DATABASE_URL cannot disable or weaken PostgreSQL TLS.")
     else:
         if not (analytics_database_password or "").strip():
             raise RuntimeError("Production analytics requires a dedicated analytics database password or ANALYTICS_DATABASE_URL.")
