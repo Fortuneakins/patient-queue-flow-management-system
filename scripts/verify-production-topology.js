@@ -14,6 +14,8 @@ const apiApp = read('backend/src/app.js');
 const frontendApi = read('frontend/src/services/api.js');
 const frontendDockerfile = read('frontend/Dockerfile');
 const envExample = read('.env.example');
+const frontendEnvExample = read('frontend/.env.example');
+const setupScript = read('scripts/setup.ps1');
 const lines = compose.split(/\r?\n/);
 
 function serviceBlock(name) {
@@ -52,6 +54,9 @@ assert.match(frontendApi, /request\('\/api\/analytics\/predict'\)/, 'The browser
 assert.doesNotMatch(frontendApi, /ANALYTICS_BASE_URL|localhost:5001/, 'Browser code must not embed the private analytics URL');
 assert.doesNotMatch(frontendDockerfile, /VITE_ANALYTICS_BASE_URL/, 'Frontend build must not embed an analytics origin');
 assert.doesNotMatch(envExample, /VITE_ANALYTICS_BASE_URL/, 'Environment template must not publish an analytics browser origin');
+assert.doesNotMatch(frontendEnvExample, /VITE_ANALYTICS_BASE_URL/, 'Frontend template must not publish an analytics browser origin');
+assert.doesNotMatch(setupScript, /^VITE_ANALYTICS_BASE_URL=/m, 'Setup script must not provision direct browser analytics access');
+assert.doesNotMatch(web, /VITE_ANALYTICS_BASE_URL/, 'Production build args must not contain the private analytics route');
 
 for (const [name, block] of [['api', api], ['analytics', analytics], ['web', web], ['migrate', migrate]]) {
   assert.doesNotMatch(block, /^\s*ports:/m, 'Only Caddy may publish host ports; "' + name + '" must remain private');
