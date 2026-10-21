@@ -47,6 +47,9 @@ test('requires public HTTPS CORS origins without localhost or URL paths', () => 
     ['http://clinic.example.org'],
     ['http://localhost:5173'],
     ['https://clinic.example.org/admin'],
+    ['https://clinic.example.org/?unexpected=yes'],
+    ['https://clinic.example.org/#fragment'],
+    ['https://user:secret@clinic.example.org'],
     [],
     ['not-a-url']
   ]) {
