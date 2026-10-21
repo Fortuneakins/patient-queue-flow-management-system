@@ -367,5 +367,31 @@ if (!dbConfigured) {
     const provenanceEvents = await request('/api/intelligence/events?event_type=QUEUE_DATA_PROVENANCE_UPDATED&limit=20', { headers: auth(tokens.admin) });
     assert.equal(provenanceEvents.response.status, 200);
     assert.ok(provenanceEvents.body.some(event => Number(event.entity_id) === Number(queueId)));
+
+    await t.test('role demotions and permission changes take effect without reissuing the JWT', async () => {
+      const adminBefore = await query("SELECT staff_id, role, extra_permissions FROM clinic_staff WHERE username='admin_demo' LIMIT 1");
+      assert.ok(adminBefore.rows[0], 'admin_demo must exist in integration seed data');
+      const adminRecord = adminBefore.rows[0];
+      try {
+        await query("UPDATE clinic_staff SET role='RECEPTION' WHERE staff_id=$1", [adminRecord.staff_id]);
+        const demotedAdmin = await request('/api/intelligence/overview', { headers: auth(tokens.admin) });
+        assert.equal(demotedAdmin.response.status, 403, 'a role demotion must override the still-valid token role');
+      } finally {
+        await query("UPDATE clinic_staff SET role=$1 WHERE staff_id=$2", [adminRecord.role, adminRecord.staff_id]);
+      }
+
+      const receptionBefore = await query("SELECT staff_id, extra_permissions FROM clinic_staff WHERE username='reception_demo' LIMIT 1");
+      assert.ok(receptionBefore.rows[0], 'reception_demo must exist in integration seed data');
+      const receptionRecord = receptionBefore.rows[0];
+      try {
+        await query("UPDATE clinic_staff SET extra_permissions=ARRAY['VIEW_STAFF_DIRECTORY']::text[] WHERE staff_id=$1", [receptionRecord.staff_id]);
+        const grantedWithoutRelogin = await request('/api/staff', { headers: auth(tokens.reception) });
+        assert.equal(grantedWithoutRelogin.response.status, 200, 'current DB permissions must be applied immediately');
+      } finally {
+        await query("UPDATE clinic_staff SET extra_permissions=$1::text[] WHERE staff_id=$2", [receptionRecord.extra_permissions || [], receptionRecord.staff_id]);
+      }
+      const revokedWithoutRelogin = await request('/api/staff', { headers: auth(tokens.reception) });
+      assert.equal(revokedWithoutRelogin.response.status, 403, 'permission removal must apply without waiting for token expiry');
+    });
   });
 }
