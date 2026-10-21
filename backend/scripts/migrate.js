@@ -37,24 +37,29 @@ async function baselineExistingSchema(client, files) {
       to_regclass('public.continuity_runs') IS NOT NULL AS has_continuity,
       (SELECT COUNT(*)::int FROM information_schema.columns
        WHERE table_schema='public' AND table_name='queue_entries'
-         AND column_name IN ('data_provenance','data_provenance_source','data_provenance_note','provenance_updated_by_staff_id','provenance_updated_at','care_pathway_id')) AS expected_queue_columns,
-      (SELECT COUNT(*)::int FROM queue_entries
-       WHERE data_provenance_source = 'LEGACY_REVIEW_REQUIRED'
-         AND provenance_updated_by_staff_id IS NOT NULL
-         AND provenance_updated_at IS NOT NULL) AS unbackfilled_review_sources
+         AND column_name IN ('data_provenance','data_provenance_source','data_provenance_note','provenance_updated_by_staff_id','provenance_updated_at','care_pathway_id')) AS expected_queue_columns
   `);
   const schema = result.rows[0];
+  if (Number(schema.expected_queue_columns) !== 6) {
+    throw new Error('Existing queue schema does not have all six reviewed provenance/pathway columns. Do not baseline this database.');
+  }
+  const backfill = await client.query(`
+    SELECT COUNT(*)::int AS unbackfilled_review_sources
+    FROM queue_entries
+    WHERE data_provenance_source = 'LEGACY_REVIEW_REQUIRED'
+      AND provenance_updated_by_staff_id IS NOT NULL
+      AND provenance_updated_at IS NOT NULL
+  `);
   const requiredFlags = [
     'has_patients','has_staff','has_queue','has_events','has_pathways','has_resources',
     'has_simulations','has_forecasts','has_communications','has_continuity'
   ];
   const missing = requiredFlags.filter(key => !schema[key]);
-  if (missing.length || Number(schema.expected_queue_columns) !== 6 || Number(schema.unbackfilled_review_sources) !== 0) {
+  if (missing.length || Number(backfill.rows[0].unbackfilled_review_sources) !== 0) {
     throw new Error(
       'Existing schema does not match the reviewed baseline for migrations 001–008. Missing markers: ' +
       [...missing,
-        ...(Number(schema.expected_queue_columns) !== 6 ? ['expected queue columns'] : []),
-        ...(Number(schema.unbackfilled_review_sources) !== 0 ? ['review-source backfill is incomplete; apply migration 008 explicitly before baseline'] : [])
+        ...(Number(backfill.rows[0].unbackfilled_review_sources) !== 0 ? ['review-source backfill is incomplete; apply migration 008 explicitly before baseline'] : [])
       ].join(', ') +
       '. Do not baseline this database; review its migration history first.'
     );
