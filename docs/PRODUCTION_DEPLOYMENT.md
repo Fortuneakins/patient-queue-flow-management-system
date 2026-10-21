@@ -130,9 +130,7 @@ Use the production Compose environment for the database operation. Only after a 
 $confirmation = Read-Host 'Type BASELINE pqfms_db only after reviewing the existing schema and verified backup'
 if ($confirmation -ne 'BASELINE pqfms_db') { throw 'Baseline cancelled; no database changes were made.' }
 
-docker compose --env-file .env.production -f compose.production.yml run --rm \
-  -e PQFMS_CONFIRM_BASELINE_REVIEWED=YES_I_VERIFIED_MIGRATIONS_001_008 \
-  migrate npm run db:migrate -- --baseline-existing
+docker compose --env-file .env.production -f compose.production.yml run --rm -e PQFMS_CONFIRM_BASELINE_REVIEWED=YES_I_VERIFIED_MIGRATIONS_001_008 migrate npm run db:migrate -- --baseline-existing
 if ($LASTEXITCODE -ne 0) { throw 'Baseline failed. Stop and inspect the database before retrying.' }
 ```
 
