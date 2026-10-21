@@ -10,6 +10,8 @@ BUFFER = 1.15
 MIN_SAMPLES_FOR_CALIBRATION = 5
 MIN_TIER_SAMPLES = 8
 ROBUST_SAMPLES = 30
+MIN_CALIBRATION_SAMPLES = 20
+MAX_CALIBRATION_OFFSET_MINUTES = 30.0
 MAX_VALID_SERVICE_MINUTES = 240.0
 MAX_VALID_WAIT_MINUTES = 720.0
 
@@ -93,6 +95,71 @@ def _service_profiles(samples: Iterable[Any] | None) -> tuple[dict[int, dict[str
                 "durations": [],
             }
     return profiles, len(pooled), by_tier
+
+
+def calibrate_wait_estimates(observations: Iterable[dict] | None) -> dict[str, Any]:
+    """
+    Derive a bounded additive correction from prior, completed, in-horizon
+    operational forecast observations. The caller is responsible for sourcing
+    only explicitly operational records and a bounded retrospective window.
+    """
+    residuals_by_tier: dict[int, list[float]] = {tier: [] for tier in range(1, 5)}
+    pooled: list[float] = []
+    for item in observations or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            predicted = float(item.get("predicted_wait_minutes"))
+            actual = float(item.get("actual_wait_minutes"))
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if not (0 <= predicted <= MAX_VALID_WAIT_MINUTES and 0 <= actual <= MAX_VALID_WAIT_MINUTES):
+            continue
+        residual = actual - predicted
+        tier = _valid_tier(item.get("tier"))
+        residuals_by_tier[tier].append(residual)
+        pooled.append(residual)
+
+    profiles: dict[str, Any] = {}
+    for tier in range(1, 5):
+        own = residuals_by_tier[tier]
+        if len(own) >= MIN_CALIBRATION_SAMPLES:
+            source = "TIER_OPERATIONAL_TRUTH"
+            samples_used = len(own)
+            raw_offset = float(median(own))
+        elif len(pooled) >= MIN_CALIBRATION_SAMPLES:
+            source = "POOLED_OPERATIONAL_TRUTH"
+            samples_used = len(pooled)
+            raw_offset = float(median(pooled))
+        else:
+            source = "NOT_CALIBRATED"
+            samples_used = 0
+            raw_offset = 0.0
+
+        offset = max(
+            -MAX_CALIBRATION_OFFSET_MINUTES,
+            min(MAX_CALIBRATION_OFFSET_MINUTES, raw_offset),
+        )
+        profiles[str(tier)] = {
+            "source": source,
+            "offset_minutes": round(offset, 1),
+            "tier_samples": len(own),
+            "samples_used": samples_used,
+        }
+
+    return {
+        "method": "BOUNDED_MEDIAN_SIGNED_ERROR",
+        "window_days": 90,
+        "minimum_samples": MIN_CALIBRATION_SAMPLES,
+        "maximum_absolute_offset_minutes": MAX_CALIBRATION_OFFSET_MINUTES,
+        "global_samples": len(pooled),
+        "tiers": profiles,
+        "limitations": [
+            "Only previous OPERATIONAL forecasts with an observed first call within the declared horizon may contribute.",
+            "The correction is a bounded median signed-error adjustment, not a trained model or a statistical confidence interval.",
+            "Calibration remains disabled until the minimum number of eligible observations is available.",
+        ],
+    }
 
 
 def _remaining_service_minutes(row: dict[str, Any], profile: dict[str, Any], now: datetime) -> float:
@@ -200,6 +267,7 @@ def estimate_current_visit_waits(
     on_duty_doctors: int,
     now: datetime | None = None,
     service_minutes: Iterable[Any] | None = None,
+    calibration: dict[str, Any] | None = None,
 ) -> list[dict[str, int]]:
     """
     Estimate the remaining time until each currently waiting visit is called.
@@ -263,10 +331,17 @@ def estimate_current_visit_waits(
         availability[slot] += float(profiles[row["tier"]]["minutes"])
         if row["queue_id"] is None:
             continue
+        baseline = int(ceil(start_minutes * BUFFER))
+        tier_calibration = (calibration or {}).get("tiers", {}).get(str(row["tier"]), {})
+        try:
+            offset = float(tier_calibration.get("offset_minutes", 0))
+        except (TypeError, ValueError, OverflowError):
+            offset = 0.0
+        calibrated = max(0.0, min(MAX_VALID_WAIT_MINUTES, baseline + offset))
         estimates.append({
             "queue_id": row["queue_id"],
             "tier": row["tier"],
-            "estimated_wait_minutes": int(ceil(start_minutes * BUFFER)),
+            "estimated_wait_minutes": int(ceil(calibrated)),
         })
     return estimates[:1000]
 
@@ -276,6 +351,7 @@ def estimate_metadata(
     staffed_doctors: int,
     active_visit_count: int,
     active_consultation_count: int | None = None,
+    wait_calibration: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Create an explainable model summary.
@@ -337,6 +413,17 @@ def estimate_metadata(
             f"{active_consultations} consultations are active while the roster reports {staff} on-duty doctor(s). "
             "The workload simulation reserves a slot for each recorded active consultation; verify the roster."
         )
+    calibration = wait_calibration or calibrate_wait_estimates([])
+    if calibration.get("global_samples", 0) < MIN_CALIBRATION_SAMPLES:
+        warnings.append(
+            f"Forecast-error calibration is inactive: {calibration.get('global_samples', 0)} eligible operational "
+            f"truth sample(s) are available; at least {MIN_CALIBRATION_SAMPLES} are required."
+        )
+    elif any(
+        item.get("source") != "TIER_OPERATIONAL_TRUTH"
+        for item in calibration.get("tiers", {}).values()
+    ):
+        warnings.append("At least one tier uses pooled forecast-error calibration because its tier-specific truth sample is small.")
     if unavailable:
         warnings.append("No on-duty doctor could be verified. Wait estimates are unavailable rather than zero.")
     warnings.append(
@@ -356,7 +443,7 @@ def estimate_metadata(
 
     return {
         "model": "queue-workload-estimate",
-        "model_version": "queue-workload-3.0.0",
+        "model_version": "queue-workload-3.1.0",
         "estimate_quality": "UNAVAILABLE_NO_STAFF" if unavailable else quality,
         "service_time_basis": basis,
         "service_history_samples": sample_count,
@@ -364,6 +451,7 @@ def estimate_metadata(
         "tier_service_minimum_samples": MIN_TIER_SAMPLES,
         "projection_buffer_percent": int(round((BUFFER - 1) * 100)),
         "tier_service_profiles": tier_metadata,
+        "wait_calibration": calibration,
         "staffed_doctors": staff,
         "simulated_service_slots": max(staff, active_consultations),
         "active_consultations": active_consultations,
