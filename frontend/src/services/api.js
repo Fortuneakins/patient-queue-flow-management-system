@@ -98,5 +98,6 @@ export const api = {
   contactPreferences: (token, patientId) => request(`/api/intelligence/contact-preferences/${patientId}`, authOptions(token)),
   updateContactPreferences: (token, patientId, body) => request(`/api/intelligence/contact-preferences/${patientId}`, authJsonOptions(token, body, 'PUT')),
   sendAccessUpdate: (token, patientId, body) => request(`/api/intelligence/contact-preferences/${patientId}/send-update`, authJsonOptions(token, body)),
-  predictions: () => request('/api/analytics/predict')
+  predictions: () => request('/api/analytics/predict'),
+  predictionEvidence: token => request('/api/analytics/model', authOptions(token))
 };
