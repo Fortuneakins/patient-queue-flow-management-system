@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:22.23.3-alpine3.24 AS build
 
 WORKDIR /build
 COPY frontend/package*.json ./
@@ -14,7 +14,7 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
     VITE_SOCKET_URL=$VITE_SOCKET_URL
 RUN npm run build
 
-FROM nginx:1.28-alpine
+FROM nginx:stable-alpine3.24
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /build/dist /usr/share/nginx/html
 EXPOSE 8080
