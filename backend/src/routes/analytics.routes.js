@@ -46,4 +46,5 @@ router.get('/model', authenticate, requireReadyPassword, authorizeRoles('ADMIN')
   }
 });
 
-module.exports = { router, publicPrediction };
+module.exports = router;
+module.exports.publicPrediction = publicPrediction;
