@@ -2,6 +2,7 @@ const { query, withTransaction } = require('../db/pool');
 const { appendOperationalEvent } = require('./operationalEventService');
 const { MODEL_VERSION, normalizeScenario, runClinicSimulation, runSyntheticLab } = require('../utils/flowSimulation');
 const env = require('../config/env');
+const { getWaitPredictions } = require('./analyticsProxyService');
 function httpError(message, status = 400) { return Object.assign(new Error(message), { status }); }
 function positiveMinutes(value, label, min = 0, max = 1440) {
   const number = Number(value);
@@ -108,20 +109,27 @@ async function runLab(input, actorStaffId) {
   });
   return { ...stored, ...persisted };
 }
-async function recordForecast(input, actorStaffId) {
+async function recordForecast(input = {}, actorStaffId) {
   const horizon = Number(input.horizon_minutes === undefined ? 60 : input.horizon_minutes);
   if (!Number.isInteger(horizon) || horizon < 1 || horizon > 1440) throw httpError('horizon_minutes must be an integer between 1 and 1440.');
-  const estimates = input.tier_estimates && typeof input.tier_estimates === 'object' && !Array.isArray(input.tier_estimates) ? input.tier_estimates : {};
+
+  // Never trust the browser to supply prediction values or a model version for
+  // the accuracy ledger. Capture the same server-side predictor used by the
+  // public display proxy so the recorded values are tied to its current model.
+  const prediction = await getWaitPredictions();
+  if (prediction.degraded) {
+    throw httpError('The analytics service is unavailable. No forecast was recorded.', 503);
+  }
   const tierEstimates = {};
   for (let tier = 1; tier <= 4; tier += 1) {
-    if (estimates[tier] === undefined) throw httpError('tier_estimates must contain predictions for tiers 1 to 4.');
-    tierEstimates[tier] = positiveMinutes(estimates[tier], 'Tier ' + tier + ' estimate');
+    tierEstimates[tier] = positiveMinutes(prediction[String(tier)], 'Tier ' + tier + ' estimate', 0, 720);
   }
+  const modelVersion = String(prediction.model?.version || 'unknown').slice(0, 40);
   const snapshot = await query("SELECT queue_id, COALESCE(priority_level,4)::int AS tier FROM queue_entries WHERE status = 'Waiting' ORDER BY queued_at LIMIT 1000");
   const stored = await withTransaction(async client => {
     const row = await client.query(
       'INSERT INTO flow_forecasts (model_version,horizon_minutes,tier_estimates,waiting_snapshot,created_by_staff_id) VALUES ($1,$2,$3::jsonb,$4,$5) RETURNING forecast_id,created_at',
-      [String(input.model_version || MODEL_VERSION).slice(0, 40), horizon, JSON.stringify(tierEstimates), snapshot.rowCount, actorStaffId]
+      [modelVersion, horizon, JSON.stringify(tierEstimates), snapshot.rowCount, actorStaffId]
     );
     const forecast = row.rows[0];
     for (const item of snapshot.rows) {
@@ -130,10 +138,10 @@ async function recordForecast(input, actorStaffId) {
         [forecast.forecast_id, item.queue_id, item.tier, tierEstimates[item.tier]]
       );
     }
-    await appendOperationalEvent(client, { eventType: 'WAIT_FORECAST_RECORDED', entityType: 'FLOW_FORECAST', entityId: forecast.forecast_id, actorStaffId, toState: 'RECORDED', metadata: { waiting_snapshot: snapshot.rowCount, horizon_minutes: horizon } });
+    await appendOperationalEvent(client, { eventType: 'WAIT_FORECAST_RECORDED', entityType: 'FLOW_FORECAST', entityId: forecast.forecast_id, actorStaffId, toState: 'RECORDED', metadata: { waiting_snapshot: snapshot.rowCount, horizon_minutes: horizon, model_version: modelVersion } });
     return forecast;
   });
-  return { ...stored, horizon_minutes: horizon, waiting_snapshot: snapshot.rowCount, tier_estimates: tierEstimates, tracked_visits: snapshot.rowCount };
+  return { ...stored, horizon_minutes: horizon, waiting_snapshot: snapshot.rowCount, tier_estimates: tierEstimates, tracked_visits: snapshot.rowCount, model_version: modelVersion };
 }
 async function getForecastTruth(limit = 20) {
   await query(
