@@ -250,7 +250,7 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <MetricCard label="Waiting now" value={waiting === null ? null : waiting.toLocaleString()} caption="Visits with Waiting status" icon="users" tone={overdue > 0 ? 'amber' : 'teal'} />
           <MetricCard label="In consultation" value={inConsultation === null ? null : inConsultation.toLocaleString()} caption="Active visits in consultation" icon="activity" tone="blue" />
-          <MetricCard label="Over 60 minutes" value={overdue === null ? null : overdue.toLocaleString()} caption="Operational delay-review threshold" icon="clock" tone={overdue > 0 ? 'red' : 'neutral'} />
+          <MetricCard label={`Over ${overview?.delay_review_threshold_minutes ?? 60} minutes`} value={overdue === null ? null : overdue.toLocaleString()} caption="Configured delay-review threshold; does not change triage priority" icon="clock" tone={overdue > 0 ? 'red' : 'neutral'} />
           <MetricCard label="Discharged today" value={dischargedToday === null ? null : dischargedToday.toLocaleString()} caption="Recorded for the South African clinic date" icon="checkCircle" tone="neutral" />
           <MetricCard label="Resources to review" value={resourceIssues === null ? null : resourceIssues.toLocaleString()} caption="Resource records marked Limited or Unavailable" icon="settings" tone={resourceIssues > 0 ? 'amber' : 'neutral'} />
           <MetricCard label="Open referrals" value={openReferrals === null ? null : openReferrals.toLocaleString()} caption="Requested, acknowledged or in progress" icon="arrow" tone={openReferrals > 0 ? 'amber' : 'neutral'} />
