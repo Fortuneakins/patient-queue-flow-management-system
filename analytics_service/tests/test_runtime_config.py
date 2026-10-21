@@ -131,3 +131,27 @@ def test_production_rejects_placeholder_internal_and_database_secrets():
             analytics_database_user="pqfms_analytics",
             analytics_database_password="REPLACE_WITH_READ_ONLY_ANALYTICS_DATABASE_SECRET",
         )
+
+
+
+def test_analytics_database_url_rejects_password_placeholder_and_disabled_tls():
+    with pytest.raises(RuntimeError, match="placeholder credentials"):
+        validate_production_config(
+            node_env="production",
+            mode="OPERATIONAL",
+            internal_token="a" * 40,
+            sslmode="verify-full",
+            cors_origins=["https://clinic.example.org"],
+            api_database_user="pqfms_api",
+            analytics_database_url="postgresql://pqfms_analytics:REPLACE_WITH_SECRET@db.example.org:5432/pqfms",
+        )
+    with pytest.raises(RuntimeError, match="cannot disable or weaken PostgreSQL TLS"):
+        validate_production_config(
+            node_env="production",
+            mode="OPERATIONAL",
+            internal_token="a" * 40,
+            sslmode="verify-full",
+            cors_origins=["https://clinic.example.org"],
+            api_database_user="pqfms_api",
+            analytics_database_url="postgresql://pqfms_analytics:real-password@db.example.org:5432/pqfms?sslmode=disable",
+        )
