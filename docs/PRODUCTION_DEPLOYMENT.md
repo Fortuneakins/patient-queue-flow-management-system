@@ -80,9 +80,9 @@ GRANT USAGE ON SCHEMA public TO pqfms_service, pqfms_analytics;
 
 -- Applies to objects created by the migration owner from this point forward.
 ALTER DEFAULT PRIVILEGES FOR ROLE pqfms_migrator IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO pqfms_service;
+  GRANT SELECT, INSERT, UPDATE ON TABLES TO pqfms_service;
 ALTER DEFAULT PRIVILEGES FOR ROLE pqfms_migrator IN SCHEMA public
-  GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO pqfms_service;
+  GRANT USAGE, SELECT ON SEQUENCES TO pqfms_service;
 ```
 
 If the roles already exist, inspect their membership and grants rather than recreating or resetting them. The migration principal must also be permitted to create required extensions in the managed database; never make the API runtime role a superuser or schema owner to work around a migration error.
@@ -90,8 +90,9 @@ If the roles already exist, inspect their membership and grants rather than recr
 The API runtime role must have the table/sequence DML grants needed by the application, plus read access to the migration ledger for startup verification. This explicit current-schema grant also covers a previously reviewed baseline whose tables were not created by the migration owner; it does not make the API role a schema owner:
 
 ```sql
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO pqfms_service;
-GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO pqfms_service;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO pqfms_service;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO pqfms_service;
+GRANT DELETE ON TABLE public.shifts TO pqfms_service;
 
 GRANT SELECT ON TABLE public.pqfms_schema_migrations TO pqfms_service;
 REVOKE INSERT, UPDATE, DELETE ON TABLE public.pqfms_schema_migrations FROM pqfms_service;
