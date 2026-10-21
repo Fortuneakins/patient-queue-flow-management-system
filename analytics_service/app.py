@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import hmac
 import os
 from pathlib import Path
 from datetime import datetime, timezone
 
 import psycopg2
 import requests
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -148,6 +149,12 @@ def live():
 
 @app.get("/api/predict")
 def predict():
+    if not INTERNAL_SERVICE_TOKEN:
+        return jsonify({"error": "Analytics internal service token is not configured."}), 503
+    supplied_token = request.headers.get("X-Internal-Service-Token", "")
+    if not hmac.compare_digest(supplied_token, INTERNAL_SERVICE_TOKEN):
+        return jsonify({"error": "Authentication required."}), 401
+
     try:
         visits = db_rows()
         history = historical_rows()
@@ -179,4 +186,5 @@ def predict():
 
 if __name__ == "__main__":
     port = int(os.getenv("ANALYTICS_PORT", "5001"))
-    app.run(host="127.0.0.1", port=port, debug=False)
+    host = os.getenv("ANALYTICS_HOST", "127.0.0.1")
+    app.run(host=host, port=port, debug=False)
