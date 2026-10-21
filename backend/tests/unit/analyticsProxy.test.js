@@ -1,3 +1,5 @@
+process.env.JWT_SECRET ||= 'analytics-proxy-unit-test-secret-with-at-least-32-characters';
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { getWaitPredictions, isPredictionPayload } = require('../../src/services/analyticsProxyService');
