@@ -118,8 +118,15 @@ def test_predict_returns_transparent_metadata(monkeypatch):
     assert response.json["service_history_samples"] == 35
     assert "operational call-to-discharge intervals" in response.json["service_time_basis"]
     assert response.json["4"] > 0
+    assert response.json["model_version"] == "queue-workload-3.2.0"
     assert response.json["visit_estimates"] == [
-        {"queue_id": 42, "tier": 4, "estimated_wait_minutes": 0}
+        {
+            "queue_id": 42,
+            "tier": 4,
+            "baseline_wait_minutes": 0,
+            "calibration_offset_minutes": 0.0,
+            "estimated_wait_minutes": 0,
+        }
     ]
 
 
