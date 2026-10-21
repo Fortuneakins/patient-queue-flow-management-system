@@ -72,10 +72,30 @@ export default function LearningPanel({ token, onOpenTool }) {
   const excludedCompletedCount = (fairness?.tiers || []).reduce((total, item) => total + Number(item.excluded_synthetic_sample_size || 0), 0);
   const unclassifiedWaitingCount = (fairness?.tiers || []).reduce((total, item) => total + Number(item.unclassified_waiting || 0), 0);
   const refresh = useCallback(async () => {
-    try {
-      const [fair, ledger, evidence] = await Promise.all([api.fairnessMetrics(token), api.forecastTruth(token, 20), api.predictionEvidence(token)]);
-      setFairness(fair); setTruth(ledger); setPrediction(evidence);
-    } catch (e) { setError(e.message); }
+    const [fairnessResult, ledgerResult, evidenceResult] = await Promise.allSettled([
+      api.fairnessMetrics(token),
+      api.forecastTruth(token, 20),
+      api.predictionEvidence(token)
+    ]);
+    const errors = [];
+    if (fairnessResult.status === 'fulfilled') setFairness(fairnessResult.value);
+    else errors.push('Fairness metrics unavailable: ' + (fairnessResult.reason?.message || 'request failed'));
+
+    if (ledgerResult.status === 'fulfilled') setTruth(ledgerResult.value);
+    else errors.push('Prediction truth history unavailable: ' + (ledgerResult.reason?.message || 'request failed'));
+
+    if (evidenceResult.status === 'fulfilled') setPrediction(evidenceResult.value);
+    else {
+      setPrediction({
+        '1': null, '2': null, '3': null, '4': null,
+        degraded: true,
+        estimate_quality: 'UNAVAILABLE',
+        model_version: 'unavailable',
+        warnings: ['Detailed prediction evidence is unavailable. Do not interpret missing estimates as zero-minute waits.']
+      });
+      errors.push('Detailed prediction evidence unavailable: ' + (evidenceResult.reason?.message || 'request failed'));
+    }
+    setError(errors.join(' '));
   }, [token]);
   useEffect(() => { refresh(); }, [refresh]);
   async function captureForecast() {
@@ -135,8 +155,8 @@ export default function LearningPanel({ token, onOpenTool }) {
                     A bounded median-error correction is learned only from earlier, in-horizon OPERATIONAL truth samples. It adjusts individual waiting-visit forecasts used by the Truth Ledger and consent-gated SMS; the aggregate tier projections above remain the unadjusted queue simulation.
                   </p>
                 </div>
-                <Badge tone={Number(prediction.wait_calibration?.global_samples || 0) >= Number(prediction.wait_calibration?.minimum_samples || 20) ? 'teal' : 'orange'}>
-                  {Number(prediction.wait_calibration?.global_samples || 0) >= Number(prediction.wait_calibration?.minimum_samples || 20) ? 'Calibration active' : 'Collecting evidence'}
+                <Badge tone={prediction.degraded ? 'red' : Number(prediction.wait_calibration?.global_samples || 0) >= Number(prediction.wait_calibration?.minimum_samples || 20) ? 'teal' : 'orange'}>
+                  {prediction.degraded ? 'Unavailable' : Number(prediction.wait_calibration?.global_samples || 0) >= Number(prediction.wait_calibration?.minimum_samples || 20) ? 'Calibration active' : 'Collecting evidence'}
                 </Badge>
               </div>
               <p className="mt-2 text-xs text-stone-500">
