@@ -28,7 +28,7 @@ DB_CONFIG = {
     "password": os.getenv("DB_PASSWORD", ""),
 }
 NODE_SERVER_URL = os.getenv("NODE_SERVER_URL", "http://localhost:5000")
-INTERNAL_SERVICE_TOKEN = os.getenv("INTERNAL_SERVICE_TOKEN", "")
+INTERNAL_SERVICE_TOKEN = os.getenv("INTERNAL_SERVICE_TOKEN", "").strip()
 STAFFED_STATIONS = max(1, int(os.getenv("STAFFED_STATIONS", "1")))
 HISTORY_DAYS = 90
 MAX_HISTORY_ROWS = 5000
