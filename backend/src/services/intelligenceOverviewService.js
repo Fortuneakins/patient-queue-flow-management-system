@@ -1,5 +1,6 @@
 const { query } = require('../db/pool');
 const { MODEL_VERSION } = require('../utils/flowSimulation');
+const { buildOperationalSignals } = require('../utils/operationalSignalEngine');
 function requiredText(value, label, min, max) {
   const clean = String(value || '').trim();
   if (clean.length < min || clean.length > max) throw Object.assign(new Error(label + ' must contain between ' + min + ' and ' + max + ' characters.'), { status: 400 });
@@ -19,14 +20,22 @@ async function getOverview() {
   );
   const samples = await query(
     "SELECT COUNT(*)::int AS sample_count FROM queue_entries WHERE status = 'Discharged' AND called_at IS NOT NULL " +
-    "AND discharged_at > called_at AND discharged_at >= NOW() - INTERVAL '90 days'"
+    "AND queued_at IS NOT NULL AND called_at >= queued_at " +
+    "AND called_at >= NOW() - INTERVAL '90 days' " +
+    "AND EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0 BETWEEN 0 AND 720 " +
+    "AND EXTRACT(EPOCH FROM (discharged_at - called_at)) / 60.0 BETWEEN 1 AND 240"
   );
   const events = await query('SELECT COUNT(*)::int AS event_count, MAX(created_at) AS last_event_at FROM operational_events');
-  return {
-    ...counts.rows[0], resources: resources.rows, service_history_samples: samples.rows[0].sample_count,
-    event_count: events.rows[0].event_count, last_event_at: events.rows[0].last_event_at,
-    model_version: MODEL_VERSION, generated_at: new Date().toISOString()
+  const snapshot = {
+    ...counts.rows[0],
+    resources: resources.rows,
+    service_history_samples: samples.rows[0].sample_count,
+    event_count: events.rows[0].event_count,
+    last_event_at: events.rows[0].last_event_at,
+    model_version: MODEL_VERSION,
+    generated_at: new Date().toISOString()
   };
+  return { ...snapshot, signals: buildOperationalSignals(snapshot) };
 }
 async function listEvents({ limit = 100, eventType = null } = {}) {
   const safeLimit = Math.max(1, Math.min(200, Number(limit) || 100));
