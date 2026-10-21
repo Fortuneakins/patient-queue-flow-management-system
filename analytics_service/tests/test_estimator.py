@@ -95,3 +95,29 @@ def test_legacy_estimate_mapping_uses_the_same_evidence_aware_engine():
     visits = [{"status": "Waiting", "priority_level": 3, "queued_at": now}]
 
     assert estimate_waits(visits, 1, now) == {"1": 0, "2": 0, "3": 12, "4": 12}
+
+
+
+def test_inconsistent_active_consultations_and_staff_count_is_disclosed():
+    now = datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc)
+    visits = [
+        {
+            "status": "In-Consultation",
+            "priority_level": 1,
+            "queued_at": now - timedelta(minutes=10),
+            "called_at": now - timedelta(minutes=5),
+        },
+        {
+            "status": "In-Consultation",
+            "priority_level": 2,
+            "queued_at": now - timedelta(minutes=8),
+            "called_at": now - timedelta(minutes=3),
+        },
+    ]
+
+    result = forecast_waits(visits, 1, now=now)
+
+    assert result["model"]["reported_staff_count"] == 1
+    assert result["model"]["staff_slots_simulated"] == 2
+    assert result["model"]["staffing_slots_inferred_from_active"] is True
+    assert any("verify the shift roster" in warning for warning in result["warnings"])
