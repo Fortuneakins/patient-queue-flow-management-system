@@ -54,6 +54,8 @@ Run `scripts\setup.ps1` from PowerShell. It creates the ignored root `.env`, gen
 
 For SMS, set `SMS_ENABLED=true` and provide Twilio credentials. With SMS disabled, the core local workflow remains available.
 
+The browser requests aggregate wait estimates through Express at `/api/analytics/predict`; Express forwards to the private Flask service using `ANALYTICS_URL` and the shared `INTERNAL_SERVICE_TOKEN`. Keep Flask's port private. For a separate analytics container, set `ANALYTICS_URL` to its private service address and bind Flask with `ANALYTICS_HOST=0.0.0.0` only inside that private container network.
+
 ## Database setup (Windows PowerShell)
 
 ```powershell
