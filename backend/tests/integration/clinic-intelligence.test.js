@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const http = require('node:http');
 
 const dbConfigured = Boolean(process.env.RUN_DB_TESTS && process.env.DB_NAME);
 if (!dbConfigured) {
@@ -10,8 +11,10 @@ if (!dbConfigured) {
   process.env.INTERNAL_SERVICE_TOKEN ||= 'integration-internal-token';
   process.env.SMS_ENABLED = 'false';
 
-  const { httpServer } = require('../../src/app');
-  const { query, pool } = require('../../src/db/pool');
+  let httpServer;
+  let query;
+  let pool;
+  let analyticsServer;
   let baseUrl;
   let listening = false;
   const patientIds = [];
@@ -38,6 +41,45 @@ if (!dbConfigured) {
   }
 
   test.before(async () => {
+    // CI keeps the same service-to-service token contract as deployment while
+    // using a deterministic analytics fixture instead of a live/clinical model.
+    analyticsServer = http.createServer((req, res) => {
+      const url = new URL(req.url, 'http://127.0.0.1');
+      if (req.method !== 'GET' || url.pathname !== '/api/predict') {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Not found.' }));
+        return;
+      }
+      if (req.headers['x-internal-service-token'] !== process.env.INTERNAL_SERVICE_TOKEN) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Authentication required.' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        '1': 2, '2': 5, '3': 10, '4': 15,
+        degraded: false,
+        staffed_doctors: 2,
+        generated_at: new Date().toISOString(),
+        model: {
+          version: 'pqfms-ci-analytics-fixture-v1',
+          method: 'TEST_FIXTURE',
+          staffing_source: 'TEST_FIXTURE',
+          valid_service_samples: 24,
+          waiting_visits: 1,
+          active_consultations: 1,
+          tiers: {}
+        },
+        warnings: ['Deterministic integration-test fixture; not clinical evidence.']
+      }));
+    });
+    await new Promise(resolve => analyticsServer.listen(0, '127.0.0.1', resolve));
+    process.env.ANALYTICS_URL = 'http://127.0.0.1:' + analyticsServer.address().port;
+
+    // Load the application only after selecting the fixture URL because the
+    // environment module is evaluated once at require-time.
+    ({ httpServer } = require('../../src/app'));
+    ({ query, pool } = require('../../src/db/pool'));
     await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve));
     listening = true;
     baseUrl = 'http://127.0.0.1:' + httpServer.address().port;
@@ -58,7 +100,8 @@ if (!dbConfigured) {
     for (const simulationId of simulationIds) await query('DELETE FROM flow_simulations WHERE simulation_id=$1', [simulationId]);
     for (const forecastId of forecastIds) await query('DELETE FROM flow_forecasts WHERE forecast_id=$1', [forecastId]);
     if (listening) await new Promise(resolve => httpServer.close(resolve));
-    await pool.end();
+    if (analyticsServer?.listening) await new Promise(resolve => analyticsServer.close(resolve));
+    if (pool) await pool.end();
   });
 
   test('clinic intelligence enforces access, tracks journeys, simulates operations and respects contact consent', async t => {
@@ -198,9 +241,13 @@ if (!dbConfigured) {
 
     const forecast = await request('/api/intelligence/forecasts', {
       method: 'POST', headers: auth(tokens.admin),
-      body: JSON.stringify({ horizon_minutes: 60, tier_estimates: { 1: 5, 2: 10, 3: 15, 4: 20 } })
+      // Deliberately submit false estimates: the ledger must use the server-side
+      // predictor output, not client-controlled values or model versions.
+      body: JSON.stringify({ horizon_minutes: 60, tier_estimates: { 1: 999, 2: 998, 3: 997, 4: 996 }, model_version: 'client-forged-model' })
     });
     assert.equal(forecast.response.status, 201, JSON.stringify(forecast.body));
+    assert.equal(forecast.body.model_version, 'pqfms-ci-analytics-fixture-v1');
+    assert.deepEqual(forecast.body.tier_estimates, { 1: 2, 2: 5, 3: 10, 4: 15 });
     forecastIds.push(forecast.body.forecast_id);
     const truth = await request('/api/intelligence/forecasts/truth', { headers: auth(tokens.admin) });
     assert.equal(truth.response.status, 200);
