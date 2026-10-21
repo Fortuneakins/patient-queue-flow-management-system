@@ -10,7 +10,8 @@ const initialSnapshot = {
   referrals: null,
   pathways: null,
   simulations: null,
-  events: null
+  events: null,
+  predictions: null
 };
 
 const workbenches = [
@@ -122,7 +123,8 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
       ['referrals', api.listReferrals(token)],
       ['pathways', api.listPathways(token)],
       ['simulations', api.listFlowSimulations(token, 20)],
-      ['events', api.intelligenceEvents(token, 10)]
+      ['events', api.intelligenceEvents(token, 10)],
+      ['predictions', api.predictions()]
     ];
     const settled = await Promise.allSettled(requests.map(([, request]) => request));
     const next = { ...initialSnapshot };
@@ -167,6 +169,25 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
   const sampleCount = overview ? count(overview.service_history_samples) : null;
   const onDutyDoctors = overview?.staffing ? count(overview.staffing.on_duty_doctors) : null;
   const unclassifiedCompleted = overview?.data_quality ? count(overview.data_quality.unclassified_completed) : null;
+  const estimator = snapshot.predictions;
+  const estimateQualityLabels = {
+    OBSERVATION_BASED: 'Observation-based',
+    LIMITED_OBSERVATIONS: 'Limited sample',
+    DEFAULT_ASSUMPTION: 'Baseline assumption',
+    UNAVAILABLE_NO_STAFF: 'Unavailable'
+  };
+  const estimateQualityLabel = estimator
+    ? (estimateQualityLabels[estimator.estimate_quality] || 'Unknown quality')
+    : null;
+  const estimateQualityTone = !estimator || estimator.degraded
+    ? 'red'
+    : estimator.estimate_quality === 'OBSERVATION_BASED' ? 'teal' : 'amber';
+  const routineTierEstimate = estimator
+    ? (estimator['4'] === null || estimator['4'] === undefined ? 'Unavailable' : `${count(estimator['4'])} min`)
+    : null;
+  const estimateEvidenceCaption = estimator
+    ? `${estimator.service_time_basis || 'Estimation basis unavailable'} · ${count(estimator.service_history_samples)} eligible samples`
+    : sourceIssues.includes('predictions') ? 'Wait estimator unavailable; do not interpret this as a zero-minute wait.' : 'Waiting for an estimator result.';
   const excludedTestDemo = overview?.data_quality ? count(overview.data_quality.excluded_test_demo_records) : null;
   const sourceLabels = {
     overview: 'operational overview',
@@ -175,7 +196,8 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
     referrals: 'referrals',
     pathways: 'care pathways',
     simulations: 'simulation history',
-    events: 'event history'
+    events: 'event history',
+    predictions: 'wait estimator'
   };
   const unavailableSources = sourceIssues.map(key => sourceLabels[key] || key);
 
@@ -254,6 +276,8 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
           <MetricCard label="Discharged today" value={dischargedToday === null ? null : dischargedToday.toLocaleString()} caption="Recorded for the South African clinic date" icon="checkCircle" tone="neutral" />
           <MetricCard label="Resources to review" value={resourceIssues === null ? null : resourceIssues.toLocaleString()} caption="Resource records marked Limited or Unavailable" icon="settings" tone={resourceIssues > 0 ? 'amber' : 'neutral'} />
           <MetricCard label="Open referrals" value={openReferrals === null ? null : openReferrals.toLocaleString()} caption="Requested, acknowledged or in progress" icon="arrow" tone={openReferrals > 0 ? 'amber' : 'neutral'} />
+          <MetricCard label="Wait-estimate evidence" value={estimateQualityLabel} caption={estimateEvidenceCaption} icon="chart" tone={estimateQualityTone} />
+          <MetricCard label="Routine-tier wait estimate" value={routineTierEstimate} caption="Planning approximation for a hypothetical tier 4 visit; not a personal guarantee or triage decision." icon="clock" tone={estimateQualityTone} />
         </div>
       </section>
 
