@@ -92,17 +92,50 @@ def historical_rows() -> list[dict]:
             ]
 
 
-def on_duty_count() -> int:
+def staffing_profile() -> dict:
+    """Return a staffing count and disclose whether it is verified or configured."""
+    fallback = {
+        "count": STAFFED_STATIONS,
+        "source": "CONFIGURED_FALLBACK",
+        "warning": None,
+    }
     if not INTERNAL_SERVICE_TOKEN:
-        return STAFFED_STATIONS
-    response = requests.get(
-        f"{NODE_SERVER_URL}/api/shifts/on-duty",
-        headers={"X-Internal-Service-Token": INTERNAL_SERVICE_TOKEN},
-        timeout=2,
+        fallback["warning"] = (
+            "The internal shift-service token is not configured. "
+            f"The estimate uses the configured fallback of {STAFFED_STATIONS} staffed station(s), "
+            "not a verified live doctor count."
+        )
+        return fallback
+
+    try:
+        response = requests.get(
+            f"{NODE_SERVER_URL}/api/shifts/on-duty",
+            headers={"X-Internal-Service-Token": INTERNAL_SERVICE_TOKEN},
+            timeout=2,
+        )
+        response.raise_for_status()
+        value = int(response.json().get("on_duty", 0))
+    except (requests.RequestException, ValueError, TypeError) as exc:
+        fallback["warning"] = (
+            "The shift service could not provide a verified on-duty count "
+            f"({type(exc).__name__}). The estimate uses the configured fallback of "
+            f"{STAFFED_STATIONS} staffed station(s)."
+        )
+        return fallback
+
+    if value > 0:
+        return {"count": value, "source": "SHIFT_SCHEDULE", "warning": None}
+
+    fallback["warning"] = (
+        "The shift service reported zero doctors on duty. The estimate uses the configured "
+        f"fallback of {STAFFED_STATIONS} staffed station(s); verify staffing before relying on it."
     )
-    response.raise_for_status()
-    value = int(response.json().get("on_duty", 0))
-    return value if value > 0 else STAFFED_STATIONS
+    return fallback
+
+
+def on_duty_count() -> int:
+    """Backward-compatible count helper for existing callers."""
+    return int(staffing_profile()["count"])
 
 
 @app.get("/api/health/live")
@@ -115,15 +148,19 @@ def predict():
     try:
         visits = db_rows()
         history = historical_rows()
-        staff = on_duty_count()
-        forecast = forecast_waits(visits, staff, historical_observations=history)
+        staffing = staffing_profile()
+        forecast = forecast_waits(visits, int(staffing["count"]), historical_observations=history)
+        model = {**forecast["model"], "staffing_source": staffing["source"]}
+        warnings = list(forecast["warnings"])
+        if staffing["warning"]:
+            warnings.insert(0, staffing["warning"])
         return jsonify({
             **forecast["estimates"],
             "degraded": False,
-            "staffed_doctors": staff,
+            "staffed_doctors": int(staffing["count"]),
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "model": forecast["model"],
-            "warnings": forecast["warnings"],
+            "model": model,
+            "warnings": warnings,
         })
     except Exception as exc:  # graceful degradation is a documented requirement
         app.logger.warning("Analytics unavailable: %s", exc)
