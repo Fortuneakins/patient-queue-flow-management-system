@@ -142,6 +142,33 @@ def service_time_samples() -> list[float]:
             return [float(row[0]) for row in cur.fetchall() if row[0] is not None]
 
 
+def tier_service_time_samples() -> list[dict]:
+    """Return recent operational duration observations with clinician-assigned tier."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COALESCE(priority_level, 4)::int AS tier,
+                       EXTRACT(EPOCH FROM (discharged_at - called_at)) / 60.0 AS service_minutes
+                FROM queue_entries
+                WHERE status = 'Discharged'
+                  AND data_provenance = 'OPERATIONAL'
+                  AND called_at IS NOT NULL
+                  AND discharged_at IS NOT NULL
+                  AND discharged_at > called_at
+                  AND discharged_at >= NOW() - INTERVAL '90 days'
+                  AND EXTRACT(EPOCH FROM (discharged_at - called_at)) / 60.0 BETWEEN 1 AND 240
+                ORDER BY discharged_at DESC
+                LIMIT 500
+                """
+            )
+            return [
+                {"tier": int(row[0] or 4), "service_minutes": float(row[1])}
+                for row in cur.fetchall()
+                if row[1] is not None
+            ]
+
+
 def on_duty_count() -> int:
     if not INTERNAL_SERVICE_TOKEN:
         if NODE_ENV == "production":
@@ -212,9 +239,15 @@ def predict():
     try:
         visits = db_rows()
         staff = on_duty_count()
-        service_samples = service_time_samples()
+        service_samples = tier_service_time_samples()
         estimates = estimate_waits(visits, staff, service_minutes=service_samples)
-        metadata = estimate_metadata(len(service_samples), staff, len(visits))
+        active_consultations = sum(1 for visit in visits if visit.get("status") == "In-Consultation")
+        metadata = estimate_metadata(
+            service_samples,
+            staff,
+            len(visits),
+            active_consultation_count=active_consultations,
+        )
         return jsonify({
             **estimates,
             **metadata,
