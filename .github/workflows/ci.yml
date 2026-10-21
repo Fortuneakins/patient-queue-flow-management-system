@@ -44,6 +44,8 @@ jobs:
           python-version: '3.13'
       - name: Install backend dependencies
         run: npm ci --prefix backend
+      - name: Audit backend production dependencies
+        run: npm --prefix backend audit --omit=dev
       - name: Initialise fresh schema with checksum-tracked migrations
         run: |
           node backend/scripts/migrate.js
@@ -64,6 +66,8 @@ jobs:
         run: python -m pytest -q analytics_service/tests
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
+      - name: Audit frontend production dependencies
+        run: npm --prefix frontend audit --omit=dev
       - name: Frontend lint
         run: npm run lint --prefix frontend
       - name: Frontend build
