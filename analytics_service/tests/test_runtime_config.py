@@ -28,8 +28,6 @@ def test_production_requires_strong_internal_token_database_password_ssl_and_htt
         node_env="production",
         mode="OPERATIONAL",
         internal_token="a" * 40,
-        database_url="",
-        database_password="a-db-password",
         sslmode="verify-full",
         cors_origins=["https://clinic.example.org"],
         api_database_user="pqfms_api",
@@ -38,7 +36,6 @@ def test_production_requires_strong_internal_token_database_password_ssl_and_htt
     )
     cases = [
         {"internal_token": "short"},
-        {"database_password": ""},
         {"analytics_database_password": ""},
         {"analytics_database_user": "pqfms_api"},
         {"sslmode": "disable"},
@@ -50,9 +47,10 @@ def test_production_requires_strong_internal_token_database_password_ssl_and_htt
             "node_env": "production",
             "mode": "OPERATIONAL",
             "internal_token": "a" * 40,
-            "database_url": "",
-            "database_password": "a-db-password",
             "sslmode": "verify-full",
+            "api_database_user": "pqfms_api",
+            "analytics_database_user": "pqfms_analytics",
+            "analytics_database_password": "read-only-db-secret",
             "cors_origins": ["https://clinic.example.org"],
         }
         kwargs.update(override)
@@ -69,4 +67,30 @@ def test_development_does_not_require_production_secrets():
         database_password="",
         sslmode="prefer",
         cors_origins=["http://localhost:5173"],
+    )
+
+
+
+def test_analytics_database_url_must_use_a_different_username():
+    with pytest.raises(RuntimeError, match="differ from the API database user"):
+        validate_production_config(
+            node_env="production",
+            mode="OPERATIONAL",
+            internal_token="a" * 40,
+            sslmode="verify-full",
+            cors_origins=["https://clinic.example.org"],
+            api_database_user="pqfms_api",
+            analytics_database_url="postgresql://pqfms_api:secret@db.example.org:5432/pqfms",
+        )
+
+
+def test_dedicated_analytics_database_url_is_accepted():
+    validate_production_config(
+        node_env="production",
+        mode="OPERATIONAL",
+        internal_token="a" * 40,
+        sslmode="verify-full",
+        cors_origins=["https://clinic.example.org"],
+        api_database_user="pqfms_api",
+        analytics_database_url="postgresql://pqfms_analytics:secret@db.example.org:5432/pqfms",
     )
