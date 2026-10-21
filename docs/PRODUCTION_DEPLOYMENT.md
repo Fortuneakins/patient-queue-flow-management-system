@@ -93,6 +93,26 @@ This procedure does not execute migrations 001–008; it checks schema markers a
 
 For any database state other than a verified 001–008 schema, use a reviewed migration plan that records which scripts have truly been applied. Never baseline a schema just because the tables have familiar names.
 
+### Provision the read-only analytics database principal
+
+After migrations have been applied, create a separate login for analytics using the database administration process. Do not reuse the API database account/password:
+
+```sql
+CREATE ROLE pqfms_analytics LOGIN;
+GRANT CONNECT ON DATABASE pqfms TO pqfms_analytics;
+GRANT USAGE ON SCHEMA public TO pqfms_analytics;
+GRANT SELECT (status, priority_level, queued_at, called_at, discharged_at, data_provenance)
+  ON TABLE public.queue_entries TO pqfms_analytics;
+```
+
+Set a unique strong password for this role through the approved secret-management process (for example, `\\password pqfms_analytics` in an interactive `psql` session). If you use a database name other than `pqfms`, adjust the `GRANT CONNECT` statement. Put these values in `ANALYTICS_DB_USER` and `ANALYTICS_DB_PASSWORD` in the protected deployment environment. The production analytics service receives only the analytics principal and the API username for a startup check; it does not receive the API password. It reads only the columns used to estimate active queue workload and historical consultation duration. It has no write grant. If a future feature needs extra columns or tables, review and grant only the minimum additional permissions.
+
+The API/service identity still needs the reviewed schema permissions used by migrations and normal clinic workflows. Keep schema ownership/admin credentials out of both runtime services.
+
+### Scaling boundary
+
+The Compose template is intentionally a **single API/analytics deployment**. The current in-memory rate limiters are per process, and Socket.IO is not configured with a cross-replica adapter. Do not scale the API horizontally or place multiple independent replicas behind a load balancer until login/endpoint rate limits use a shared store (with expiry and abuse controls), Socket.IO refresh events are coordinated, and multi-replica concurrency/health behaviour is tested. The database remains the source of truth; an extra replica must not create the illusion of coordinated protections that are only local to one process.
+
 ## 6. Create the first production administrator
 
 The normal API intentionally refuses to start in production while the seeded demonstration usernames remain. Do not seed the demo accounts in production.
