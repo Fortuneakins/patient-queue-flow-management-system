@@ -63,12 +63,23 @@ def test_development_does_not_require_production_secrets():
         node_env="development",
         mode="SYNTHETIC_TEST",
         internal_token="",
-        database_url="",
-        database_password="",
         sslmode="prefer",
         cors_origins=["http://localhost:5173"],
     )
 
+
+
+def test_analytics_database_url_must_be_a_valid_postgres_url(): 
+    with pytest.raises(RuntimeError, match="valid PostgreSQL URL"):
+        validate_production_config(
+            node_env="production",
+            mode="OPERATIONAL",
+            internal_token="a" * 40,
+            sslmode="verify-full",
+            cors_origins=["https://clinic.example.org"],
+            api_database_user="pqfms_api",
+            analytics_database_url="https://pqfms_analytics:secret@db.example.org:5432/pqfms",
+        )
 
 
 def test_analytics_database_url_must_use_a_different_username():
