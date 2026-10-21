@@ -7,13 +7,13 @@
 The production Compose stack in `compose.production.yml` uses:
 
 - **Caddy** as the only public entry point, with automatic HTTPS certificates and persisted certificate state.
-- **Nginx** to serve the compiled React application and reverse-proxy same-origin requests to the API and analytics service.
+- **Nginx** to serve the compiled React application and reverse-proxy same-origin API and Socket.IO requests. It does not expose Flask analytics directly; Express calls analytics over the private Compose network with the internal service token.
 - **Node/Express API** for authentication, workflow validation, authorisation and PostgreSQL transactions.
 - **Flask analytics under Gunicorn**, not Flask's development server.
 - **Externally managed PostgreSQL with verified TLS**. The database is intentionally not exposed by Compose and the deployment stack does not seed demonstration data.
 - A dedicated, checksum-tracked migration command (`npm run db:migrate`) and one-time first-administrator bootstrap (`npm run bootstrap:admin`).
 
-The API and analytics services are on a private Compose network and are not published as host ports. The frontend uses same-origin `/api`, `/analytics` and `/socket.io` routes, so browser configuration does not need to embed internal hostnames or database credentials.
+The API and analytics services are on a private Compose network and are not published as host ports. The frontend uses same-origin `/api` and `/socket.io` routes. The browser never calls `/analytics` or an analytics host directly; the Express proxy adds service authentication and filters the public estimate response.
 
 ## 2. Production prerequisites
 
@@ -187,8 +187,7 @@ Use the deployment's public HTTPS hostname to check:
 
 - `/api/health/live` reports the API process is alive.
 - `/api/health/ready` reports database readiness.
-- `/analytics/api/health/live` reports the analytics process is alive.
-- `/analytics/api/health/ready` reports analytics database readiness and provenance mode.
+- The Compose analytics healthcheck calls `/api/health/ready` inside the private analytics container network. Flask health and prediction routes are not published through Nginx.
 - The public display board hides patient names, identification numbers and consultation notes.
 - A synthetic check-in, call, note, discharge and history lookup pass in the *separate staging environment*.
 - Every new check-in has its expected server-assigned provenance source; test/demo observations never count as operational model evidence.
