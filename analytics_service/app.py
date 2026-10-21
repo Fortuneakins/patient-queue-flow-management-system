@@ -114,7 +114,10 @@ def staffing_profile() -> dict:
             timeout=2,
         )
         response.raise_for_status()
-        value = int(response.json().get("on_duty", 0))
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("shift service response was not a JSON object")
+        value = int(payload.get("on_duty", 0))
     except (requests.RequestException, ValueError, TypeError) as exc:
         fallback["warning"] = (
             "The shift service could not provide a verified on-duty count "
