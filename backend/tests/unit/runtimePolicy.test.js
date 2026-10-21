@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateProductionConfig } = require('../../src/config/runtimePolicy');
+const { validateProductionConfig, parseTrustProxyHops } = require('../../src/config/runtimePolicy');
 
 const validProductionConfig = {
   nodeEnv: 'production',
@@ -95,4 +95,15 @@ test('rejects a PostgreSQL URL that explicitly disables TLS', () => {
     databaseUrl: 'postgresql://pqfms:unique-password@db.example.org:5432/pqfms?sslmode=disable',
     databasePassword: ''
   }), /cannot override verified PostgreSQL TLS/);
+});
+
+
+test('trust proxy parser requires a numeric hop count or explicit false', () => {
+  assert.equal(parseTrustProxyHops('0'), 0);
+  assert.equal(parseTrustProxyHops('2'), 2);
+  assert.equal(parseTrustProxyHops('false'), false);
+  assert.equal(parseTrustProxyHops(''), false);
+  assert.throws(() => parseTrustProxyHops('true'), /do not trust all proxies/);
+  assert.throws(() => parseTrustProxyHops('-1'), /non-negative integer/);
+  assert.throws(() => parseTrustProxyHops('two'), /non-negative integer/);
 });
