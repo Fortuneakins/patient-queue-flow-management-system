@@ -72,3 +72,10 @@ def test_no_staff_reports_unavailable_even_when_queue_is_empty():
     metadata = estimate_metadata(0, 0, 0)
     assert metadata["degraded"] is True
     assert metadata["estimate_quality"] == "UNAVAILABLE_NO_STAFF"
+
+
+def test_historical_service_time_explicitly_describes_the_call_to_discharge_proxy():
+    metadata = estimate_metadata(35, 2, 8)
+    assert metadata["estimate_quality"] == "OBSERVATION_BASED"
+    assert "call-to-discharge intervals" in metadata["service_time_basis"]
+    assert any("post-consultation work" in item for item in metadata["limitations"])
