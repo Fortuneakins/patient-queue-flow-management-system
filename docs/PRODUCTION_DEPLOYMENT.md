@@ -92,7 +92,7 @@ The API runtime role must have the table/sequence DML grants needed by the appli
 ```sql
 GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO pqfms_service;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO pqfms_service;
-GRANT DELETE ON TABLE public.shifts TO pqfms_service;
+GRANT DELETE ON TABLE public.shifts, public.queue_pathway_progress TO pqfms_service;
 
 GRANT SELECT ON TABLE public.pqfms_schema_migrations TO pqfms_service;
 REVOKE INSERT, UPDATE, DELETE ON TABLE public.pqfms_schema_migrations FROM pqfms_service;
