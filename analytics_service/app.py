@@ -316,7 +316,7 @@ def predict():
         return jsonify({
             "1": None, "2": None, "3": None, "4": None,
             "model": "queue-workload-estimate",
-            "model_version": "queue-workload-2.0.0",
+            "model_version": "queue-workload-3.1.0",
             "estimate_quality": "UNAVAILABLE",
             "degraded": True,
             "reason": "The live estimate could not be calculated. Queue operations continue normally.",
