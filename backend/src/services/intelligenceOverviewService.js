@@ -27,8 +27,12 @@ async function getOverview() {
       'FROM clinic_resources GROUP BY resource_type, status ORDER BY resource_type, status'
     ),
     query(
-      "SELECT COUNT(*)::int AS sample_count FROM queue_entries WHERE status = 'Discharged' AND called_at IS NOT NULL " +
-      "AND discharged_at > called_at AND data_provenance = 'OPERATIONAL' AND discharged_at >= NOW() - INTERVAL '90 days'"
+      "SELECT COUNT(*)::int AS sample_count FROM (" +
+      "SELECT queue_id FROM queue_entries WHERE status = 'Discharged' AND called_at IS NOT NULL " +
+      "AND discharged_at IS NOT NULL AND discharged_at > called_at AND data_provenance = 'OPERATIONAL' " +
+      "AND discharged_at >= NOW() - INTERVAL '90 days' " +
+      "AND EXTRACT(EPOCH FROM (discharged_at - called_at)) / 60.0 BETWEEN 1 AND 240 " +
+      "ORDER BY discharged_at DESC LIMIT 500) eligible_service_samples"
     ),
     query('SELECT COUNT(*)::int AS event_count, MAX(created_at) AS last_event_at FROM operational_events'),
     query(
