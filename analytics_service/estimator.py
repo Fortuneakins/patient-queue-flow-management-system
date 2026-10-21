@@ -286,6 +286,7 @@ def estimate_metadata(
         "service_history_samples": sample_count,
         "service_time_minimum_calibration_samples": MIN_SAMPLES_FOR_CALIBRATION,
         "tier_service_minimum_samples": MIN_TIER_SAMPLES,
+        "projection_buffer_percent": int(round((BUFFER - 1) * 100)),
         "tier_service_profiles": tier_metadata,
         "staffed_doctors": staff,
         "simulated_service_slots": max(staff, active_consultations),
@@ -299,6 +300,7 @@ def estimate_metadata(
             "Historical service time is measured from first doctor call to recorded discharge, so it can include post-consultation work and is a proxy rather than pure face-to-face consultation time.",
             "Active consultations use elapsed time and conditional residuals from comparable completed durations where enough history exists; sparse history uses an explicit bounded fallback.",
             "Tier-specific medians require at least eight valid completed visits in that tier; thinner tiers use the pooled median when available, otherwise the default assumption.",
+            "A 15% planning buffer is applied after slot scheduling; it is a heuristic margin, not a calibrated prediction interval.",
             "The estimator does not predict future arrivals, diagnose patients or change the priority assigned by authorised clinical staff.",
         ],
     }
