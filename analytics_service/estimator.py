@@ -85,7 +85,7 @@ def estimate_waits(
     staff = max(0, staff)
 
     workload_exists = bool(rows)
-    if staff <= 0 and workload_exists:
+    if staff <= 0:
         return {str(tier): None for tier in range(1, 5)}
     if not workload_exists:
         return {str(tier): 0 for tier in range(1, 5)}
