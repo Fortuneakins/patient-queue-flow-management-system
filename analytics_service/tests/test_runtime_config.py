@@ -40,6 +40,11 @@ def test_production_requires_strong_internal_token_database_password_ssl_and_htt
         {"analytics_database_user": "pqfms_api"},
         {"sslmode": "disable"},
         {"cors_origins": ["http://clinic.example.org"]},
+        {"cors_origins": ["https://clinic.example.org/admin"]},
+        {"cors_origins": ["https://clinic.example.org/?unexpected=yes"]},
+        {"cors_origins": ["https://clinic.example.org/#fragment"]},
+        {"cors_origins": ["https://user:secret@clinic.example.org"]},
+        {"cors_origins": ["https://localhost"]},
         {"cors_origins": []},
     ]
     for override in cases:
