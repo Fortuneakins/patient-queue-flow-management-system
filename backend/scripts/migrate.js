@@ -37,7 +37,11 @@ async function baselineExistingSchema(client, files) {
       to_regclass('public.continuity_runs') IS NOT NULL AS has_continuity,
       (SELECT COUNT(*)::int FROM information_schema.columns
        WHERE table_schema='public' AND table_name='queue_entries'
-         AND column_name IN ('data_provenance','data_provenance_source','data_provenance_note','provenance_updated_by_staff_id','provenance_updated_at','care_pathway_id')) AS expected_queue_columns
+         AND column_name IN ('data_provenance','data_provenance_source','data_provenance_note','provenance_updated_by_staff_id','provenance_updated_at','care_pathway_id')) AS expected_queue_columns,
+      (SELECT COUNT(*)::int FROM queue_entries
+       WHERE data_provenance_source = 'LEGACY_REVIEW_REQUIRED'
+         AND provenance_updated_by_staff_id IS NOT NULL
+         AND provenance_updated_at IS NOT NULL) AS unbackfilled_review_sources
   `);
   const schema = result.rows[0];
   const requiredFlags = [
@@ -45,30 +49,46 @@ async function baselineExistingSchema(client, files) {
     'has_simulations','has_forecasts','has_communications','has_continuity'
   ];
   const missing = requiredFlags.filter(key => !schema[key]);
-  if (missing.length || Number(schema.expected_queue_columns) !== 6) {
+  if (missing.length || Number(schema.expected_queue_columns) !== 6 || Number(schema.unbackfilled_review_sources) !== 0) {
     throw new Error(
       'Existing schema does not match the reviewed baseline for migrations 001–008. Missing markers: ' +
-      [...missing, ...(Number(schema.expected_queue_columns) !== 6 ? ['expected queue columns'] : [])].join(', ') +
+      [...missing,
+        ...(Number(schema.expected_queue_columns) !== 6 ? ['expected queue columns'] : []),
+        ...(Number(schema.unbackfilled_review_sources) !== 0 ? ['review-source backfill is incomplete; apply migration 008 explicitly before baseline'] : [])
+      ].join(', ') +
       '. Do not baseline this database; review its migration history first.'
     );
   }
 
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS pqfms_schema_migrations (
-      filename VARCHAR(200) PRIMARY KEY,
-      sha256 CHAR(64) NOT NULL,
-      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      applied_by VARCHAR(100) NOT NULL DEFAULT CURRENT_USER
-    )
-  `);
-  for (const filename of files) {
-    const sql = fs.readFileSync(path.join(migrationDirectory, filename), 'utf8');
-    await client.query(
-      'INSERT INTO pqfms_schema_migrations (filename, sha256, applied_by) VALUES ($1, $2, $3) ON CONFLICT (filename) DO NOTHING',
-      [filename, checksum(sql), 'MANUALLY_REVIEWED_BASELINE']
-    );
+  // Only mark the schema version that this baseline procedure explicitly knows.
+  // Future migrations must remain pending and execute normally.
+  const baselineFiles = files.filter(filename => Number(filename.slice(0, 3)) >= 1 && Number(filename.slice(0, 3)) <= 8);
+  if (baselineFiles.length !== 8) {
+    throw new Error('Safe baseline requires all eight reviewed migrations (001–008). Review and update the baseline procedure before continuing.');
   }
-  console.log(`Baselined ${files.length} migration files after schema-marker checks and explicit confirmation. No migration SQL was run.`);
+  await client.query('BEGIN');
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pqfms_schema_migrations (
+        filename VARCHAR(200) PRIMARY KEY,
+        sha256 CHAR(64) NOT NULL,
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        applied_by VARCHAR(100) NOT NULL DEFAULT CURRENT_USER
+      )
+    `);
+    for (const filename of baselineFiles) {
+      const sql = fs.readFileSync(path.join(migrationDirectory, filename), 'utf8');
+      await client.query(
+        'INSERT INTO pqfms_schema_migrations (filename, sha256, applied_by) VALUES ($1, $2, $3) ON CONFLICT (filename) DO NOTHING',
+        [filename, checksum(sql), 'MANUALLY_REVIEWED_BASELINE']
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  }
+  console.log(`Baselined ${baselineFiles.length} reviewed migration files (001–008). No migration SQL was run.`);
 }
 
 async function main() {
