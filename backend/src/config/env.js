@@ -10,7 +10,7 @@ function required(name) {
 }
 
 const { resolveDataProvenancePolicy } = require('./dataProvenancePolicy');
-const { asBoolean, parseTrustProxyHops, validateProductionConfig } = require('./runtimePolicy');
+const { asBoolean, parseTrustProxyHops, parseDelayReviewThresholdMinutes, validateProductionConfig } = require('./runtimePolicy');
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const dataProvenancePolicy = resolveDataProvenancePolicy({
   nodeEnv: NODE_ENV,
@@ -35,6 +35,7 @@ const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER || '';
 
 
 const TRUST_PROXY_HOPS = parseTrustProxyHops(process.env.TRUST_PROXY_HOPS);
+const DELAY_REVIEW_THRESHOLD_MINUTES = parseDelayReviewThresholdMinutes(process.env.DELAY_REVIEW_THRESHOLD_MINUTES);
 validateProductionConfig({
   nodeEnv: NODE_ENV,
   jwtSecret: JWT_SECRET,
@@ -59,6 +60,7 @@ module.exports = {
   DATA_PROVENANCE_POLICY_PRODUCTION_GUARDED: dataProvenancePolicy.productionGuarded,
   ALLOW_NON_OPERATIONAL_PROVENANCE_MODE: asBoolean(process.env.ALLOW_NON_OPERATIONAL_PROVENANCE_MODE),
   TRUST_PROXY_HOPS,
+  DELAY_REVIEW_THRESHOLD_MINUTES,
   DB_SSL,
   PORT: Number(process.env.PORT || 5000),
   JWT_SECRET,
