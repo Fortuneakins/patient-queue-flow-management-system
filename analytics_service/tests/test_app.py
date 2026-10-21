@@ -19,8 +19,9 @@ def test_predict_keeps_legacy_tier_fields_and_exposes_model_evidence(monkeypatch
     )
     monkeypatch.setattr(service, "historical_rows", lambda: _history())
     monkeypatch.setattr(service, "staffing_profile", lambda: {"count": 1, "source": "SHIFT_SCHEDULE", "warning": None})
+    monkeypatch.setattr(service, "INTERNAL_SERVICE_TOKEN", "test-internal-token")
 
-    response = service.app.test_client().get("/api/predict")
+    response = service.app.test_client().get("/api/predict", headers={"X-Internal-Service-Token": "test-internal-token"})
     payload = response.get_json()
 
     assert response.status_code == 200
@@ -38,8 +39,9 @@ def test_predict_returns_degraded_not_false_zero_confidence_when_database_fails(
         raise RuntimeError("database unavailable")
 
     monkeypatch.setattr(service, "db_rows", raise_database_error)
+    monkeypatch.setattr(service, "INTERNAL_SERVICE_TOKEN", "test-internal-token")
 
-    response = service.app.test_client().get("/api/predict")
+    response = service.app.test_client().get("/api/predict", headers={"X-Internal-Service-Token": "test-internal-token"})
     payload = response.get_json()
 
     assert response.status_code == 200
@@ -63,8 +65,9 @@ def test_predict_explains_configured_staffing_fallback(monkeypatch):
             "warning": "The shift service could not verify staffing. The estimate uses the configured fallback of 2 staffed stations.",
         },
     )
+    monkeypatch.setattr(service, "INTERNAL_SERVICE_TOKEN", "test-internal-token")
 
-    response = service.app.test_client().get("/api/predict")
+    response = service.app.test_client().get("/api/predict", headers={"X-Internal-Service-Token": "test-internal-token"})
     payload = response.get_json()
 
     assert response.status_code == 200
@@ -119,3 +122,25 @@ def test_staffing_profile_falls_back_when_shift_service_returns_invalid_shape(mo
     assert profile["source"] == "CONFIGURED_FALLBACK"
     assert "could not provide a verified on-duty count" in profile["warning"]
     assert "configured fallback of 2 staffed station(s)" in profile["warning"]
+
+
+
+def test_predict_rejects_requests_without_the_internal_service_token(monkeypatch):
+    monkeypatch.setattr(service, "INTERNAL_SERVICE_TOKEN", "expected-token")
+
+    response = service.app.test_client().get("/api/predict")
+
+    assert response.status_code == 401
+    assert response.get_json()["error"] == "Authentication required."
+
+
+def test_predict_fails_closed_when_the_internal_service_token_is_not_configured(monkeypatch):
+    monkeypatch.setattr(service, "INTERNAL_SERVICE_TOKEN", "")
+
+    response = service.app.test_client().get(
+        "/api/predict",
+        headers={"X-Internal-Service-Token": "unexpected-token"},
+    )
+
+    assert response.status_code == 503
+    assert "not configured" in response.get_json()["error"]
