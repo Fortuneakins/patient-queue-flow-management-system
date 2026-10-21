@@ -67,3 +67,23 @@ test('requires complete Twilio settings if SMS is enabled', () => {
     smsEnabled: true
   }), /Twilio credentials/);
 });
+
+
+test('rejects placeholder database credentials in production', () => {
+  assert.throws(() => validateProductionConfig({
+    ...validProductionConfig,
+    databasePassword: 'REPLACE_WITH_DATABASE_SECRET'
+  }), /cannot use a placeholder/);
+  assert.throws(() => validateProductionConfig({
+    ...validProductionConfig,
+    databaseUrl: 'postgresql://pqfms:REPLACE_WITH_DATABASE_SECRET@db.example.org:5432/pqfms',
+    databasePassword: ''
+  }), /non-placeholder database credentials/);
+});
+
+test('rejects malformed production PostgreSQL URLs', () => {
+  assert.throws(() => validateProductionConfig({
+    ...validProductionConfig,
+    databaseUrl: 'https://user:secret@db.example.org:5432/pqfms'
+  }), /valid PostgreSQL connection URL/);
+});
