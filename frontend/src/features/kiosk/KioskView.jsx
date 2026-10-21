@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Icon from '../../components/ui/Icon';
 import { Button, Card, Field, inputClass, Badge, Spinner } from '../../components/ui';
 import { firstName } from '../../utils/format';
@@ -10,6 +10,12 @@ export default function KioskView({ publicQueue, predictions, onVerify, onCheckI
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [ticket, setTicket] = useState(null);
+
+  useEffect(() => {
+    if (!ticket) return undefined;
+    const timeoutId = window.setTimeout(() => setTicket(null), 60_000);
+    return () => window.clearTimeout(timeoutId);
+  }, [ticket]);
 
   async function submit(event) {
     event.preventDefault();
@@ -54,7 +60,7 @@ export default function KioskView({ publicQueue, predictions, onVerify, onCheckI
           </div>
           <div className="kiosk-ticket-success-actions">
             <Button onClick={() => setTicket(null)} icon="refresh">Return to Kiosk</Button>
-            <p>Keep your ticket number available for reference.</p>
+            <p>Keep your ticket number available for reference. For privacy, this screen returns to the kiosk automatically after 60 seconds.</p>
           </div>
         </Card>
       </main>

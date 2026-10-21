@@ -3,15 +3,24 @@ const { allocateDailyTicket } = require('./ticketService');
 const { validateSymptoms, validateTier } = require('../utils/validation');
 const { sendCallNotification } = require('./smsService');
 const { appendOperationalEvent } = require('./operationalEventService');
+const env = require('../config/env');
+const { queueVisibilityPredicate } = require('../config/dataProvenancePolicy');
 
+const queueVisibility = queueVisibilityPredicate(env.DATA_PROVENANCE_MODE, 'q');
 const PUBLIC_QUEUE_SELECT = `
   SELECT q.queue_id, q.ticket_number, q.status, q.priority_level, q.queued_at
   FROM queue_entries q
   WHERE q.status IN ('Waiting', 'In-Consultation')
+    AND ${queueVisibility}
 `;
 
 async function getActiveTicket(client, patientId) {
-  const result = await client.query(`SELECT ticket_number FROM queue_entries WHERE patient_id = $1 AND status <> 'Discharged' LIMIT 1`, [patientId]);
+  const result = await client.query(
+    `SELECT q.ticket_number FROM queue_entries q
+     WHERE q.patient_id = $1 AND q.status <> 'Discharged' AND ${queueVisibility}
+     LIMIT 1`,
+    [patientId]
+  );
   return result.rows[0]?.ticket_number || null;
 }
 
@@ -32,10 +41,12 @@ async function checkIn({ patientId, identificationNumber, symptoms, requestedTic
     const ticketNumber = await allocateDailyTicket(client, ticketDate);
     try {
       const result = await client.query(
-        `INSERT INTO queue_entries (patient_id, ticket_date, ticket_number, status, priority_level, symptoms)
-         VALUES ($1, $2, $3, 'Waiting', NULL, $4)
-         RETURNING queue_id, patient_id, ticket_date, ticket_number, status, priority_level, symptoms, queued_at`,
-        [resolvedPatientId, ticketDate, ticketNumber, cleanSymptoms]
+        `INSERT INTO queue_entries
+           (patient_id, ticket_date, ticket_number, status, priority_level, symptoms, data_provenance, data_provenance_source)
+         VALUES ($1, $2, $3, 'Waiting', NULL, $4, $5, 'SERVER_POLICY')
+         RETURNING queue_id, patient_id, ticket_date, ticket_number, status, priority_level, symptoms,
+                   queued_at, data_provenance, data_provenance_source`,
+        [resolvedPatientId, ticketDate, ticketNumber, cleanSymptoms, env.DATA_PROVENANCE_MODE]
       );
       const visit = result.rows[0];
       const pathway = await client.query("SELECT pathway_id FROM care_pathways WHERE pathway_code = $1 AND is_active = TRUE LIMIT 1", ['OPD_STANDARD']);
@@ -57,7 +68,12 @@ async function checkIn({ patientId, identificationNumber, symptoms, requestedTic
         entityType: 'QUEUE_VISIT',
         entityId: visit.queue_id,
         toState: 'Waiting',
-        metadata: { ticket_number: ticketNumber }
+        metadata: {
+          ticket_number: ticketNumber,
+          data_provenance: visit.data_provenance,
+          data_provenance_source: visit.data_provenance_source,
+          provenance_policy_mode: env.DATA_PROVENANCE_MODE
+        }
       });
       return { duplicate: false, visit };
     } catch (error) {
@@ -90,6 +106,7 @@ async function listStaffQueue() {
     LEFT JOIN clinic_staff c ON c.staff_id = q.called_by_staff_id
     LEFT JOIN clinic_staff d ON d.staff_id = q.discharged_by_staff_id
     WHERE q.status IN ('Waiting', 'In-Consultation')
+      AND ${queueVisibility}
     ORDER BY ${queueOrderSql('q')}`);
   return result.rows;
 }
@@ -104,7 +121,7 @@ async function listPublicQueue() {
 }
 
 async function findActiveForHistory() {
-  const result = await query(`SELECT q.queue_id, q.ticket_number, q.status, q.priority_level, q.symptoms, q.queued_at FROM queue_entries q WHERE q.status IN ('Waiting','In-Consultation') ORDER BY ${queueOrderSql('q')}`);
+  const result = await query(`SELECT q.queue_id, q.ticket_number, q.status, q.priority_level, q.symptoms, q.queued_at FROM queue_entries q WHERE q.status IN ('Waiting','In-Consultation') AND ${queueVisibility} ORDER BY ${queueOrderSql('q')}`);
   return result.rows;
 }
 
@@ -247,7 +264,8 @@ async function overview() {
       COUNT(*) FILTER (WHERE status = 'Discharged' AND priority_level = 2 AND discharged_at::date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::int AS discharged_tier_2,
       COUNT(*) FILTER (WHERE status = 'Discharged' AND priority_level = 3 AND discharged_at::date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::int AS discharged_tier_3,
       COUNT(*) FILTER (WHERE status = 'Discharged' AND priority_level = 4 AND discharged_at::date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::int AS discharged_tier_4
-    FROM queue_entries`);
+    FROM queue_entries q
+    WHERE ${queueVisibility}`);
   return result.rows[0];
 }
 
@@ -258,7 +276,7 @@ async function dischargeLog({ limit = 100, offset = 0 }) {
     FROM queue_entries q
     JOIN patients p ON p.patient_id = q.patient_id
     LEFT JOIN clinic_staff d ON d.staff_id = q.discharged_by_staff_id
-    WHERE q.status = 'Discharged'
+    WHERE q.status = 'Discharged' AND ${queueVisibility}
     ORDER BY q.discharged_at DESC LIMIT $1 OFFSET $2`, [Math.min(Number(limit) || 100, 200), Math.max(Number(offset) || 0, 0)]);
   return result.rows;
 }
@@ -269,6 +287,7 @@ async function staffPerformance() {
     FROM clinic_staff cs
     JOIN queue_entries q ON q.discharged_by_staff_id = cs.staff_id
       AND q.status = 'Discharged'
+      AND q.data_provenance = 'OPERATIONAL'
       AND q.discharged_at::date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date
     GROUP BY cs.staff_id, cs.username, cs.role
     ORDER BY discharged_today DESC, cs.username ASC`);

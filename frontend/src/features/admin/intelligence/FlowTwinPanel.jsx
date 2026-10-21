@@ -13,6 +13,33 @@ const numberFields = [
   ['seed', 'Repeatable scenario seed', 1, 2147483647]
 ];
 
+const scenarioPresets = [
+  {
+    name: 'Demand surge',
+    description: 'Test a sudden rise in arrivals with current modelled capacity.',
+    icon: 'users',
+    values: { name: 'Demand surge', horizon_minutes: '90', extra_arrivals: '20', additional_stations: '0', station_loss: '0', doctor_delay_minutes: '0', seed: '20261015' }
+  },
+  {
+    name: 'Reduced capacity',
+    description: 'Explore a scenario where one station is temporarily unavailable.',
+    icon: 'settings',
+    values: { name: 'Reduced capacity', horizon_minutes: '90', extra_arrivals: '0', additional_stations: '0', station_loss: '1', doctor_delay_minutes: '0', seed: '20261015' }
+  },
+  {
+    name: 'Consultation delay',
+    description: 'Explore the impact of a 30-minute doctor delay.',
+    icon: 'clock',
+    values: { name: 'Consultation delay', horizon_minutes: '90', extra_arrivals: '0', additional_stations: '0', station_loss: '0', doctor_delay_minutes: '30', seed: '20261015' }
+  },
+  {
+    name: 'Capacity response',
+    description: 'Compare a demand rise with one additional hypothetical station.',
+    icon: 'checkCircle',
+    values: { name: 'Capacity response', horizon_minutes: '90', extra_arrivals: '20', additional_stations: '1', station_loss: '0', doctor_delay_minutes: '0', seed: '20261015' }
+  }
+];
+
 function Metric({ label, value, suffix = '', icon = 'chart' }) {
   const missing = value === null || value === undefined;
   const explanatory = typeof value === 'string' && value.length > 12;
@@ -47,6 +74,21 @@ function displayDeltaFallback(baselineValue, scenarioValue) {
   if (baselineValue === null || baselineValue === undefined) return 'No baseline sample';
   if (scenarioValue === null || scenarioValue === undefined) return 'No scenario sample';
   return 'Not available';
+}
+
+function plainEnglishDelta(baselineValue, scenarioValue, suffix = '') {
+  if (baselineValue === null || baselineValue === undefined || scenarioValue === null || scenarioValue === undefined) {
+    return 'Not comparable from the available baseline data.';
+  }
+  const baselineNumber = Number(baselineValue);
+  const scenarioNumber = Number(scenarioValue);
+  if (!Number.isFinite(baselineNumber) || !Number.isFinite(scenarioNumber)) {
+    return 'Not comparable from the available data.';
+  }
+  const delta = Number((scenarioNumber - baselineNumber).toFixed(1));
+  if (delta === 0) return `No modelled change (${displayValue(scenarioNumber, suffix)}).`;
+  const signed = `${delta > 0 ? '+' : ''}${delta}${suffix}`;
+  return `${displayValue(baselineNumber, suffix)} → ${displayValue(scenarioNumber, suffix)} (${signed} vs baseline).`;
 }
 
 // Older saved runs may predate the persisted comparison-delta fields. Rebuild
@@ -120,6 +162,12 @@ export default function FlowTwinPanel({ token }) {
   // The API's recent-simulation feed also includes Synthetic Lab batches.
   // FlowTwin can only render its own SCENARIO output contract.
   const flowTwinRecent = recent.filter(item => item.simulation_kind === 'SCENARIO');
+  const scenarioDrivers = [
+    Number(result?.input?.extra_arrivals) > 0 ? `${result.input.extra_arrivals} additional arrivals` : null,
+    Number(result?.input?.additional_stations) > 0 ? `${result.input.additional_stations} hypothetical additional station(s)` : null,
+    Number(result?.input?.station_loss) > 0 ? `${result.input.station_loss} station(s) unavailable` : null,
+    Number(result?.input?.doctor_delay_minutes) > 0 ? `${result.input.doctor_delay_minutes}-minute doctor delay` : null
+  ].filter(Boolean);
   const resolvedDeltas = {
     completed: resolveDelta(compare?.projected_completed_delta, baseline?.projected_completed, scenario?.projected_completed),
     remaining: resolveDelta(compare?.projected_remaining_delta, baseline?.projected_remaining, scenario?.projected_remaining),
@@ -148,6 +196,32 @@ export default function FlowTwinPanel({ token }) {
           </div>
           <Badge tone="teal">Deterministic model</Badge>
         </div>
+        <section className="mt-5 rounded-2xl border border-teal-100 bg-teal-50/50 p-4 md:p-5" aria-labelledby="flowtwin-presets-title">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="eyebrow">Guided start</p>
+              <h3 id="flowtwin-presets-title" className="font-display text-base font-bold">Choose a what-if scenario</h3>
+              <p className="mt-1 text-sm text-stone-600">Load a sensible starting point first, then adjust any values below before running it.</p>
+            </div>
+            <Badge tone="teal">No live queue changes</Badge>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {scenarioPresets.map(preset => (
+              <button
+                key={preset.name}
+                type="button"
+                onClick={() => { setForm(preset.values); setResult(null); setError(''); }}
+                aria-label={`Use the ${preset.name} scenario preset`}
+                className="group flex h-full flex-col items-start rounded-xl border border-stone-200 bg-white p-3 text-left transition hover:border-teal-400 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 text-teal-800"><Icon name={preset.icon} size={18} /></span>
+                <strong className="mt-3 text-sm text-stone-900">{preset.name}</strong>
+                <span className="mt-1 flex-1 text-xs leading-relaxed text-stone-500">{preset.description}</span>
+                <span className="mt-3 text-xs font-bold text-teal-800">Use starting values →</span>
+              </button>
+            ))}
+          </div>
+        </section>
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <div className="md:col-span-2 xl:col-span-3">
             <Field label="Scenario name" required><input className={inputClass} maxLength={120} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></Field>
@@ -180,6 +254,27 @@ export default function FlowTwinPanel({ token }) {
 
       {result && <Card className="flowtwin-results-card space-y-5 p-5 md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eyebrow">Simulation result</p><h2 className="font-display text-lg font-bold">{result.name}</h2><p className="mt-1 text-xs text-stone-500">Simulation #{result.simulation_id} · {result.model_version} · seed {result.input?.seed}</p></div><Badge tone={scenario?.model_quality === 'OBSERVATION_BASED' ? 'green' : 'orange'}>{scenario?.model_quality?.replaceAll('_', ' ') || 'Estimate'}</Badge></div>
+
+        <section className="rounded-xl border border-teal-100 bg-teal-50/50 p-4 md:p-5" aria-labelledby="flowtwin-plain-summary">
+          <p className="eyebrow">Plain-English readout</p>
+          <h3 id="flowtwin-plain-summary" className="font-display text-base font-bold">What changed against the baseline?</h3>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="rounded-lg border border-white bg-white/80 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Projected completions</p>
+              <p className="mt-2 text-sm font-semibold text-stone-900">{plainEnglishDelta(baseline?.projected_completed, scenario?.projected_completed)}</p>
+            </div>
+            <div className="rounded-lg border border-white bg-white/80 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Remaining queue</p>
+              <p className="mt-2 text-sm font-semibold text-stone-900">{plainEnglishDelta(baseline?.projected_remaining, scenario?.projected_remaining)}</p>
+            </div>
+            <div className="rounded-lg border border-white bg-white/80 p-3">
+              <p className="text-xs font-bold uppercase tracking-wide text-stone-500">P90 wait to service start</p>
+              <p className="mt-2 text-sm font-semibold text-stone-900">{plainEnglishDelta(baseline?.p90_additional_wait_minutes, scenario?.p90_additional_wait_minutes, ' min')}</p>
+            </div>
+          </div>
+          <p className="mt-3 text-sm text-stone-700"><strong>Scenario drivers:</strong> {scenarioDrivers.length ? scenarioDrivers.join(' · ') : 'No additional demand, capacity loss, extra stations or doctor delay configured.'}</p>
+          <p className="mt-2 text-xs leading-relaxed text-stone-500">This is a comparison of model outputs, not a promise of actual clinic outcomes. A missing baseline measure is shown as not comparable rather than treated as zero.</p>
+        </section>
 
         <section className="flowtwin-projection-section">
           <div className="flowtwin-section-title"><div><p className="eyebrow">Projected scenario</p><h3>Estimated service picture</h3></div><span className="flowtwin-model-tag"><Icon name="info" size={14} /> Model output</span></div>

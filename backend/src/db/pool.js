@@ -3,10 +3,14 @@ const env = require('../config/env');
 
 const pool = new Pool({
   ...(env.DATABASE_URL ? { connectionString: env.DATABASE_URL } : env.DB),
+  ...(env.DB_SSL ? { ssl: { rejectUnauthorized: true } } : {}),
   max: 15,
   idleTimeoutMillis: 10000,
   connectionTimeoutMillis: 3000,
-  options: '-c timezone=Africa/Johannesburg'
+  query_timeout: 15000,
+  statement_timeout: 15000,
+  application_name: 'pqfms-api',
+  options: '-c timezone=Africa/Johannesburg -c idle_in_transaction_session_timeout=10000'
 });
 
 async function query(text, params) {

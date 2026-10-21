@@ -1,6 +1,6 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
-const ANALYTICS_BASE_URL = (import.meta.env.VITE_ANALYTICS_BASE_URL || 'http://localhost:5001').replace(/\/$/, '');
-export const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_BASE_URL).replace(/\/$/, '');
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000').replace(/\/$/, '');
+const ANALYTICS_BASE_URL = (import.meta.env.VITE_ANALYTICS_BASE_URL ?? 'http://localhost:5001').replace(/\/$/, '');
+export const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL ?? API_BASE_URL).replace(/\/$/, '');
 
 export class ApiError extends Error {
   constructor(status, message, data = null) {
@@ -93,6 +93,8 @@ export const api = {
   recordFlowForecast: (token, body) => request('/api/intelligence/forecasts', authJsonOptions(token, body)),
   forecastTruth: (token, limit = 20) => request(`/api/intelligence/forecasts/truth?limit=${limit}`, authOptions(token)),
   fairnessMetrics: token => request('/api/intelligence/fairness', authOptions(token)),
+  queueProvenance: (token, limit = 50, provenance = '') => request(`/api/intelligence/data-provenance/queue-records?limit=${limit}${provenance ? `&provenance=${encodeURIComponent(provenance)}` : ''}`, authOptions(token)),
+  updateQueueProvenance: (token, queueId, body) => request(`/api/intelligence/data-provenance/queue-records/${queueId}`, authJsonOptions(token, body, 'PATCH')),
   listReferrals: (token, status = '') => request(`/api/intelligence/referrals${status ? `?status=${encodeURIComponent(status)}` : ''}`, authOptions(token)),
   createReferral: (token, body) => request('/api/intelligence/referrals', authJsonOptions(token, body)),
   updateReferral: (token, id, body) => request(`/api/intelligence/referrals/${id}`, authJsonOptions(token, body, 'PATCH')),

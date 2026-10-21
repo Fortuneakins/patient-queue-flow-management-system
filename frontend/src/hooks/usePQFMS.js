@@ -27,11 +27,13 @@ export function usePQFMS() {
   });
 
   const [predictions, setPredictions] = useState({
-    '1': 0,
-    '2': 0,
-    '3': 0,
-    '4': 0,
-    degraded: false,
+    '1': null,
+    '2': null,
+    '3': null,
+    '4': null,
+    degraded: true,
+    estimate_quality: 'LOADING',
+    reason: 'Waiting for a live operational estimate.',
     staffed_doctors: 0
   });
 

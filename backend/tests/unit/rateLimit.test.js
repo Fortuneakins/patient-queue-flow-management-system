@@ -41,3 +41,41 @@ test('rate limiter caps a single identity and allows a different identity', () =
   assert.equal(otherStaff.statusCode, 200);
   assert.equal(passed, 3);
 });
+
+
+test('caps unique client keys without evicting active budgets or growing memory', () => {
+  let now = 1000;
+  const limiter = createRateLimiter({ windowMs: 60_000, max: 10, maxKeys: 2, now: () => now });
+  let passed = 0;
+  const next = () => { passed += 1; };
+
+  limiter({ ip: '192.0.2.1' }, fakeResponse(), next);
+  limiter({ ip: '192.0.2.2' }, fakeResponse(), next);
+  const response = fakeResponse();
+  limiter({ ip: '192.0.2.3' }, response, next);
+
+  assert.equal(passed, 2);
+  assert.equal(response.statusCode, 429);
+  assert.match(response.body.error, /capacity is temporarily exhausted/);
+  assert.ok(Number(response.headers['Retry-After']) > 0);
+});
+
+test('expired keys are cleared to allow new clients once the window has elapsed', () => {
+  let now = 1000;
+  const limiter = createRateLimiter({ windowMs: 1000, max: 1, maxKeys: 1, now: () => now });
+  let passed = 0;
+  const next = () => { passed += 1; };
+
+  limiter({ ip: '192.0.2.1' }, fakeResponse(), next);
+  now = 2000;
+  const response = fakeResponse();
+  limiter({ ip: '192.0.2.2' }, response, next);
+  assert.equal(response.statusCode, 200);
+  assert.equal(passed, 2);
+});
+
+test('rejects invalid limiter settings at construction time', () => {
+  assert.throws(() => createRateLimiter({ windowMs: 0, max: 10 }), /windowMs/);
+  assert.throws(() => createRateLimiter({ windowMs: 1000, max: 0 }), /max must/);
+  assert.throws(() => createRateLimiter({ windowMs: 1000, max: 10, maxKeys: 0 }), /maxKeys/);
+});

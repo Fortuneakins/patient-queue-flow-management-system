@@ -59,7 +59,7 @@ Pop-Location
 
 Write-Host 'Installing analytics dependencies...' -ForegroundColor DarkCyan
 Push-Location analytics_service
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt -r requirements-dev.txt
 Pop-Location
 
 Write-Host 'Dependencies installed and local secrets provisioned.' -ForegroundColor Green

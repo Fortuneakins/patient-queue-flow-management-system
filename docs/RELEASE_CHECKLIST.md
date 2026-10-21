@@ -16,13 +16,19 @@ Use this checklist immediately before creating the GitHub release that is refere
 - [ ] Confirm no API keys, database passwords or JWT secrets are committed.
 - [ ] Rotate any credential that was ever present in an untrusted copy of the project.
 - [ ] Confirm `JWT_SECRET` is generated locally and is at least 32 characters.
-- [ ] Confirm `INTERNAL_SERVICE_TOKEN` is configured for the analytics-to-API integration.
-- [ ] Keep Twilio disabled unless real SMS testing is required.
+- [ ] Confirm `INTERNAL_SERVICE_TOKEN` is a unique secret distinct from `JWT_SECRET`.
+- [ ] Confirm production uses `DATA_PROVENANCE_MODE=OPERATIONAL`; synthetic/demo overrides are prohibited.
+- [ ] Confirm PostgreSQL TLS is enabled and verified, and production origins are HTTPS.
+- [ ] Confirm seeded demo accounts are absent and the first administrator was provisioned through the audited one-time bootstrap utility.
+- [ ] Confirm only the HTTPS gateway exposes host ports; API, analytics and PostgreSQL are private.
+- [ ] Confirm Twilio remains disabled unless consent, credentials, delivery testing and operating procedures are approved.
+- [ ] Confirm MFA or a formally documented accepted compensating control is approved before real-clinic use.
 
 ## Reproducibility
 
 - [ ] Run `.\scripts\setup.ps1` from a fresh clone.
-- [ ] Run `.\scripts\database.ps1`.
+- [ ] For a fresh development database, run `.\scripts\database.ps1`; this must never run in production.
+- [ ] Verify `pqfms_schema_migrations` contains filenames and checksums for the applied migration set.
 - [ ] Confirm migrations apply from an empty database.
 - [ ] Confirm synthetic seed data loads.
 - [ ] Start all services with `.\scripts\start-all.ps1`.
@@ -37,6 +43,20 @@ Use this checklist immediately before creating the GitHub release that is refere
 - [ ] `npm --prefix frontend run lint`
 - [ ] `npm --prefix frontend run build`
 - [ ] `npm run load-test` using the NFR-05 configuration.
+- [ ] Validate `compose.production.yml` with `docker compose --env-file .env.production -f compose.production.yml config --quiet`.
+- [ ] Build the API, analytics and frontend container images.
+- [ ] Inspect container health checks and run a staging smoke test through the HTTPS entry point.
+- [ ] Verify API and analytics ports are not publicly exposed.
+
+## Production-only operational gates
+
+- [ ] Validate TLS, DNS, security headers, origin policy and reverse-proxy IP handling in the real deployment environment.
+- [ ] Perform an independent security assessment/penetration test and privacy/legal review.
+- [ ] Demonstrate encrypted backups and complete a restore rehearsal to a separate database.
+- [ ] Record approved recovery-point and recovery-time objectives, monitoring/alerting and incident ownership.
+- [ ] Obtain clinician/operations sign-off for queue workflow, prioritisation semantics, accessibility, patient-facing wording and downtime procedures.
+- [ ] Validate prediction error on representative independently captured operational data, with sample sizes, uncertainty and drift monitoring; synthetic data must not count as operational evidence.
+- [ ] Record written approval from the responsible organisation before entering real patient data.
 
 ## Manual acceptance
 

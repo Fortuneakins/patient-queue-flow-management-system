@@ -53,12 +53,11 @@ export default function ReferralRelayPanel({ token, canManage = false }) {
             <h2 className="font-display text-lg font-bold">Create referral record</h2>
             <p className="mt-1 text-sm text-stone-500">Tracks a hand-off inside this PQFMS installation. Choose an active visit to prefill the linked patient; this does not send a referral to an external health system.</p>
             <div className="mt-4 space-y-3">
-              <Field label="Patient ID" required><input className={inputClass} type="number" min="1" value={form.patient_id} onChange={e => setForm({ ...form, patient_id: e.target.value })}/></Field>
               <Field label="Link an active visit" hint="Optional; selecting one fills in the patient and queue IDs."><select className={inputClass} value={form.queue_id} onChange={e => {
                   const selected = activeVisits.find(visit => String(visit.queue_id) === e.target.value);
                   setForm({ ...form, queue_id: e.target.value, patient_id: selected ? String(selected.patient_id) : form.patient_id });
                 }}><option value="">No active visit selected</option>{activeVisits.map(visit => <option key={visit.queue_id} value={visit.queue_id}>Ticket {visit.ticket_number} · {visit.full_name} · {visit.status}</option>)}</select></Field>
-              <Field label="Patient record ID" required><input className={inputClass} type="number" min="1" value={form.patient_id} onChange={e => setForm({ ...form, patient_id: e.target.value })}/></Field>
+              <Field label="Patient record ID" required hint="Auto-filled when you select an active visit; otherwise enter the numeric ID from the patient directory."><input className={inputClass} type="number" min="1" value={form.patient_id} onChange={e => setForm({ ...form, patient_id: e.target.value })}/></Field>
               <Field label="Receiving service" required><input className={inputClass} maxLength={160} value={form.referred_to} onChange={e => setForm({ ...form, referred_to: e.target.value })} placeholder="Service or facility name"/></Field>
               <Field label="Operational referral reason" required hint="Avoid unnecessary sensitive details"><textarea className={inputClass + ' min-h-24'} maxLength={1000} value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })}/></Field>
               <Field label="Follow-up due" hint="Optional local date and time"><input className={inputClass} type="datetime-local" value={form.due_at} onChange={e => setForm({ ...form, due_at: e.target.value })}/></Field>

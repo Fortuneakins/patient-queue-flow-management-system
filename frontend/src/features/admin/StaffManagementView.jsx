@@ -10,6 +10,19 @@ const STATUS_FILTERS = [
   { value: 'potential-test', label: 'Potential test accounts' }
 ];
 
+const productionPasswordPolicy = import.meta.env.PROD;
+const minimumStaffPasswordLength = productionPasswordPolicy ? 14 : 8;
+
+function validStaffPassword(value) {
+  if (value.length < minimumStaffPasswordLength) return false;
+  if (!productionPasswordPolicy) return true;
+  return /[a-z]/.test(value)
+    && /[A-Z]/.test(value)
+    && /[0-9]/.test(value)
+    && /[^A-Za-z0-9]/.test(value)
+    && !/DemoPass2026!|password|change-me/i.test(value);
+}
+
 function isPotentialTestAccount(item) {
   return /^temp_\d+$/i.test(String(item.username || '')) && !String(item.employee_id || '').trim();
 }
@@ -58,6 +71,12 @@ export default function StaffManagementView({
 
   async function create() {
     setError('');
+    if (!validStaffPassword(form.password)) {
+      setError(productionPasswordPolicy
+        ? 'Temporary password must be at least 14 characters and include uppercase, lowercase, a number and a special character. Do not use demo or placeholder passwords.'
+        : 'Temporary password must be at least 8 characters.');
+      return;
+    }
     try {
       await onCreateStaff(form);
       setForm({ username: '', password: '', role: 'RECEPTION', contact_no: '', employee_id: '' });
@@ -120,7 +139,7 @@ export default function StaffManagementView({
             <p className="eyebrow">Account administration</p>
             <h2 className="font-display text-lg font-bold">Create staff account</h2>
             <p className="mt-1 text-xs text-stone-500">
-              New accounts receive a temporary password and must change it at first sign-in.
+              New accounts receive a temporary password and must change it at first sign-in. {productionPasswordPolicy ? 'Use 14+ characters with uppercase, lowercase, a number and a special character.' : 'Use at least 8 characters in this local development build.'}
             </p>
           </div>
 
@@ -148,6 +167,7 @@ export default function StaffManagementView({
                 className={inputClass}
                 type="password"
                 name="new-staff-temporary-password"
+                minLength={minimumStaffPasswordLength}
                 autoComplete="new-password"
                 value={form.password}
                 onChange={event => setForm({ ...form, password: event.target.value })}

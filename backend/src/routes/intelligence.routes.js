@@ -8,6 +8,7 @@ const flow = require('../services/flowAnalyticsService');
 const referrals = require('../services/referralService');
 const contacts = require('../services/contactService');
 const continuity = require('../services/continuityService');
+const provenance = require('../services/dataProvenanceService');
 const { createRateLimiter } = require('../utils/rateLimit');
 const router = express.Router();
 router.use(authenticate, requireReadyPassword);
@@ -40,6 +41,8 @@ router.post('/synthetic-lab/run', admin, endpoint(req => flow.runLab(req.body ||
 router.post('/forecasts', admin, endpoint(req => flow.recordForecast(req.body || {}, req.user.staff_id), 201));
 router.get('/forecasts/truth', admin, endpoint(req => flow.getForecastTruth(req.query.limit)));
 router.get('/fairness', admin, endpoint(() => flow.fairnessMetrics()));
+router.get('/data-provenance/queue-records', admin, endpoint(req => provenance.listQueueProvenance({ limit: req.query.limit, provenance: req.query.provenance || null })));
+router.patch('/data-provenance/queue-records/:queue_id', admin, endpoint(req => provenance.updateQueueProvenance(req.params.queue_id, req.body || {}, req.user.staff_id)));
 router.get('/referrals', clinical, endpoint(req => referrals.listReferrals({ status: req.query.status, limit: req.query.limit })));
 router.post('/referrals', authorizeRoles('ADMIN','DOCTOR'), endpoint(req => referrals.createReferral(req.body || {}, req.user.staff_id), 201));
 router.patch('/referrals/:referral_id', authorizeRoles('ADMIN','DOCTOR'), endpoint(req => referrals.updateReferral(req.params.referral_id, req.body || {}, req.user.staff_id)));

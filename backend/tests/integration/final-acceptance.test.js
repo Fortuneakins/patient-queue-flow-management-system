@@ -302,14 +302,14 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
       assert.equal(after.response.status, 401);
     });
 
-    await t.test('permissions take effect on the next sign-in', async () => {
+    await t.test('role and permission changes take effect immediately without a new sign-in', async () => {
       const grant = await request(`/api/staff/${reception.staff_id}/permissions`, {
         method: 'PUT', headers: auth(tokens.admin), body: JSON.stringify({ permission: 'VIEW_STAFF_DIRECTORY', grant: true })
       });
       assert.equal(grant.response.status, 200);
 
       const oldToken = await request('/api/staff', { headers: auth(tokens.reception) });
-      assert.equal(oldToken.response.status, 403);
+      assert.equal(oldToken.response.status, 200, 'a current database grant should apply to the already-issued token');
 
       const refreshedReception = await login('reception_demo');
       const newToken = await request('/api/staff', { headers: auth(refreshedReception.token) });
@@ -321,7 +321,7 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
       assert.equal(revoke.response.status, 200);
 
       const currentToken = await request('/api/staff', { headers: auth(refreshedReception.token) });
-      assert.equal(currentToken.response.status, 200);
+      assert.equal(currentToken.response.status, 403, 'revocation must take effect immediately for every still-valid token');
       const nextLogin = await login('reception_demo');
       const nextToken = await request('/api/staff', { headers: auth(nextLogin.token) });
       assert.equal(nextToken.response.status, 403);

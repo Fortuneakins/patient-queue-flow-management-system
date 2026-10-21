@@ -8,6 +8,8 @@ if (!dbConfigured) {
 } else {
   process.env.JWT_SECRET ||= 'integration-test-secret-with-at-least-32-characters-123';
   process.env.INTERNAL_SERVICE_TOKEN ||= 'integration-internal-token';
+  process.env.NODE_ENV ||= 'test';
+  process.env.DATA_PROVENANCE_MODE ||= 'SYNTHETIC_TEST';
   process.env.SMS_ENABLED = 'false';
 
   const { httpServer } = require('../../src/app');
@@ -88,6 +90,12 @@ if (!dbConfigured) {
       assert.equal(nurseReferrals.response.status, 200);
       const nurseEventLog = await request('/api/intelligence/events', { headers: auth(tokens.nurse) });
       assert.equal(nurseEventLog.response.status, 403);
+      const adminProvenance = await request('/api/intelligence/data-provenance/queue-records', { headers: auth(tokens.admin) });
+      assert.equal(adminProvenance.response.status, 200);
+      assert.ok(Array.isArray(adminProvenance.body.records));
+      assert.ok(adminProvenance.body.summary.UNCLASSIFIED >= 0);
+      const nurseProvenance = await request('/api/intelligence/data-provenance/queue-records', { headers: auth(tokens.nurse) });
+      assert.equal(nurseProvenance.response.status, 403);
       const nurseCreateResource = await request('/api/intelligence/resources', {
         method: 'POST', headers: auth(tokens.nurse), body: JSON.stringify({ resource_code: 'DENIED', name: 'Denied resource', resource_type: 'ROOM' })
       });
@@ -124,6 +132,19 @@ if (!dbConfigured) {
     const queueId = checkedIn.body.queue_id;
     queueIds.push(queueId);
     assert.ok(checkedIn.body.care_pathway_id, 'a new visit should automatically receive the standard pathway');
+    assert.equal(checkedIn.body.data_provenance, 'SYNTHETIC_TEST', 'non-production check-ins must receive the server-configured provenance automatically');
+    assert.equal(checkedIn.body.data_provenance_source, 'SERVER_POLICY', 'automatic provenance source must be identifiable');
+    const checkInEvent = await request('/api/intelligence/events?event_type=VISIT_CHECKED_IN&limit=20', { headers: auth(tokens.admin) });
+    assert.equal(checkInEvent.response.status, 200);
+    const automaticProvenanceEvent = checkInEvent.body.find(event => Number(event.entity_id) === Number(queueId));
+    assert.equal(automaticProvenanceEvent.metadata.data_provenance, 'SYNTHETIC_TEST');
+    assert.equal(automaticProvenanceEvent.metadata.data_provenance_source, 'SERVER_POLICY');
+
+    const cannotHideActiveTestVisit = await request('/api/intelligence/data-provenance/queue-records/' + queueId, {
+      method: 'PATCH', headers: auth(tokens.admin),
+      body: JSON.stringify({ provenance: 'DEMO', reason: 'CI test must not reclassify an active visit.' })
+    });
+    assert.equal(cannotHideActiveTestVisit.response.status, 409, 'active visits must complete normally before being marked as test/demo data');
 
     const journey = await request('/api/intelligence/journeys/' + queueId, { headers: auth(tokens.nurse) });
     assert.equal(journey.response.status, 200);
@@ -202,9 +223,30 @@ if (!dbConfigured) {
     });
     assert.equal(forecast.response.status, 201, JSON.stringify(forecast.body));
     forecastIds.push(forecast.body.forecast_id);
+
+    // Model an observation that arrives after its declared horizon. The overall
+    // MAE remains auditable, while the API must separately identify in-horizon
+    // accuracy so an outlier is not silently treated as a representative sample.
+    const delayedSample = await query(
+      'UPDATE flow_forecast_samples SET actual_wait_minutes=$1, observed_at=NOW() WHERE forecast_id=$2 AND queue_id=$3 RETURNING sample_id',
+      [75, forecast.body.forecast_id, queueId]
+    );
+    assert.equal(delayedSample.rowCount, 1, 'forecast should track the newly checked-in waiting visit');
     const truth = await request('/api/intelligence/forecasts/truth', { headers: auth(tokens.admin) });
     assert.equal(truth.response.status, 200);
     assert.ok(Array.isArray(truth.body.forecasts));
+    const evaluatedForecast = truth.body.forecasts.find(item => Number(item.forecast_id) === Number(forecast.body.forecast_id));
+    assert.ok(evaluatedForecast, 'newly recorded forecast should appear in truth ledger');
+    assert.ok(Number(evaluatedForecast.tracked_samples) >= 1);
+    assert.ok(Number(evaluatedForecast.observed_samples) >= 1);
+    assert.equal(Number(evaluatedForecast.within_horizon_samples), 0, 'synthetic fixtures must not count as verified operational accuracy');
+    assert.equal(Number(evaluatedForecast.out_of_horizon_samples), 0, 'synthetic observations must not be represented as operational errors');
+    assert.equal(Number(evaluatedForecast.unclassified_observed_samples), 0);
+    assert.equal(Number(evaluatedForecast.excluded_synthetic_observed_samples), 1);
+    assert.equal(Number(evaluatedForecast.excluded_synthetic_out_of_horizon_samples), 1, 'the 75-minute synthetic observation must remain explicitly outside the 60-minute horizon');
+    assert.equal(Number(evaluatedForecast.unclassified_out_of_horizon_samples), 0);
+    assert.equal(evaluatedForecast.within_horizon_mean_absolute_error_minutes, null);
+    assert.ok(Number(evaluatedForecast.mean_absolute_error_minutes) >= 0, 'all-sample MAE should remain available for audit');
     const fairness = await request('/api/intelligence/fairness', { headers: auth(tokens.admin) });
     assert.equal(fairness.response.status, 200);
     assert.equal(fairness.body.tiers.length, 4);
@@ -249,6 +291,22 @@ if (!dbConfigured) {
     assert.ok(events.body.some(event => event.event_type === 'FLOWTWIN_SIMULATION_RUN'));
     assert.ok(events.body.some(event => event.event_type === 'REFERRAL_CREATED'));
 
+    // Normal workflow state changes must preserve the provenance assigned by server policy.
+    const callResponse = await request('/api/queue/' + queueId + '/call', {
+      method: 'PUT', headers: auth(tokens.doctor), body: JSON.stringify({})
+    });
+    assert.equal(callResponse.response.status, 200, JSON.stringify(callResponse.body));
+    const dischargeResponse = await request('/api/queue/' + queueId + '/discharge', {
+      method: 'PUT', headers: auth(tokens.doctor), body: JSON.stringify({})
+    });
+    assert.equal(dischargeResponse.response.status, 200, JSON.stringify(dischargeResponse.body));
+    const preservedProvenance = await query(
+      'SELECT data_provenance, data_provenance_source FROM queue_entries WHERE queue_id=$1',
+      [queueId]
+    );
+    assert.equal(preservedProvenance.rows[0].data_provenance, 'SYNTHETIC_TEST');
+    assert.equal(preservedProvenance.rows[0].data_provenance_source, 'SERVER_POLICY');
+
     // Regression: P90 labelled queue-to-call must not include time from call to discharge.
     const doctor = await query("SELECT staff_id FROM clinic_staff WHERE username = 'doctor_demo' LIMIT 1");
     assert.ok(doctor.rows[0], 'doctor_demo must exist in integration seed data');
@@ -258,6 +316,13 @@ if (!dbConfigured) {
       "discharged_by_staff_id=$2, discharged_at=NOW() - INTERVAL '5 minutes' WHERE queue_id=$1",
       [queueId, doctor.rows[0].staff_id]
     );
+    const explicitlyOperational = await request('/api/intelligence/data-provenance/queue-records/' + queueId, {
+      method: 'PATCH', headers: auth(tokens.admin),
+      body: JSON.stringify({ provenance: 'OPERATIONAL', reason: 'CI fixture explicitly marked operational to test verified metric inclusion.' })
+    });
+    assert.equal(explicitlyOperational.response.status, 200, JSON.stringify(explicitlyOperational.body));
+    assert.equal(explicitlyOperational.body.data_provenance, 'OPERATIONAL');
+    assert.equal(explicitlyOperational.body.data_provenance_source, 'ADMIN_REVIEW');
     const fairnessRegression = await request('/api/intelligence/fairness', { headers: auth(tokens.admin) });
     assert.equal(fairnessRegression.response.status, 200);
     const tierTwo = fairnessRegression.body.tiers.find(item => item.tier === 2);
@@ -267,7 +332,7 @@ if (!dbConfigured) {
       "ROUND(AVG(EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0)::numeric,1) AS mean_wait_minutes, " +
       "ROUND(percentile_cont(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0)::numeric,1) AS p90_queue_to_call_minutes, " +
       "ROUND(percentile_cont(0.90) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (discharged_at - queued_at)) / 60.0)::numeric,1) AS p90_queue_to_discharge_minutes " +
-      "FROM queue_entries WHERE status='Discharged' AND COALESCE(priority_level,4)=2 " +
+      "FROM queue_entries WHERE status='Discharged' AND data_provenance='OPERATIONAL' AND COALESCE(priority_level,4)=2 " +
       "AND called_at IS NOT NULL AND called_at >= queued_at AND discharged_at >= NOW() - INTERVAL '30 days'"
     );
     assert.equal(tierTwo.sample_size, expectedTierTwo.rows[0].sample_size);
@@ -282,5 +347,51 @@ if (!dbConfigured) {
       Number(expectedTierTwo.rows[0].p90_queue_to_call_minutes),
       'P90 must use called_at - queued_at, not discharged_at - queued_at'
     );
+
+    const classifiedAsSynthetic = await request('/api/intelligence/data-provenance/queue-records/' + queueId, {
+      method: 'PATCH', headers: auth(tokens.admin),
+      body: JSON.stringify({ provenance: 'SYNTHETIC_TEST', reason: 'CI verifies synthetic records are excluded from operational history.' })
+    });
+    assert.equal(classifiedAsSynthetic.response.status, 200, JSON.stringify(classifiedAsSynthetic.body));
+    assert.equal(classifiedAsSynthetic.body.data_provenance, 'SYNTHETIC_TEST');
+    assert.equal(classifiedAsSynthetic.body.data_provenance_source, 'ADMIN_REVIEW');
+    assert.equal(classifiedAsSynthetic.body.status, 'Discharged', 'provenance classification must not change visit status');
+    assert.equal(Number(classifiedAsSynthetic.body.priority_level), 2, 'provenance classification must not change assigned tier');
+    const filteredRecords = await request('/api/intelligence/data-provenance/queue-records?provenance=SYNTHETIC_TEST', { headers: auth(tokens.admin) });
+    assert.equal(filteredRecords.response.status, 200);
+    assert.ok(filteredRecords.body.records.some(item => Number(item.queue_id) === Number(queueId)));
+    const fairnessAfterClassification = await request('/api/intelligence/fairness', { headers: auth(tokens.admin) });
+    assert.equal(fairnessAfterClassification.response.status, 200);
+    const syntheticTierTwo = fairnessAfterClassification.body.tiers.find(item => item.tier === 2);
+    assert.ok(Number(syntheticTierTwo.excluded_synthetic_sample_size) >= 1);
+    const provenanceEvents = await request('/api/intelligence/events?event_type=QUEUE_DATA_PROVENANCE_UPDATED&limit=20', { headers: auth(tokens.admin) });
+    assert.equal(provenanceEvents.response.status, 200);
+    assert.ok(provenanceEvents.body.some(event => Number(event.entity_id) === Number(queueId)));
+
+    await t.test('role demotions and permission changes take effect without reissuing the JWT', async () => {
+      const adminBefore = await query("SELECT staff_id, role, extra_permissions FROM clinic_staff WHERE username='admin_demo' LIMIT 1");
+      assert.ok(adminBefore.rows[0], 'admin_demo must exist in integration seed data');
+      const adminRecord = adminBefore.rows[0];
+      try {
+        await query("UPDATE clinic_staff SET role='RECEPTION' WHERE staff_id=$1", [adminRecord.staff_id]);
+        const demotedAdmin = await request('/api/intelligence/overview', { headers: auth(tokens.admin) });
+        assert.equal(demotedAdmin.response.status, 403, 'a role demotion must override the still-valid token role');
+      } finally {
+        await query("UPDATE clinic_staff SET role=$1 WHERE staff_id=$2", [adminRecord.role, adminRecord.staff_id]);
+      }
+
+      const receptionBefore = await query("SELECT staff_id, extra_permissions FROM clinic_staff WHERE username='reception_demo' LIMIT 1");
+      assert.ok(receptionBefore.rows[0], 'reception_demo must exist in integration seed data');
+      const receptionRecord = receptionBefore.rows[0];
+      try {
+        await query("UPDATE clinic_staff SET extra_permissions=ARRAY['VIEW_STAFF_DIRECTORY']::text[] WHERE staff_id=$1", [receptionRecord.staff_id]);
+        const grantedWithoutRelogin = await request('/api/staff', { headers: auth(tokens.reception) });
+        assert.equal(grantedWithoutRelogin.response.status, 200, 'current DB permissions must be applied immediately');
+      } finally {
+        await query("UPDATE clinic_staff SET extra_permissions=$1::text[] WHERE staff_id=$2", [receptionRecord.extra_permissions || [], receptionRecord.staff_id]);
+      }
+      const revokedWithoutRelogin = await request('/api/staff', { headers: auth(tokens.reception) });
+      assert.equal(revokedWithoutRelogin.response.status, 403, 'permission removal must apply without waiting for token expiry');
+    });
   });
 }
