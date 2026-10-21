@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 import psycopg2
 import requests
 from flask import Flask, jsonify
@@ -20,7 +21,13 @@ DATA_PROVENANCE_MODE = resolve_provenance_mode(NODE_ENV, os.getenv("DATA_PROVENA
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024
-allowed_origins = [v.strip() for v in os.getenv("CORS_ORIGIN", "http://localhost:5173").split(",") if v.strip()]
+allowed_origins = []
+for origin_value in os.getenv("CORS_ORIGIN", "http://localhost:5173").split(","):
+    origin_value = origin_value.strip()
+    if not origin_value:
+        continue
+    parsed_origin = urlparse(origin_value)
+    allowed_origins.append(f"{parsed_origin.scheme}://{parsed_origin.netloc}" if parsed_origin.scheme and parsed_origin.netloc else origin_value)
 INTERNAL_SERVICE_TOKEN = os.getenv("INTERNAL_SERVICE_TOKEN", "").strip()
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 DB_CONFIG = {
