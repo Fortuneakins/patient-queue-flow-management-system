@@ -4,23 +4,44 @@ function asBoolean(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase());
 }
 
+function isPlaceholderSecret(value) {
+  return /REPLACE[_ -]?WITH|GENERATED[_ -]?BY|PLACEHOLDER|YOUR[_ -]|CHANGE[_ -]?ME|EXAMPLE[_ -]?SECRET|CI[_ -]?SECRET/i.test(String(value || ''));
+}
+
 function validateProductionConfig(input = {}) {
   const nodeEnv = String(input.nodeEnv || 'development').trim().toLowerCase();
   if (nodeEnv !== 'production') return { production: false };
 
   const jwtSecret = String(input.jwtSecret || '');
   const internalToken = String(input.internalServiceToken || '');
-  if (jwtSecret.length < 48 || /GENERATED_BY_SETUP_SCRIPT|change[-_ ]?me|example|ci-secret/i.test(jwtSecret)) {
+  if (jwtSecret.length < 48 || isPlaceholderSecret(jwtSecret)) {
     throw new Error('Production requires a unique JWT_SECRET of at least 48 characters, provisioned through a secrets manager.');
   }
-  if (internalToken.length < 32 || /GENERATED_BY_SETUP_SCRIPT|change[-_ ]?me|example|ci-token/i.test(internalToken)) {
+  if (internalToken.length < 32 || isPlaceholderSecret(internalToken)) {
     throw new Error('Production requires an independent INTERNAL_SERVICE_TOKEN of at least 32 characters.');
   }
   if (jwtSecret === internalToken) {
     throw new Error('JWT_SECRET and INTERNAL_SERVICE_TOKEN must be different secrets.');
   }
-  if (!input.databaseUrl && !String(input.databasePassword || '').trim()) {
+  const databasePassword = String(input.databasePassword || '').trim();
+  const databaseUrl = String(input.databaseUrl || '').trim();
+  if (!databaseUrl && !databasePassword) {
     throw new Error('Production requires a database password or DATABASE_URL.');
+  }
+  if (databasePassword && isPlaceholderSecret(databasePassword)) {
+    throw new Error('Production database credentials cannot use a placeholder secret.');
+  }
+  if (databaseUrl) {
+    let parsedDatabaseUrl;
+    try { parsedDatabaseUrl = new URL(databaseUrl); } catch (_) {
+      throw new Error('DATABASE_URL must be a valid PostgreSQL connection URL.');
+    }
+    if (!['postgres:', 'postgresql:'].includes(parsedDatabaseUrl.protocol) || !parsedDatabaseUrl.hostname) {
+      throw new Error('DATABASE_URL must be a valid PostgreSQL connection URL.');
+    }
+    if (!parsedDatabaseUrl.username || !parsedDatabaseUrl.password || isPlaceholderSecret(decodeURIComponent(parsedDatabaseUrl.password))) {
+      throw new Error('DATABASE_URL must contain non-placeholder database credentials.');
+    }
   }
   if (input.databaseSsl !== true) {
     throw new Error('Production requires DB_SSL=true with certificate validation enabled.');
@@ -48,4 +69,4 @@ function validateProductionConfig(input = {}) {
   return { production: true, corsOrigins: origins.length };
 }
 
-module.exports = { asBoolean, validateProductionConfig };
+module.exports = { asBoolean, isPlaceholderSecret, validateProductionConfig };
