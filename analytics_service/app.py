@@ -10,7 +10,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 
 from .estimator import estimate_waits, estimate_metadata
-from .runtime_config import resolve_provenance_mode, validate_production_config
+from .runtime_config import PROVENANCE_MODES, resolve_provenance_mode, validate_production_config
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 load_dotenv()
