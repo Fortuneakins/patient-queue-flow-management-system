@@ -8,6 +8,15 @@ function isPlaceholderSecret(value) {
   return /REPLACE[_ -]?WITH|GENERATED[_ -]?BY|PLACEHOLDER|YOUR[_ -]|CHANGE[_ -]?ME|EXAMPLE[_ -]?SECRET|CI[_ -]?SECRET/i.test(String(value || ''));
 }
 
+function parseTrustProxyHops(value) {
+  const normalized = String(value ?? '0').trim().toLowerCase();
+  if (normalized === '' || normalized === 'false') return false;
+  if (/^\\d+$/.test(normalized) && Number.isSafeInteger(Number(normalized))) {
+    return Number(normalized);
+  }
+  throw new Error('TRUST_PROXY_HOPS must be a non-negative integer or false; do not trust all proxies.');
+}
+
 function validateProductionConfig(input = {}) {
   const nodeEnv = String(input.nodeEnv || 'development').trim().toLowerCase();
   if (nodeEnv !== 'production') return { production: false };
@@ -47,6 +56,10 @@ function validateProductionConfig(input = {}) {
       throw new Error('DATABASE_URL cannot override verified PostgreSQL TLS with a weaker sslmode.');
     }
   }
+  if (input.trustProxyHops !== undefined && input.trustProxyHops !== false
+    && (!Number.isSafeInteger(input.trustProxyHops) || input.trustProxyHops < 0)) {
+    throw new Error('Production TRUST_PROXY_HOPS must be a non-negative integer; do not trust all proxies.');
+  }
   if (input.databaseSsl !== true) {
     throw new Error('Production requires DB_SSL=true with certificate validation enabled.');
   }
@@ -73,4 +86,4 @@ function validateProductionConfig(input = {}) {
   return { production: true, corsOrigins: origins.length };
 }
 
-module.exports = { asBoolean, isPlaceholderSecret, validateProductionConfig };
+module.exports = { asBoolean, isPlaceholderSecret, parseTrustProxyHops, validateProductionConfig };
