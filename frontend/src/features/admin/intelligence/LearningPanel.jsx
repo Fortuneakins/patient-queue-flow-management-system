@@ -57,21 +57,10 @@ export default function LearningPanel({ token }) {
   async function captureForecast() {
     setBusy(true); setError(''); setNotice('');
     try {
-      const prediction = await api.predictions();
-      if (prediction?.degraded) throw new Error('The analytics service is in degraded mode. No forecast was recorded because the estimate is not available.');
-      const estimates = {};
-      for (let tier = 1; tier <= 4; tier += 1) {
-        const value = Number(prediction[String(tier)]);
-        if (!Number.isFinite(value) || value < 0) throw new Error('The analytics service returned an invalid tier estimate.');
-        estimates[tier] = value;
-      }
-      const modelVersion = prediction?.model?.version || 'pqfms-analytics-unversioned';
-      const saved = await api.recordFlowForecast(token, {
-        horizon_minutes: 60,
-        tier_estimates: estimates,
-        model_version: modelVersion
-      });
-      setNotice('Forecast #' + saved.forecast_id + ' recorded with ' + saved.tracked_visits + ' waiting-visit sample(s).');
+      // The backend captures and versions the authoritative model output. The
+      // browser submits only the sampling horizon; it cannot seed false labels.
+      const saved = await api.recordFlowForecast(token, { horizon_minutes: 60 });
+      setNotice('Forecast #' + saved.forecast_id + ' recorded with ' + saved.tracked_visits + ' waiting-visit sample(s) using model ' + saved.model_version + '.');
       await refresh();
     } catch (e) { setError(e.message || 'The forecast could not be recorded.'); }
     finally { setBusy(false); }
