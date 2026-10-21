@@ -257,7 +257,7 @@ def estimate_waits(
             slot = min(range(len(availability)), key=availability.__getitem__)
             availability[slot] += float(profiles[row["tier"]]["minutes"])
         minutes_until_available = min(availability) if availability else 0.0
-        estimates[str(target)] = int(ceil(minutes_until_available * BUFFER))
+        estimates[str(target)] = min(MAX_VALID_WAIT_MINUTES, int(ceil(minutes_until_available * BUFFER)))
 
     return estimates
 
@@ -331,7 +331,7 @@ def estimate_current_visit_waits(
         availability[slot] += float(profiles[row["tier"]]["minutes"])
         if row["queue_id"] is None:
             continue
-        baseline = int(ceil(start_minutes * BUFFER))
+        baseline = min(MAX_VALID_WAIT_MINUTES, int(ceil(start_minutes * BUFFER)))
         tier_calibration = (calibration or {}).get("tiers", {}).get(str(row["tier"]), {})
         try:
             offset = float(tier_calibration.get("offset_minutes", 0))
