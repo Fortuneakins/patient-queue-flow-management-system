@@ -21,7 +21,7 @@ Before deployment, provision and test:
 
 1. A supported Linux host or managed container platform with Docker Engine and Docker Compose v2. Keep the operating system and container runtime patched.
 2. A DNS name whose public A/AAAA record points at the deployment host. Allow inbound TCP 80/443 (and UDP 443 only if HTTP/3 is enabled). Do not publish ports 5000, 5001 or 5432 publicly.
-3. A managed PostgreSQL database and dedicated least-privilege application owner/service account. The TLS certificate must chain to a CA trusted in the application containers, and its hostname must match `DB_HOST`. The service account needs the schema permissions used by migrations.
+3. A managed PostgreSQL database with **three distinct roles**: `pqfms_migrator` for the one-shot migration job, `pqfms_service` for API runtime DML, and `pqfms_analytics` for column-level read-only analytics. The TLS certificate must chain to a CA trusted in the application containers, and its hostname must match `DB_HOST`.
 4. Automated encrypted backups, point-in-time recovery where available, a retention policy, and a **successfully rehearsed restore** to a separate database. A backup is not proven until restore is tested.
 5. A secret manager or protected host-level secret file, a monitored certificate contact email, an operational owner and a documented incident/rollback contact.
 6. An independent decision from the organisation responsible for the clinic that the application is permitted to process patient information. This requires privacy/legal review and clinical/safety governance, not just passing software tests.
@@ -65,6 +65,41 @@ docker compose --env-file .env.production -f compose.production.yml build
 
 The project CI builds these images as a basic packaging check. This does not certify their runtime configuration, database reachability or operational security.
 
+## 4A. Provision database roles before first migration
+
+Use the managed PostgreSQL administration connection to create separate principals. Store each password in the secret manager; `\\password` in an interactive `psql` session avoids putting the password directly in SQL text or terminal history.
+
+```sql
+CREATE ROLE pqfms_migrator LOGIN;
+CREATE ROLE pqfms_service LOGIN;
+CREATE ROLE pqfms_analytics LOGIN;
+
+GRANT CONNECT ON DATABASE pqfms TO pqfms_migrator, pqfms_service, pqfms_analytics;
+GRANT CREATE ON SCHEMA public TO pqfms_migrator;
+GRANT USAGE ON SCHEMA public TO pqfms_service, pqfms_analytics;
+
+-- Applies to objects created by the migration owner from this point forward.
+ALTER DEFAULT PRIVILEGES FOR ROLE pqfms_migrator IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO pqfms_service;
+ALTER DEFAULT PRIVILEGES FOR ROLE pqfms_migrator IN SCHEMA public
+  GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO pqfms_service;
+```
+
+If the roles already exist, inspect their membership and grants rather than recreating or resetting them. The migration principal must also be permitted to create required extensions in the managed database; never make the API runtime role a superuser or schema owner to work around a migration error.
+
+The API runtime role must have the table/sequence DML grants needed by the application, plus read access to the migration ledger for startup verification. After the migration command completes, apply:
+
+```sql
+GRANT SELECT ON TABLE public.pqfms_schema_migrations TO pqfms_service;
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.pqfms_schema_migrations FROM pqfms_service;
+
+-- The analytics principal receives only the columns queried by the estimator.
+GRANT SELECT (status, priority_level, queued_at, called_at, discharged_at, data_provenance)
+  ON TABLE public.queue_entries TO pqfms_analytics;
+```
+
+Set `DB_USER/DB_PASSWORD` to the API runtime role, `MIGRATION_DB_USER/MIGRATION_DB_PASSWORD` to the migration owner, and `ANALYTICS_DB_USER/ANALYTICS_DB_PASSWORD` to the read-only analytics principal. The API container must never receive the migration-owner password. Do not start the API until grants are verified. On future releases, apply new migrations only with the migration role, then verify new table/sequence default privileges and extend analytics column grants only when required by an independently reviewed query change.
+
 ## 5. Apply migrations safely
 
 ### New, empty production database
@@ -107,7 +142,7 @@ GRANT SELECT (status, priority_level, queued_at, called_at, discharged_at, data_
 
 Set a unique strong password for this role through the approved secret-management process (for example, `\\password pqfms_analytics` in an interactive `psql` session). If you use a database name other than `pqfms`, adjust the `GRANT CONNECT` statement. Put these values in `ANALYTICS_DB_USER` and `ANALYTICS_DB_PASSWORD` in the protected deployment environment. The production analytics service receives only the analytics principal and the API username for a startup check; it does not receive the API password. It reads only the columns used to estimate active queue workload and historical consultation duration. It has no write grant. If a future feature needs extra columns or tables, review and grant only the minimum additional permissions.
 
-The API/service identity still needs the reviewed schema permissions used by migrations and normal clinic workflows. Keep schema ownership/admin credentials out of both runtime services.
+The API runtime identity has DML permissions but is not a schema owner. Keep migration-owner credentials out of both runtime services.
 
 ### Scaling boundary
 
