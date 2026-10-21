@@ -1,25 +1,51 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
 const { httpServer } = require('./app');
 const { pool } = require('./db/pool');
 const env = require('./config/env');
 
+const migrationDirectory = path.resolve(__dirname, '../../db/migrations');
+
+function migrationChecksum(content) {
+  return crypto.createHash('sha256').update(content, 'utf8').digest('hex');
+}
+
 async function assertProductionDatabaseSafety() {
   if (env.NODE_ENV !== 'production') return;
-  const ledger = await pool.query("SELECT to_regclass('public.pqfms_schema_migrations') AS table_name");
-  if (!ledger.rows[0]?.table_name) {
-    throw new Error('Production startup blocked: tracked schema migration ledger is missing. Run the reviewed database migration procedure first.');
+
+  const migrationFiles = fs.readdirSync(migrationDirectory)
+    .filter(name => /^\d{3}_[a-z0-9_]+\.sql$/i.test(name))
+    .sort((a, b) => a.localeCompare(b));
+  if (!migrationFiles.length) {
+    throw new Error('Production startup blocked: no versioned database migrations are present in the image.');
   }
-  const schemaVersion = await pool.query(
-    "SELECT 1 FROM pqfms_schema_migrations WHERE filename = $1",
-    ['008_backfill_reviewed_provenance_sources.sql']
-  );
-  if (schemaVersion.rowCount !== 1) {
-    throw new Error('Production startup blocked: schema migration 008 is not recorded. Run the tracked migration command and review the output.');
+
+  const ledger = await pool.query(
+    'SELECT filename, sha256 FROM pqfms_schema_migrations ORDER BY filename'
+  ).catch(() => {
+    throw new Error('Production startup blocked: tracked schema migration ledger is missing or unavailable. Run the reviewed migration procedure first.');
+  });
+  const appliedByName = new Map(ledger.rows.map(row => [row.filename, String(row.sha256).trim()]));
+  const expected = new Set(migrationFiles);
+
+  for (const filename of migrationFiles) {
+    const source = fs.readFileSync(path.join(migrationDirectory, filename), 'utf8');
+    const expectedChecksum = migrationChecksum(source);
+    if (appliedByName.get(filename) !== expectedChecksum) {
+      throw new Error(`Production startup blocked: migration ${filename} is not recorded with its current checksum. Run the tracked migration command and review the output.`);
+    }
   }
-  const result = await pool.query(
+  const unknownApplied = [...appliedByName.keys()].filter(filename => !expected.has(filename));
+  if (unknownApplied.length) {
+    throw new Error('Production startup blocked: database migration ledger contains migrations absent from this application image. Resolve release/schema drift before starting.');
+  }
+
+  const demoAccounts = await pool.query(
     "SELECT COUNT(*)::int AS demo_accounts FROM clinic_staff WHERE username = ANY($1::text[])",
     [['admin_demo', 'reception_demo', 'nurse_demo', 'doctor_demo']]
   );
-  if (Number(result.rows[0]?.demo_accounts || 0) > 0) {
+  if (Number(demoAccounts.rows[0]?.demo_accounts || 0) > 0) {
     throw new Error('Production startup blocked: seeded demonstration accounts are present. Provision named staff accounts through the approved bootstrap process and remove demo accounts before deployment.');
   }
 }
@@ -31,6 +57,7 @@ async function start() {
 }
 
 start().catch(error => {
+  // Do not log SQL text, connection strings or secret-bearing environment values.
   console.error('PQFMS API failed to start:', error.message);
   process.exit(1);
 });
