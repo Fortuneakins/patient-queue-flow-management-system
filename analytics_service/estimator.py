@@ -341,6 +341,8 @@ def estimate_current_visit_waits(
         estimates.append({
             "queue_id": row["queue_id"],
             "tier": row["tier"],
+            "baseline_wait_minutes": baseline,
+            "calibration_offset_minutes": round(offset, 1),
             "estimated_wait_minutes": int(ceil(calibrated)),
         })
     return estimates[:1000]
@@ -443,7 +445,7 @@ def estimate_metadata(
 
     return {
         "model": "queue-workload-estimate",
-        "model_version": "queue-workload-3.1.0",
+        "model_version": "queue-workload-3.2.0",
         "estimate_quality": "UNAVAILABLE_NO_STAFF" if unavailable else quality,
         "service_time_basis": basis,
         "service_history_samples": sample_count,
