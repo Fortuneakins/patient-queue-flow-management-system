@@ -8,9 +8,9 @@ const { publicPrediction, modelEvidence } = require('../../src/routes/analytics.
 function payload(overrides = {}) {
   return {
     '1': 0, '2': 6, '3': 18, '4': 32,
-    visit_estimates: [{ queue_id: 19, tier: 4, estimated_wait_minutes: 24 }],
+    visit_estimates: [{ queue_id: 19, tier: 4, baseline_wait_minutes: 20, calibration_offset_minutes: 4, estimated_wait_minutes: 24 }],
     model: 'queue-workload-estimate',
-    model_version: 'queue-workload-3.1.0',
+    model_version: 'queue-workload-3.2.0',
     estimate_quality: 'OBSERVATION_BASED',
     service_time_basis: 'median of operational call-to-discharge intervals',
     service_history_samples: 35,
@@ -38,10 +38,10 @@ test('analytics proxy authenticates service-to-service calls and validates data'
 
   assert.equal(urlSeen, 'http://analytics.internal:5001/api/predict');
   assert.equal(optionsSeen.headers['X-Internal-Service-Token'], 'test-token');
-  assert.equal(result.model_version, 'queue-workload-3.1.0');
+  assert.equal(result.model_version, 'queue-workload-3.2.0');
   assert.equal(result.service_history_samples, 35);
   assert.equal(result.degraded, false);
-  assert.deepEqual(result.visit_estimates, [{ queue_id: 19, tier: 4, estimated_wait_minutes: 24 }]);
+  assert.deepEqual(result.visit_estimates, [{ queue_id: 19, tier: 4, baseline_wait_minutes: 20, calibration_offset_minutes: 4, estimated_wait_minutes: 24 }]);
 });
 
 test('analytics proxy fails closed when no internal token is configured', async () => {
@@ -103,6 +103,32 @@ test('public response reports limited, fallback and unavailable estimate bases',
 test('administrator model evidence omits internal per-visit queue identifiers', () => {
   const result = modelEvidence(payload());
 
-  assert.equal(result.model_version, 'queue-workload-3.1.0');
+  assert.equal(result.model_version, 'queue-workload-3.2.0');
   assert.equal(Object.hasOwn(result, 'visit_estimates'), false);
+});
+
+
+
+test('analytics proxy rejects missing baseline or out-of-range calibration offset', async () => {
+  const missingBaseline = await getWaitPredictions({
+    internalToken: 'test-token',
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => payload({
+        visit_estimates: [{ queue_id: 19, tier: 4, estimated_wait_minutes: 24 }]
+      })
+    })
+  });
+  assert.equal(missingBaseline.degraded, true);
+
+  const excessiveOffset = await getWaitPredictions({
+    internalToken: 'test-token',
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => payload({
+        visit_estimates: [{ queue_id: 19, tier: 4, baseline_wait_minutes: 20, calibration_offset_minutes: 31, estimated_wait_minutes: 51 }]
+      })
+    })
+  });
+  assert.equal(excessiveOffset.degraded, true);
 });
