@@ -17,7 +17,7 @@ export default function LearningPanel({ token }) {
   const [truth, setTruth] = useState(null);
   const [livePrediction, setLivePrediction] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing, setRefreshing] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -133,7 +133,7 @@ export default function LearningPanel({ token }) {
           </>
         ) : (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
-            Live estimates are unavailable. Queue operations continue normally; do not interpret missing estimates as zero-minute waits.
+            {refreshing ? 'Loading current prediction evidence…' : 'Live estimates are unavailable. Queue operations continue normally; do not interpret missing estimates as zero-minute waits.'}
             {livePrediction?.warnings?.map((warning, index) => <p key={index} className="mt-1">{warning}</p>)}
           </div>
         )}
