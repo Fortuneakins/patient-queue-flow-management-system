@@ -26,6 +26,19 @@ function describeTierServiceProfile(profile) {
   return `Default ${value} assumption · clinic n=${profile.pooled_service_samples || 0}`;
 }
 
+function describeWaitCalibration(profile) {
+  if (!profile) return 'Calibration evidence unavailable';
+  const offset = Number(profile.offset_minutes || 0);
+  const signed = offset > 0 ? '+' + offset : String(offset);
+  if (profile.source === 'TIER_OPERATIONAL_TRUTH') {
+    return `Tier-specific correction ${signed} min · n=${profile.samples_used} visit(s)`;
+  }
+  if (profile.source === 'POOLED_OPERATIONAL_TRUTH') {
+    return `Pooled clinic correction ${signed} min · n=${profile.samples_used} visit(s), tier n=${profile.tier_samples}`;
+  }
+  return `Inactive · ${profile.tier_samples || 0} tier-specific truth sample(s)`;
+}
+
 export default function LearningPanel({ token, onOpenTool }) {
   const [fairness, setFairness] = useState(null);
   const [truth, setTruth] = useState(null);
@@ -114,6 +127,31 @@ export default function LearningPanel({ token, onOpenTool }) {
               <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Data provenance</span><p className="mt-1 text-sm font-semibold">{prediction.provenance_mode || 'Not reported'}</p></div>
             </div>
             <p className="mt-3 text-sm leading-relaxed text-stone-600">{prediction.service_time_basis || 'Service-time basis not reported.'}</p>
+            <div className="mt-4 rounded-xl border border-stone-200 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-stone-900">Per-visit forecast calibration</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-stone-600">
+                    A bounded median-error correction is learned only from earlier, in-horizon OPERATIONAL truth samples. It adjusts individual waiting-visit forecasts used by the Truth Ledger and consent-gated SMS; the aggregate tier projections above remain the unadjusted queue simulation.
+                  </p>
+                </div>
+                <Badge tone={Number(prediction.wait_calibration?.global_samples || 0) >= Number(prediction.wait_calibration?.minimum_samples || 20) ? 'teal' : 'orange'}>
+                  {Number(prediction.wait_calibration?.global_samples || 0) >= Number(prediction.wait_calibration?.minimum_samples || 20) ? 'Calibration active' : 'Collecting evidence'}
+                </Badge>
+              </div>
+              <p className="mt-2 text-xs text-stone-500">
+                Eligible prior visits: {prediction.wait_calibration?.global_samples ?? 0}; minimum required: {prediction.wait_calibration?.minimum_samples ?? 'Not reported'}; maximum correction: ±{prediction.wait_calibration?.maximum_absolute_offset_minutes ?? 'Not reported'} min.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                {[1, 2, 3, 4].map(tier => {
+                  const profile = prediction.wait_calibration?.tiers?.[String(tier)];
+                  return <div key={tier} className="rounded-lg bg-stone-50 p-3">
+                    <p className="text-xs font-semibold text-stone-700">Tier {tier}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-stone-600">{describeWaitCalibration(profile)}</p>
+                  </div>;
+                })}
+              </div>
+            </div>
             {Array.isArray(prediction.warnings) && prediction.warnings.length > 0 && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
               <p className="text-sm font-semibold text-amber-950">Model evidence warnings</p>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">{prediction.warnings.map((item, index) => <li key={index}>{item}</li>)}</ul>
