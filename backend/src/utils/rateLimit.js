@@ -22,7 +22,7 @@ function createRateLimiter({ windowMs, max, maxKeys = 10000, keyGenerator = req 
 
   return (req, res, next) => {
     const currentTime = now();
-    if (currentTime - lastCleanup >= cleanupIntervalMs || buckets.size >= maxKeys) {
+    if (currentTime - lastCleanup >= cleanupIntervalMs) {
       prune(currentTime);
     }
 
@@ -33,8 +33,8 @@ function createRateLimiter({ windowMs, max, maxKeys = 10000, keyGenerator = req 
       // Fail closed when the key store is full instead of allocating unbounded
       // memory or silently evicting an active client's rate budget.
       if (buckets.size >= maxKeys) {
-        const oldestExpiry = Math.min(...Array.from(buckets.values(), item => item.start + windowMs));
-        const retryAfter = Math.max(1, Math.ceil((oldestExpiry - currentTime) / 1000));
+        const nextCleanup = lastCleanup + cleanupIntervalMs;
+        const retryAfter = Math.max(1, Math.ceil((nextCleanup - currentTime) / 1000));
         res.set('X-RateLimit-Limit', String(max));
         res.set('X-RateLimit-Remaining', '0');
         res.set('Retry-After', String(retryAfter));
