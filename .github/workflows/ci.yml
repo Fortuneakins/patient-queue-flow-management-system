@@ -55,7 +55,7 @@ jobs:
         env:
           RUN_DB_TESTS: '1'
       - name: Install analytics dependencies
-        run: python -m pip install -r analytics_service/requirements-dev.txt
+        run: python -m pip install -r analytics_service/requirements.txt -r analytics_service/requirements-dev.txt
       - name: Analytics tests
         run: python -m pytest -q analytics_service/tests
       - name: Install frontend dependencies
