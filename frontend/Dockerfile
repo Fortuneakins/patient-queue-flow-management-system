@@ -14,7 +14,7 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
     VITE_SOCKET_URL=$VITE_SOCKET_URL
 RUN npm run build
 
-FROM nginx:stable-alpine3.24
+FROM nginx:1.31.7
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /build/dist /usr/share/nginx/html
 EXPOSE 8080
