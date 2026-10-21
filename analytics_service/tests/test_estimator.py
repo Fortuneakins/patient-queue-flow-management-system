@@ -1,6 +1,6 @@
 from datetime import datetime, timezone, timedelta
 
-from analytics_service.estimator import estimate_waits, estimate_metadata
+from analytics_service.estimator import estimate_waits, estimate_metadata, calibrate_wait_estimates, estimate_current_visit_waits
 
 
 def test_empty_queue_reports_zero_for_each_tier():
@@ -207,3 +207,50 @@ def test_current_visit_forecasts_use_active_consultation_elapsed_time():
     forecasts = estimate_current_visit_waits(visits, 1, now, service_minutes=history)
 
     assert forecasts == [{"queue_id": 22, "tier": 1, "estimated_wait_minutes": 10}]
+
+
+
+def test_forecast_calibration_waits_for_minimum_sample_count():
+    profile = calibrate_wait_estimates([
+        {"tier": 4, "predicted_wait_minutes": 20, "actual_wait_minutes": 29}
+        for _ in range(19)
+    ])
+
+    assert profile["global_samples"] == 19
+    assert all(item["source"] == "NOT_CALIBRATED" for item in profile["tiers"].values())
+    assert all(item["offset_minutes"] == 0 for item in profile["tiers"].values())
+
+
+def test_forecast_calibration_uses_tier_median_and_caps_large_offsets():
+    observations = (
+        [{"tier": 1, "predicted_wait_minutes": 10, "actual_wait_minutes": 80} for _ in range(20)]
+        + [{"tier": 4, "predicted_wait_minutes": 20, "actual_wait_minutes": 30} for _ in range(20)]
+    )
+    profile = calibrate_wait_estimates(observations)
+
+    assert profile["global_samples"] == 40
+    assert profile["tiers"]["1"]["source"] == "TIER_OPERATIONAL_TRUTH"
+    assert profile["tiers"]["1"]["offset_minutes"] == 30
+    assert profile["tiers"]["4"]["source"] == "TIER_OPERATIONAL_TRUTH"
+    assert profile["tiers"]["4"]["offset_minutes"] == 10
+    assert profile["tiers"]["2"]["source"] == "POOLED_OPERATIONAL_TRUTH"
+    assert profile["tiers"]["2"]["offset_minutes"] == 30
+
+
+def test_forecast_calibration_offset_is_applied_only_to_visit_level_forecast():
+    now = datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc)
+    visits = [
+        {"queue_id": 91, "status": "Waiting", "priority_level": 1, "queued_at": now},
+    ]
+    calibration = {
+        "tiers": {
+            "1": {"source": "TIER_OPERATIONAL_TRUTH", "offset_minutes": 7.5}
+        }
+    }
+
+    individual = estimate_current_visit_waits(visits, 1, now, calibration=calibration)
+
+    assert individual == [{"queue_id": 91, "tier": 1, "estimated_wait_minutes": 8}]
+    # Aggregate tier-level estimates remain transparent queue simulations and
+    # are not silently adjusted using errors measured on individual visit samples.
+    assert estimate_waits(visits, 1, now)["1"] == 14
