@@ -75,7 +75,7 @@ CREATE ROLE pqfms_service LOGIN;
 CREATE ROLE pqfms_analytics LOGIN;
 
 GRANT CONNECT ON DATABASE pqfms TO pqfms_migrator, pqfms_service, pqfms_analytics;
-GRANT CREATE ON SCHEMA public TO pqfms_migrator;
+GRANT USAGE, CREATE ON SCHEMA public TO pqfms_migrator;
 GRANT USAGE ON SCHEMA public TO pqfms_service, pqfms_analytics;
 
 -- Applies to objects created by the migration owner from this point forward.
