@@ -73,7 +73,11 @@ jobs:
       - name: Build production frontend image
         run: docker build --file frontend/Dockerfile --tag pqfms-web:ci .
       - name: Validate Nginx configuration
-        run: docker run --rm --entrypoint nginx pqfms-web:ci -t
+        run: |
+          docker run --rm \
+            --add-host api:127.0.0.1 \
+            --add-host analytics:127.0.0.1 \
+            --entrypoint nginx pqfms-web:ci -t
       - name: Validate Caddy HTTPS configuration
         run: |
           docker run --rm \
