@@ -46,8 +46,12 @@ function isPredictionPayload(payload) {
       const queueId = Number(item.queue_id);
       const tier = Number(item.tier);
       const wait = Number(item.estimated_wait_minutes);
+      const baseline = Number(item.baseline_wait_minutes);
+      const offset = Number(item.calibration_offset_minutes);
       if (!Number.isSafeInteger(queueId) || queueId < 1 || !Number.isInteger(tier) || tier < 1 || tier > 4) return false;
-      if (!Number.isFinite(wait) || wait < 0 || wait > 720 || seenQueueIds.has(queueId)) return false;
+      if (!Number.isFinite(wait) || wait < 0 || wait > 720) return false;
+      if (!Number.isFinite(baseline) || baseline < 0 || baseline > 720) return false;
+      if (!Number.isFinite(offset) || offset < -30 || offset > 30 || seenQueueIds.has(queueId)) return false;
       seenQueueIds.add(queueId);
     }
   }
@@ -116,6 +120,8 @@ async function getWaitPredictions({
       visit_estimates: Array.isArray(payload.visit_estimates) ? payload.visit_estimates.map(item => ({
         queue_id: Number(item.queue_id),
         tier: Number(item.tier),
+        baseline_wait_minutes: Number(item.baseline_wait_minutes),
+        calibration_offset_minutes: Number(item.calibration_offset_minutes),
         estimated_wait_minutes: Number(item.estimated_wait_minutes)
       })) : [],
       generated_at: typeof payload.generated_at === 'string' ? payload.generated_at : new Date().toISOString()
