@@ -20,7 +20,7 @@ function toneFor(value) {
 }
 
 function sourceLabel(value) {
-  if (value === 'SERVER_POLICY') return 'Assigned automatically';
+  if (value === 'SERVER_POLICY') return 'Assigned by server policy';
   if (value === 'ADMIN_REVIEW') return 'Set by administrator';
   return 'Legacy / review required';
 }
@@ -138,7 +138,7 @@ export default function DataProvenancePanel({ token }) {
             {policy && <Badge tone="neutral">{policy.policy_source === 'ENVIRONMENT_CONFIG' ? 'Explicit server setting' : 'Environment default'}</Badge>}
           </div>
           {policy ? (
-            <p className="mt-1">The server currently assigns new visits as <strong>{labelFor(policy.new_visit_mode)}</strong> using <code>DATA_PROVENANCE_MODE</code> ({policy.environment}). This is server-controlled and cannot be chosen in a check-in request. Status, triage and discharge updates preserve the classification; only an authorised provenance review changes it.</p>
+            <p className="mt-1">The server currently assigns new visits as <strong>{labelFor(policy.new_visit_mode)}</strong> using <code>DATA_PROVENANCE_MODE</code> ({policy.environment}). This is server-controlled and cannot be chosen in a check-in request. This records the deployment's configured policy; it does not independently verify a patient's identity or prove that an individual record belongs to a real patient. In production, use only for live operational check-ins—run synthetic acceptance tests in a separate environment and database. Status, triage and discharge updates preserve the classification; only an authorised provenance review changes it.</p>
           ) : (
             <p className="mt-1">Loading the server-controlled policy…</p>
           )}
