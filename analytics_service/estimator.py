@@ -338,11 +338,12 @@ def estimate_current_visit_waits(
         except (TypeError, ValueError, OverflowError):
             offset = 0.0
         calibrated = max(0.0, min(MAX_VALID_WAIT_MINUTES, baseline + offset))
+        effective_offset = calibrated - baseline
         estimates.append({
             "queue_id": row["queue_id"],
             "tier": row["tier"],
             "baseline_wait_minutes": baseline,
-            "calibration_offset_minutes": round(offset, 1),
+            "calibration_offset_minutes": round(effective_offset, 1),
             "estimated_wait_minutes": int(ceil(calibrated)),
         })
     return estimates[:1000]
