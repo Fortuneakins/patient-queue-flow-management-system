@@ -134,7 +134,7 @@ if (!dbConfigured) {
       const adminModel = await request('/api/analytics/model', { headers: auth(tokens.admin) });
       assert.equal(adminModel.response.status, 200);
       assert.equal(adminModel.body.model.version, 'pqfms-ci-analytics-fixture-v1');
-      assert.equal(adminModel.body.model.staffed_doctors, undefined);
+      assert.equal(adminModel.body.staffed_doctors, 2);
       assert.equal(adminModel.body.model.staffing_source, 'TEST_FIXTURE');
 
       const nursePathways = await request('/api/intelligence/pathways', { headers: auth(tokens.nurse) });
