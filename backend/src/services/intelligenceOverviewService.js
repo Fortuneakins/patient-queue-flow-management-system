@@ -19,7 +19,7 @@ async function getOverview() {
     'FROM clinic_resources GROUP BY resource_type, status ORDER BY resource_type, status'
   );
   const samples = await query(
-    "SELECT COUNT(*)::int AS sample_count FROM queue_entries WHERE status = 'Discharged' AND called_at IS NOT NULL " +
+    "SELECT COUNT(*)::int AS sample_count FROM queue_entries WHERE status = 'Discharged' AND called_at IS NOT NULL AND discharged_at IS NOT NULL " +
     "AND queued_at IS NOT NULL AND called_at >= queued_at " +
     "AND called_at >= NOW() - INTERVAL '90 days' " +
     "AND EXTRACT(EPOCH FROM (called_at - queued_at)) / 60.0 BETWEEN 0 AND 720 " +
