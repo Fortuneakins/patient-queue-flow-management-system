@@ -87,3 +87,12 @@ test('rejects malformed production PostgreSQL URLs', () => {
     databaseUrl: 'https://user:secret@db.example.org:5432/pqfms'
   }), /valid PostgreSQL connection URL/);
 });
+
+
+test('rejects a PostgreSQL URL that explicitly disables TLS', () => {
+  assert.throws(() => validateProductionConfig({
+    ...validProductionConfig,
+    databaseUrl: 'postgresql://pqfms:unique-password@db.example.org:5432/pqfms?sslmode=disable',
+    databasePassword: ''
+  }), /cannot override verified PostgreSQL TLS/);
+});
