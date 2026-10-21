@@ -83,8 +83,9 @@ function validateProductionConfig(input = {}) {
     try { parsed = new URL(origin); } catch (_) {
       throw new Error('Every production CORS_ORIGIN must be a valid HTTPS origin.');
     }
-    if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password || (parsed.pathname !== '/' && parsed.pathname !== '')) {
-      throw new Error('Every production CORS_ORIGIN must be a clean HTTPS origin without credentials or a path.');
+    if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password
+      || (parsed.pathname !== '/' && parsed.pathname !== '') || parsed.search || parsed.hash) {
+      throw new Error('Every production CORS_ORIGIN must be a clean HTTPS origin without credentials, path, query or fragment.');
     }
     if (['localhost', '127.0.0.1', '::1'].includes(parsed.hostname.toLowerCase())) {
       throw new Error('Localhost is not a valid production CORS_ORIGIN.');
