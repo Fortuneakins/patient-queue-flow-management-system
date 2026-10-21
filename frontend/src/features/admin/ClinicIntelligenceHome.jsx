@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../../services/api';
 import { Badge, Button, Card, EmptyState } from '../../components/ui';
 import Icon from '../../components/ui/Icon';
@@ -79,7 +79,7 @@ function MetricCard({ label, value, caption, icon, tone = 'teal' }) {
   );
 }
 
-function SignalRow({ tone = 'amber', title, detail, action, onClick }) {
+function SignalRow({ tone = 'amber', title, detail, action, onClick, severity, ruleId }) {
   const tones = {
     red: 'border-red-200 bg-red-50 text-red-950',
     amber: 'border-amber-200 bg-amber-50 text-amber-950',
@@ -91,7 +91,11 @@ function SignalRow({ tone = 'amber', title, detail, action, onClick }) {
       <div className="flex min-w-0 gap-3">
         <span className="mt-0.5 shrink-0"><Icon name={tone === 'red' ? 'alert' : tone === 'teal' ? 'checkCircle' : 'info'} size={18} /></span>
         <div className="min-w-0">
-          <p className="font-semibold">{title}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold">{title}</p>
+            {severity && <span className="rounded-full border border-current/20 bg-white/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">{severity}</span>}
+            {ruleId && <code className="rounded border border-current/20 bg-white/50 px-1.5 py-0.5 text-[10px]">{ruleId}</code>}
+          </div>
           <p className="mt-1 text-sm leading-relaxed opacity-80">{detail}</p>
         </div>
       </div>
@@ -105,8 +109,11 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
   const [busy, setBusy] = useState(false);
   const [sourceIssues, setSourceIssues] = useState([]);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const refreshInFlight = useRef(false);
 
   const refresh = useCallback(async () => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
     setBusy(true);
     const requests = [
       ['overview', api.intelligenceOverview(token)],
@@ -129,9 +136,14 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
     setSourceIssues(issues);
     setLastUpdated(new Date());
     setBusy(false);
+    refreshInFlight.current = false;
   }, [token]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    refresh();
+    const interval = window.setInterval(refresh, 30_000);
+    return () => window.clearInterval(interval);
+  }, [refresh]);
 
   const overview = snapshot.overview;
   const waiting = overview ? count(overview.waiting) : null;
