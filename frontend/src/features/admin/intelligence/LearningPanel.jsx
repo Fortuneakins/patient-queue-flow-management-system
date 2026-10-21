@@ -116,10 +116,11 @@ export default function LearningPanel({ token }) {
                 );
               })}
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Service observations</span><p className="mt-1 font-semibold tabular-nums">{predictionModel?.valid_service_samples ?? 0}</p></div>
               <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Recorded waiting visits</span><p className="mt-1 font-semibold tabular-nums">{predictionModel?.waiting_visits ?? 0}</p></div>
               <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Active consultations</span><p className="mt-1 font-semibold tabular-nums">{predictionModel?.active_consultations ?? 0}</p></div>
+              <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Staffing source</span><p className="mt-1 text-sm font-semibold">{predictionModel?.staffing_source === 'SHIFT_SCHEDULE' ? 'Verified shift schedule' : 'Configured fallback'}</p></div>
               <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Model version</span><p className="mt-1 break-all text-sm font-semibold">{predictionModel?.version || 'Not reported'}</p></div>
             </div>
             {livePrediction.warnings?.length > 0 && (
