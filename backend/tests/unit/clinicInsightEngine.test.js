@@ -64,3 +64,24 @@ test('sorts severity deterministically and never recommends changing triage', ()
   assert.deepEqual(result.insights.map(item => item.severity).slice(0, 2), ['CRITICAL', 'CRITICAL']);
   assert.ok(result.insights.every(item => !/automatically assign|automatically change/i.test(item.recommended_action)));
 });
+
+
+test('reports the configured delay threshold in evidence instead of assuming 60 minutes', () => {
+  const result = buildClinicInsights({
+    waiting: 4,
+    in_consultation: 1,
+    overdue_waiting: 2,
+    oldest_wait_minutes: 77,
+    delay_review_threshold_minutes: 45,
+    on_duty_doctors: 1,
+    resource_issues: 0,
+    unclassified_completed: 0,
+    unclassified_active: 0,
+    service_history_samples: 8
+  });
+  const flow = result.insights.find(item => item.rule_id === 'FLOW-001');
+  assert.ok(flow);
+  assert.match(flow.summary, /configured 45-minute/);
+  assert.ok(flow.evidence.includes('Visits over 45 minutes: 2.'));
+  assert.ok(flow.evidence.includes('Configured delay-review threshold: 45 minutes.'));
+});
