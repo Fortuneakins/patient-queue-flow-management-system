@@ -26,6 +26,19 @@ function publicPrediction(prediction) {
   else if (quality === 'LIMITED_OBSERVATIONS') estimateBasis = 'LIMITED_OBSERVATIONS';
   else if (quality === 'UNAVAILABLE_NO_STAFF') estimateBasis = 'UNAVAILABLE';
 
+  const warnings = Array.isArray(prediction.warnings)
+    ? [...new Set(prediction.warnings
+      .filter(item => typeof item === 'string' && item.trim())
+      .map(item => item.trim().slice(0, 500))]
+    )].slice(0, 5)
+    : [];
+
+  if (prediction.degraded && warnings.length === 0) {
+    warnings.push('Wait estimates are currently unavailable. Queue operations continue normally.');
+  } else if (estimateBasis === 'FALLBACK_ASSUMPTION' && warnings.length === 0) {
+    warnings.push('This planning estimate uses a default assumption and is not calibrated against sufficient operational history.');
+  }
+
   return {
     '1': prediction['1'],
     '2': prediction['2'],
@@ -34,7 +47,7 @@ function publicPrediction(prediction) {
     degraded: prediction.degraded,
     estimate_basis: estimateBasis,
     generated_at: prediction.generated_at,
-    warnings: prediction.degraded ? ['Wait estimates are currently unavailable.'] : []
+    warnings
   };
 }
 
