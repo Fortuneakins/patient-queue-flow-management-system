@@ -153,6 +153,9 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
     : null;
   const latestEvent = snapshot.events?.[0] || null;
   const sampleCount = overview ? count(overview.service_history_samples) : null;
+  const onDutyDoctors = overview?.staffing ? count(overview.staffing.on_duty_doctors) : null;
+  const unclassifiedCompleted = overview?.data_quality ? count(overview.data_quality.unclassified_completed) : null;
+  const excludedTestDemo = overview?.data_quality ? count(overview.data_quality.excluded_test_demo_records) : null;
   const sourceLabels = {
     overview: 'operational overview',
     visits: 'active visits',
@@ -164,63 +167,27 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
   };
   const unavailableSources = sourceIssues.map(key => sourceLabels[key] || key);
 
-  const signals = [];
-  if (overdue !== null && overdue > 0) {
-    signals.push({
-      tone: 'red',
-      title: `${overdue} waiting ${overdue === 1 ? 'visit needs' : 'visits need'} a delay review`,
-      detail: 'These waiting visits have crossed the system’s 60-minute operational review threshold. Check the context with authorised clinical staff; this is not an automatic change to triage priority.',
-      action: 'Review delay signals',
-      tool: 'learning'
-    });
-  }
-  if (resourceIssues !== null && resourceIssues > 0) {
-    signals.push({
-      tone: 'amber',
-      title: `${resourceIssues} resource ${resourceIssues === 1 ? 'record needs' : 'records need'} attention`,
-      detail: 'At least one resource is marked Limited or Unavailable. Confirm the recorded state with the responsible administrator before relying on it for planning.',
-      action: 'Inspect resources',
-      tool: 'resources'
-    });
-  }
-  if (openReferrals !== null && openReferrals > 0) {
-    signals.push({
-      tone: 'amber',
-      title: `${openReferrals} referral ${openReferrals === 1 ? 'record remains' : 'records remain'} open`,
-      detail: 'Review acknowledgement and follow-up status. Referral Relay records handovers locally; it does not contact an external service automatically.',
-      action: 'Review referrals',
-      tool: 'referrals'
-    });
-  }
-  if (waiting !== null && waiting > 0 && (overdue === null || overdue === 0)) {
-    signals.push({
-      tone: 'teal',
-      title: `${waiting} ${waiting === 1 ? 'visit is' : 'visits are'} currently waiting`,
-      detail: 'Use FlowTwin to explore a hypothetical demand or capacity change without altering the live queue.',
-      action: 'Explore a scenario',
-      tool: 'flow'
-    });
-  }
-  if (sampleCount !== null && sampleCount < 10) {
-    signals.push({
-      tone: 'neutral',
-      title: 'Limited historical service-time evidence',
-      detail: sampleCount === 0
-        ? 'No eligible completed service-time samples were found in the recent history used by the model. Treat wait projections as assumption-led until more observations accumulate.'
-        : `Only ${sampleCount} eligible completed service-time ${sampleCount === 1 ? 'sample was' : 'samples were'} found. Review model assumptions and sample size before drawing conclusions.`,
-      action: 'Review prediction evidence',
-      tool: 'learning'
-    });
-  }
-  if (snapshot.events && snapshot.events.length === 0) {
-    signals.push({
-      tone: 'neutral',
-      title: 'No operational events were returned',
-      detail: 'The current event query is empty. This may reflect a fresh database or a lack of recorded actions, rather than a system failure.',
-      action: 'Open Flight Recorder',
-      tool: 'events'
-    });
-  }
+  const actionLabels = {
+    learning: 'Review evidence',
+    resources: 'Inspect resources',
+    provenance: 'Review provenance',
+    flow: 'Explore scenario',
+    referrals: 'Review referrals',
+    events: 'Inspect event trace'
+  };
+  const signals = Array.isArray(overview?.insights)
+    ? overview.insights.map(item => ({
+      tone: ['CRITICAL', 'HIGH'].includes(item.severity) ? 'red'
+        : item.severity === 'MEDIUM' ? 'amber'
+          : item.severity === 'LOW' ? 'neutral' : 'teal',
+      title: item.title,
+      detail: [item.summary, ...(item.evidence || []).map(value => `Evidence: ${value}`), `Suggested action: ${item.recommended_action}`].join(' '),
+      action: item.tool ? (actionLabels[item.tool] || 'Open workbench') : null,
+      tool: item.tool,
+      ruleId: item.rule_id,
+      severity: item.severity
+    }))
+    : [];
 
   const go = tool => onOpenTool?.(tool);
 
@@ -241,7 +208,8 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-teal-100">
               <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-300" /> API-backed data</span>
               <span>{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Waiting for first snapshot'}</span>
-              {overview?.model_version && <span>Model {overview.model_version}</span>}
+              {overview?.model_version && <span>Queue model {overview.model_version}</span>}
+              {overview?.insight_model_version && <span>Review rules {overview.insight_model_version}</span>}
             </div>
           </div>
           <Button onClick={refresh} disabled={busy} icon="refresh" variant="secondary">{busy ? 'Refreshing…' : 'Refresh snapshot'}</Button>
@@ -350,13 +318,16 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
           <div className="min-w-0">
             <p className="eyebrow">Evidence and system footing</p>
             <h3 className="font-display text-base font-bold text-stone-900">Data quality and model context</h3>
-            <p className="mt-1 text-sm text-stone-600">Inspect the evidence behind the operational summary; these counts do not certify prediction accuracy or clinical safety.</p>
+            <p className="mt-1 text-sm text-stone-600">The server-side review rules combine queue delay, rostered capacity, resource state, provenance and sample sufficiency. Each prompt includes its evidence and a suggested human action; rule outputs are not clinical decisions.</p>
           </div>
           <div className="flex flex-wrap gap-2 text-xs font-semibold text-stone-700">
             <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1">Pathways: {activePathways === null ? '—' : activePathways}</span>
             <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1">Service samples: {sampleCount === null ? '—' : sampleCount}</span>
             <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1">Scenarios: {scenarios === null ? '—' : scenarios}</span>
             <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1">Events: {overview?.event_count == null ? '—' : count(overview.event_count).toLocaleString()}</span>
+            <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1">Doctors rostered now: {onDutyDoctors === null ? '—' : onDutyDoctors}</span>
+            <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1">Unclassified completed: {unclassifiedCompleted === null ? '—' : unclassifiedCompleted}</span>
+            <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1">Test/demo excluded: {excludedTestDemo === null ? '—' : excludedTestDemo}</span>
           </div>
         </summary>
         <div className="border-t border-stone-200 p-4 md:p-5">
