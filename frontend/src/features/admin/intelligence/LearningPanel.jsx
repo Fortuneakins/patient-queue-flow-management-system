@@ -28,7 +28,7 @@ export default function LearningPanel({ token }) {
       api.intelligenceOverview(token),
       api.fairnessMetrics(token),
       api.forecastTruth(token, 20),
-      api.predictions()
+      api.predictionEvidence(token)
     ]);
     const errors = [];
 
