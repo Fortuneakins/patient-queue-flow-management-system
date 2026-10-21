@@ -70,13 +70,19 @@ if (!dbConfigured) {
           "ORDER BY COALESCE(priority_level,4), queued_at, queue_id LIMIT 1000) " +
           "SELECT queue_id, tier FROM visible_queue WHERE status='Waiting' ORDER BY tier, queue_id"
         );
-        const visitEstimates = snapshot.rows.map(item => ({
-          queue_id: Number(item.queue_id),
-          tier: Number(item.tier),
-          baseline_wait_minutes: ({ 1: 1, 2: 4, 3: 7, 4: 11 })[Number(item.tier)],
-          calibration_offset_minutes: 0,
-          estimated_wait_minutes: ({ 1: 1, 2: 4, 3: 7, 4: 11 })[Number(item.tier)]
-        }));
+        // A fixed synthetic correction makes baseline-versus-applied MAE testable.
+        // It is fixture data only, not a claim that production calibration is trained.
+        const visitEstimates = snapshot.rows.map(item => {
+          const baselineWait = ({ 1: 1, 2: 4, 3: 7, 4: 11 })[Number(item.tier)];
+          const calibrationOffset = 5;
+          return {
+            queue_id: Number(item.queue_id),
+            tier: Number(item.tier),
+            baseline_wait_minutes: baselineWait,
+            calibration_offset_minutes: calibrationOffset,
+            estimated_wait_minutes: baselineWait + calibrationOffset
+          };
+        });
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         res.end(JSON.stringify({
           '1': 2, '2': 5, '3': 10, '4': 15,
@@ -323,12 +329,12 @@ if (!dbConfigured) {
     assert.equal(recordedSample.rowCount, 1);
     const recordedTier = await query('SELECT COALESCE(priority_level,4)::int AS tier FROM queue_entries WHERE queue_id=$1', [queueId]);
     const perVisitExpected = ({ 1: 1, 2: 4, 3: 7, 4: 11 })[recordedTier.rows[0].tier];
-    assert.equal(Number(recordedSample.rows[0].predicted_wait_minutes), perVisitExpected,
-      'truth ledger should use the per-visit estimate, not the tier-level summary');
+    assert.equal(Number(recordedSample.rows[0].predicted_wait_minutes), perVisitExpected + 5,
+      'truth ledger should persist the applied per-visit estimate, not the tier-level summary');
     assert.equal(Number(recordedSample.rows[0].baseline_wait_minutes), perVisitExpected,
-      'baseline forecast should be persisted separately from the corrected score');
-    assert.equal(Number(recordedSample.rows[0].calibration_offset_minutes), 0,
-      'test fixture has no prior operational calibration and should apply no offset');
+      'baseline forecast should be persisted separately from the applied score');
+    assert.equal(Number(recordedSample.rows[0].calibration_offset_minutes), 5,
+      'fixture correction must be auditable independently from the baseline');
 
     // Model an observation that arrives after its declared horizon. The overall
     // MAE remains auditable, while the API must separately identify in-horizon
@@ -345,9 +351,9 @@ if (!dbConfigured) {
     assert.ok(evaluatedForecast, 'newly recorded forecast should appear in truth ledger');
     assert.ok(Number(evaluatedForecast.tracked_samples) >= 1);
     assert.ok(Number(evaluatedForecast.observed_samples) >= 1);
-    assert.equal(Number(evaluatedForecast.calibrated_samples), 0, 'the fixture stores no non-zero calibration correction');
-    assert.equal(Number(evaluatedForecast.mean_applied_calibration_offset_minutes), 0);
-    assert.equal(Number(evaluatedForecast.max_abs_applied_calibration_offset_minutes), 0);
+    assert.ok(Number(evaluatedForecast.calibrated_samples) >= 1, 'the synthetic fixture should demonstrate applied corrections');
+    assert.equal(Number(evaluatedForecast.mean_applied_calibration_offset_minutes), 5);
+    assert.equal(Number(evaluatedForecast.max_abs_applied_calibration_offset_minutes), 5);
     assert.equal(Number(evaluatedForecast.within_horizon_samples), 0, 'synthetic fixtures must not count as verified operational accuracy');
     assert.equal(Number(evaluatedForecast.out_of_horizon_samples), 0, 'synthetic observations must not be represented as operational errors');
     assert.equal(Number(evaluatedForecast.unclassified_observed_samples), 0);
@@ -355,7 +361,22 @@ if (!dbConfigured) {
     assert.equal(Number(evaluatedForecast.excluded_synthetic_out_of_horizon_samples), 1, 'the 75-minute synthetic observation must remain explicitly outside the 60-minute horizon');
     assert.equal(Number(evaluatedForecast.unclassified_out_of_horizon_samples), 0);
     assert.equal(evaluatedForecast.within_horizon_mean_absolute_error_minutes, null);
-    assert.ok(Number(evaluatedForecast.mean_absolute_error_minutes) >= 0, 'all-sample MAE should remain available for audit');
+    assert.equal(evaluatedForecast.within_horizon_baseline_mean_absolute_error_minutes, null);
+    assert.equal(evaluatedForecast.operational_baseline_mean_absolute_error_minutes, null,
+      'synthetic outcomes must not be reported as operational baseline accuracy');
+
+    const pairedErrors = await query(
+      'SELECT ROUND(AVG(ABS(actual_wait_minutes - baseline_wait_minutes))::numeric,1) AS baseline_mae, ' +
+      'ROUND(AVG(ABS(actual_wait_minutes - predicted_wait_minutes))::numeric,1) AS applied_mae, ' +
+      'COUNT(actual_wait_minutes)::int AS observed_count FROM flow_forecast_samples ' +
+      'WHERE forecast_id=$1 AND actual_wait_minutes IS NOT NULL',
+      [forecast.body.forecast_id]
+    );
+    assert.ok(Number(pairedErrors.rows[0].observed_count) >= 1);
+    assert.equal(Number(evaluatedForecast.baseline_mean_absolute_error_minutes), Number(pairedErrors.rows[0].baseline_mae),
+      'baseline MAE should use the saved baseline over the same observed sample set');
+    assert.equal(Number(evaluatedForecast.mean_absolute_error_minutes), Number(pairedErrors.rows[0].applied_mae),
+      'applied MAE should use the saved applied estimate over the same observed sample set');
     const fairness = await request('/api/intelligence/fairness', { headers: auth(tokens.admin) });
     assert.equal(fairness.response.status, 200);
     assert.equal(fairness.body.tiers.length, 4);
