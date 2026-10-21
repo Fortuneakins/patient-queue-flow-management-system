@@ -84,7 +84,18 @@ function validateUsername(value) {
 }
 
 function validatePassword(value) {
-  return typeof value === 'string' && value.length >= 8;
+  if (typeof value !== 'string') return false;
+  if (String(process.env.NODE_ENV || 'development').toLowerCase() !== 'production') {
+    return value.length >= 8;
+  }
+  // Production staff accounts use a stronger floor than local academic fixtures.
+  // MFA remains a separate production go-live requirement; this is not a substitute.
+  return value.length >= 14
+    && /[a-z]/.test(value)
+    && /[A-Z]/.test(value)
+    && /[0-9]/.test(value)
+    && /[^A-Za-z0-9]/.test(value)
+    && !/DemoPass2026!|password|change-me/i.test(value);
 }
 
 module.exports = {
