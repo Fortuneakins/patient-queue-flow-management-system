@@ -207,7 +207,10 @@ async function getForecastTruth(limit = 20) {
   const result = await query(
     'SELECT f.forecast_id,f.model_version,f.horizon_minutes,f.tier_estimates,f.waiting_snapshot,f.created_at, ' +
     'COUNT(s.sample_id)::int AS tracked_samples,COUNT(s.actual_wait_minutes)::int AS observed_samples, ' +
-    'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NULL)::int AS pending_samples, ' +
+    'COUNT(s.sample_id) FILTER (WHERE s.calibration_offset_minutes <> 0)::int AS calibrated_samples, ' +
+    'ROUND(AVG(s.calibration_offset_minutes) FILTER (WHERE s.sample_id IS NOT NULL)::numeric,1) AS mean_applied_calibration_offset_minutes, ' +
+    'ROUND(MAX(ABS(s.calibration_offset_minutes)) FILTER (WHERE s.sample_id IS NOT NULL)::numeric,1) AS max_abs_applied_calibration_offset_minutes, ' +
+    'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NULL)::int AS pending_samples, '
     'COUNT(s.sample_id) FILTER (WHERE q.data_provenance = \'OPERATIONAL\')::int AS operational_tracked_samples, ' +
     'COUNT(s.actual_wait_minutes) FILTER (WHERE q.data_provenance = \'OPERATIONAL\')::int AS operational_observed_samples, ' +
     'COUNT(s.actual_wait_minutes) FILTER (WHERE COALESCE(q.data_provenance,\'UNCLASSIFIED\') = \'UNCLASSIFIED\')::int AS unclassified_observed_samples, ' +
