@@ -165,3 +165,45 @@ def test_lower_priority_waiting_work_does_not_delay_a_higher_tier_forecast():
     assert estimates["2"] == 0
     assert estimates["3"] == 0
     assert estimates["4"] == 14
+
+
+
+def test_current_visit_forecasts_are_individual_and_follow_priority_order():
+    from analytics_service.estimator import estimate_current_visit_waits
+
+    now = datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc)
+    visits = [
+        {"queue_id": 11, "status": "Waiting", "priority_level": 1, "queued_at": now - timedelta(minutes=5)},
+        {"queue_id": 12, "status": "Waiting", "priority_level": 1, "queued_at": now - timedelta(minutes=4)},
+        {"queue_id": 13, "status": "Waiting", "priority_level": 2, "queued_at": now - timedelta(minutes=3)},
+        {"queue_id": 14, "status": "Waiting", "priority_level": 4, "queued_at": now - timedelta(minutes=2)},
+    ]
+
+    forecasts = estimate_current_visit_waits(visits, 2, now)
+
+    assert forecasts == [
+        {"queue_id": 11, "tier": 1, "estimated_wait_minutes": 0},
+        {"queue_id": 12, "tier": 1, "estimated_wait_minutes": 0},
+        {"queue_id": 13, "tier": 2, "estimated_wait_minutes": 14},
+        {"queue_id": 14, "tier": 4, "estimated_wait_minutes": 14},
+    ]
+
+
+def test_current_visit_forecasts_use_active_consultation_elapsed_time():
+    from analytics_service.estimator import estimate_current_visit_waits
+
+    now = datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc)
+    history = [
+        {"tier": 1, "service_minutes": duration}
+        for duration in [10, 12, 14, 16, 18, 20, 22, 24]
+    ]
+    visits = [
+        {"queue_id": 21, "status": "In-Consultation", "priority_level": 1,
+         "queued_at": now - timedelta(minutes=20), "called_at": now - timedelta(minutes=10)},
+        {"queue_id": 22, "status": "Waiting", "priority_level": 1,
+         "queued_at": now - timedelta(minutes=2)},
+    ]
+
+    forecasts = estimate_current_visit_waits(visits, 1, now, service_minutes=history)
+
+    assert forecasts == [{"queue_id": 22, "tier": 1, "estimated_wait_minutes": 9}]
