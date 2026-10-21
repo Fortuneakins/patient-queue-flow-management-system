@@ -166,8 +166,8 @@ services:
       DB_HOST: ${DB_HOST:?Set DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME:?Set DB_NAME}
-      DB_USER: ${DB_USER:?Set DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      DB_USER: ${MIGRATION_DB_USER:?Set a dedicated database migration owner}
+      DB_PASSWORD: ${MIGRATION_DB_PASSWORD:?Set the migration-owner password}
       DB_SSL: "true"
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN}
