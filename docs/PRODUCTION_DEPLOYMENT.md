@@ -36,7 +36,7 @@ Copy-Item .env.production.example .env.production
 
 The actual `.env.production` file is ignored by Git. Never put its values in source control, screenshots, support tickets, build arguments or application logs.
 
-Populate the file with the public domain, monitored TLS contact email, managed PostgreSQL host/database/user/password, and two independently generated random secrets:
+Populate the file with the public domain, monitored TLS contact email, managed PostgreSQL host/database/user/password, the delay-review threshold (default 60 minutes; whole values 1–1440), and two independently generated random secrets:
 
 ```powershell
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
