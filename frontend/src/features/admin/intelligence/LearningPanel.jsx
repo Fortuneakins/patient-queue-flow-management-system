@@ -106,9 +106,10 @@ export default function LearningPanel({ token, onOpenTool }) {
                 </div>;
               })}
             </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Completed timing samples</span><p className="mt-1 font-semibold tabular-nums">{prediction.service_history_samples ?? 0}</p></div>
               <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Rostered doctors</span><p className="mt-1 font-semibold tabular-nums">{prediction.staffed_doctors ?? 'Unknown'}</p></div>
+              <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Planning buffer</span><p className="mt-1 text-sm font-semibold">{prediction.projection_buffer_percent == null ? 'Not reported' : prediction.projection_buffer_percent + '%'}</p><p className="mt-1 text-xs text-stone-500">Heuristic margin, not a confidence interval</p></div>
               <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Model version</span><p className="mt-1 break-all text-sm font-semibold">{prediction.model_version || 'Not reported'}</p></div>
               <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Data provenance</span><p className="mt-1 text-sm font-semibold">{prediction.provenance_mode || 'Not reported'}</p></div>
             </div>
