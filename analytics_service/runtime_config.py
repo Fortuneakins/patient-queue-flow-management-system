@@ -75,5 +75,19 @@ def validate_production_config(
             raise RuntimeError("Production analytics database username cannot be a placeholder.")
     if (sslmode or "").strip().lower() not in {"require", "verify-ca", "verify-full"}:
         raise RuntimeError("Production analytics requires DB_SSLMODE=require, verify-ca or verify-full.")
-    if not cors_origins or any(urlparse(origin).scheme != "https" for origin in cors_origins):
-        raise RuntimeError("Production analytics CORS_ORIGIN must contain only HTTPS origins.")
+    if not cors_origins:
+        raise RuntimeError("Production analytics requires at least one HTTPS CORS_ORIGIN.")
+    for origin in cors_origins:
+        parsed_origin = urlparse(origin)
+        if (
+            parsed_origin.scheme != "https"
+            or not parsed_origin.hostname
+            or parsed_origin.username
+            or parsed_origin.password
+            or parsed_origin.path not in {"", "/"}
+            or parsed_origin.query
+            or parsed_origin.fragment
+        ):
+            raise RuntimeError("Production analytics CORS_ORIGIN must contain clean HTTPS origins without credentials, paths, queries or fragments.")
+        if parsed_origin.hostname.lower() in {"localhost", "127.0.0.1", "::1"}:
+            raise RuntimeError("Production analytics CORS_ORIGIN cannot use localhost.")
