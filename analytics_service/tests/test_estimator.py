@@ -15,8 +15,9 @@ def test_workload_estimate_counts_equal_or_higher_priority_work_and_active_consu
         {"status": "Waiting", "priority_level": 3, "queued_at": now - timedelta(minutes=10)},
         {"status": "In-Consultation", "priority_level": 2, "queued_at": now - timedelta(minutes=20), "called_at": now - timedelta(minutes=4)},
     ]
-    # Three waiting jobs plus a conservative half-service allowance for the active consultation.
-    assert estimate_waits(visits, 2, now) == {"1": 18, "2": 18, "3": 25, "4": 25}
+    # Each waiting job is allocated to the currently earliest available doctor slot.
+    # The active consultation has already consumed four of the 12 assumed minutes.
+    assert estimate_waits(visits, 2, now) == {"1": 14, "2": 14, "3": 23, "4": 23}
 
 
 def test_observed_service_time_is_used_only_after_minimum_sample_threshold():
@@ -79,3 +80,71 @@ def test_historical_service_time_explicitly_describes_the_call_to_discharge_prox
     assert metadata["estimate_quality"] == "OBSERVATION_BASED"
     assert "call-to-discharge intervals" in metadata["service_time_basis"]
     assert any("post-consultation work" in item for item in metadata["limitations"])
+
+
+
+def test_tier_specific_history_changes_service_time_for_each_priority():
+    now = datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc)
+    history = (
+        [{"tier": 1, "service_minutes": 5} for _ in range(8)]
+        + [{"tier": 2, "service_minutes": 10} for _ in range(8)]
+        + [{"tier": 3, "service_minutes": 15} for _ in range(8)]
+        + [{"tier": 4, "service_minutes": 20} for _ in range(8)]
+    )
+    visits = [
+        {"status": "Waiting", "priority_level": 1, "queued_at": now - timedelta(minutes=5)},
+        {"status": "Waiting", "priority_level": 2, "queued_at": now - timedelta(minutes=4)},
+        {"status": "Waiting", "priority_level": 3, "queued_at": now - timedelta(minutes=3)},
+        {"status": "Waiting", "priority_level": 4, "queued_at": now - timedelta(minutes=2)},
+    ]
+
+    assert estimate_waits(visits, 1, now, service_minutes=history) == {
+        "1": 6, "2": 18, "3": 35, "4": 58
+    }
+
+
+def test_elapsed_active_consultation_uses_conditional_remaining_duration():
+    now = datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc)
+    history = [
+        {"tier": 1, "service_minutes": duration}
+        for duration in [10, 12, 14, 16, 18, 20, 22, 24]
+    ]
+    visits = [
+        {
+            "status": "In-Consultation",
+            "priority_level": 1,
+            "queued_at": now - timedelta(minutes=20),
+            "called_at": now - timedelta(minutes=10),
+        },
+        {"status": "Waiting", "priority_level": 1, "queued_at": now - timedelta(minutes=2)},
+    ]
+
+    # Given an elapsed 10 minutes, comparable completed durations imply an
+    # eight-minute median residual; one five-minute buffered job is not enough
+    # to free the only slot before that existing job completes.
+    assert estimate_waits(visits, 1, now, service_minutes=history)["1"] == 29
+
+
+def test_insufficient_tier_history_uses_pooled_median_with_evidence_source():
+    history = (
+        [{"tier": 1, "service_minutes": 6} for _ in range(8)]
+        + [{"tier": 2, "service_minutes": 18} for _ in range(4)]
+    )
+    metadata = estimate_metadata(history, 2, 1, active_consultation_count=0)
+
+    assert metadata["tier_service_profiles"]["1"]["service_model"] == "TIER_HISTORY"
+    assert metadata["tier_service_profiles"]["1"]["service_minutes"] == 6
+    assert metadata["tier_service_profiles"]["2"]["service_model"] == "POOLED_HISTORY"
+    assert metadata["tier_service_profiles"]["2"]["tier_service_samples"] == 4
+    assert metadata["estimate_quality"] == "LIMITED_OBSERVATIONS"
+    assert metadata["service_history_samples"] == 12
+
+
+def test_service_metadata_reports_roster_mismatch_and_no_false_confidence():
+    history = [{"tier": 4, "service_minutes": 14} for _ in range(8)]
+    metadata = estimate_metadata(history, 1, 3, active_consultation_count=2)
+
+    assert metadata["simulated_service_slots"] == 2
+    assert metadata["active_consultations"] == 2
+    assert metadata["waiting_visits"] == 1
+    assert any("verify the roster" in warning for warning in metadata["warnings"])
