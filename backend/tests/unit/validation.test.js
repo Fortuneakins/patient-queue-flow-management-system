@@ -68,3 +68,20 @@ test('enforces username and password constraints', () => {
 test('normalizes roles consistently', () => {
   assert.equal(normalizeRole(' doctor '), 'DOCTOR');
 });
+
+
+test('requires a stronger password policy in production without breaking local demo fixtures', () => {
+  const previous = process.env.NODE_ENV;
+  try {
+    process.env.NODE_ENV = 'production';
+    assert.equal(validatePassword('12345678'), false);
+    assert.equal(validatePassword('LongerProduction1!'), true);
+    assert.equal(validatePassword('Demo' + 'Pass2026!'), false);
+    assert.equal(validatePassword('alllowercase12345!'), false);
+    assert.equal(validatePassword('ALLUPPERCASE12345!'), false);
+    assert.equal(validatePassword('NoDigitsOrSymbolHere'), false);
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previous;
+  }
+});
