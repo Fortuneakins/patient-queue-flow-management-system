@@ -44,6 +44,6 @@ assert.match(caddyService, /- ["']?80:80["']?/, 'The public gateway must publish
 assert.match(caddyService, /- ["']?443:443["']?/, 'The public gateway must publish HTTPS port 443');
 assert.match(api, /DATA_PROVENANCE_MODE:\s*OPERATIONAL/, 'Production API must use operational provenance');
 assert.match(analytics, /DATA_PROVENANCE_MODE:\s*OPERATIONAL/, 'Production analytics must use operational provenance');
-assert.match(migrate, /npm run db:migrate/, 'The migration service must run only the tracked migration runner');
+assert.match(migrate, /command:\s*\["npm",\s*"run",\s*"db:migrate"\]/, 'The migration service must run only the tracked migration runner');
 
 console.log('Production topology checks passed: Caddy → Nginx 8080 → private API 5000 / analytics 5001; only Caddy publishes host ports.');
