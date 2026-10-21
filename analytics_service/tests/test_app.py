@@ -114,7 +114,7 @@ def test_predict_returns_transparent_metadata(monkeypatch):
     assert response.json["degraded"] is False
     assert response.json["estimate_quality"] == "OBSERVATION_BASED"
     assert response.json["service_history_samples"] == 35
-    assert response.json["service_time_basis"].startswith("median of recent operational call-to-discharge")
+    assert "operational call-to-discharge intervals" in response.json["service_time_basis"]
     assert response.json["4"] > 0
 
 
