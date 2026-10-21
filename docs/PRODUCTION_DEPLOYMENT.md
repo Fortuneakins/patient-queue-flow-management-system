@@ -129,7 +129,7 @@ The runner serialises migrations with a PostgreSQL advisory lock, stores filenam
 
 Take a backup and verify it can be restored before baselining or applying schema changes. The migration runner will not guess the history of an existing database that has no migration ledger.
 
-For a previously reviewed database whose schema and source backfill already match migrations 001–008, the explicit baseline flow is:
+For a previously reviewed database whose schema and source backfill already match migrations 001–008, the explicit baseline flow is. **This repository currently has nine reviewed SQL files across eight numbered versions because both `007_data_provenance_source.sql` and `007_forecast_calibration_baseline.sql` use the `007` prefix.** The baseline manifest checks the exact filenames rather than assuming one file per number:
 
 Use the production Compose environment for the database operation. Only after a verified backup/restore rehearsal and manual confirmation that this database really matches migrations 001–008, run:
 
@@ -141,7 +141,7 @@ docker compose --env-file .env.production -f compose.production.yml run --rm -e 
 if ($LASTEXITCODE -ne 0) { throw 'Baseline failed. Stop and inspect the database before retrying.' }
 ```
 
-This procedure does not execute migrations 001–008; it checks schema markers and requires explicit confirmation before writing their checksums to the ledger. It also checks the migration-008 provenance-source backfill. The one-off job uses the configured production database endpoint, TLS settings and migration-owner credentials from `.env.production`; it does not use the developer's local `.env`. If any check fails, stop and compare the restored backup, schema and migration history. Do not force the baseline, delete the ledger, reset the database or run old migrations against retained data. If the source backfill has not been applied, apply migration 008 explicitly after backup and review before attempting the baseline.
+This procedure does not execute migrations 001–008; it checks the required tables, reviewed queue provenance/pathway columns, the baseline/offset columns and named constraints on `flow_forecast_samples`, the exact nine-file migration manifest, and the migration-008 provenance-source backfill. It requires explicit confirmation before writing the reviewed files’ checksums to the ledger. The one-off job uses the configured production database endpoint, TLS settings and migration-owner credentials from `.env.production`; it does not use the developer's local `.env`. If any check fails, stop and compare the restored backup, schema and migration history. Do not force the baseline, delete the ledger, reset the database or run old migrations against retained data. If the source backfill has not been applied, apply migration 008 explicitly after backup and review before attempting the baseline.
 
 For any database state other than a verified 001–008 schema, use a reviewed migration plan that records which scripts have truly been applied. Never baseline a schema just because the tables have familiar names.
 
