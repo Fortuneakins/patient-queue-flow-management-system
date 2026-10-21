@@ -135,8 +135,20 @@ async function recordForecast(input = {}, actorStaffId) {
   const modelVersion = String(prediction.model_version || 'unknown').slice(0, 40);
   const perVisit = new Map(prediction.visit_estimates.map(item => [
     Number(item.queue_id),
-    { tier: Number(item.tier), wait: positiveMinutes(item.estimated_wait_minutes, 'Visit estimate', 0, 720) }
+    {
+      tier: Number(item.tier),
+      wait: positiveMinutes(item.estimated_wait_minutes, 'Visit estimate', 0, 720),
+      baselineWait: positiveMinutes(item.baseline_wait_minutes, 'Visit baseline estimate', 0, 720),
+      calibrationOffset: Number(item.calibration_offset_minutes)
+    }
   ]));
+  for (const predictionRow of perVisit.values()) {
+    if (!Number.isFinite(predictionRow.calibrationOffset)
+      || predictionRow.calibrationOffset < -30
+      || predictionRow.calibrationOffset > 30) {
+      throw httpError('The analytics service returned an invalid calibration offset. No forecast was recorded.', 503);
+    }
+  }
   const predictedQueueIds = [...perVisit.keys()];
   const snapshot = predictedQueueIds.length
     ? await query(
@@ -162,8 +174,8 @@ async function recordForecast(input = {}, actorStaffId) {
     for (const item of snapshot.rows) {
       const predicted = perVisit.get(Number(item.queue_id));
       await client.query(
-        'INSERT INTO flow_forecast_samples (forecast_id,queue_id,tier,predicted_wait_minutes) VALUES ($1,$2,$3,$4) ON CONFLICT (forecast_id,queue_id) DO NOTHING',
-        [forecast.forecast_id, item.queue_id, item.tier, predicted.wait]
+        'INSERT INTO flow_forecast_samples (forecast_id,queue_id,tier,predicted_wait_minutes,baseline_wait_minutes,calibration_offset_minutes) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (forecast_id,queue_id) DO NOTHING',
+        [forecast.forecast_id, item.queue_id, item.tier, predicted.wait, predicted.baselineWait, predicted.calibrationOffset]
       );
     }
     await appendOperationalEvent(client, { eventType: 'WAIT_FORECAST_RECORDED', entityType: 'FLOW_FORECAST', entityId: forecast.forecast_id, actorStaffId, toState: 'RECORDED', metadata: {
