@@ -110,6 +110,7 @@ def test_predict_returns_transparent_metadata(monkeypatch):
     ])
     monkeypatch.setattr(analytics, "on_duty_count", lambda: 1)
     monkeypatch.setattr(analytics, "tier_service_time_samples", lambda: ([{"tier": 1, "service_minutes": 8.0}] * 8 + [{"tier": 2, "service_minutes": 10.0}] * 8 + [{"tier": 3, "service_minutes": 12.0}] * 8 + [{"tier": 4, "service_minutes": 14.0}] * 11))
+    monkeypatch.setattr(analytics, "forecast_calibration_observations", lambda: [])
     response = analytics.app.test_client().get("/api/predict", headers=_test_service_headers(monkeypatch))
     assert response.status_code == 200
     assert response.json["degraded"] is False
@@ -128,6 +129,7 @@ def test_predict_does_not_report_zero_wait_when_no_staff_are_available(monkeypat
     ])
     monkeypatch.setattr(analytics, "on_duty_count", lambda: 0)
     monkeypatch.setattr(analytics, "tier_service_time_samples", lambda: ([{"tier": 1, "service_minutes": 8.0}] * 8 + [{"tier": 2, "service_minutes": 10.0}] * 8 + [{"tier": 3, "service_minutes": 12.0}] * 8 + [{"tier": 4, "service_minutes": 14.0}] * 11))
+    monkeypatch.setattr(analytics, "forecast_calibration_observations", lambda: [])
     response = analytics.app.test_client().get("/api/predict", headers=_test_service_headers(monkeypatch))
     assert response.status_code == 200
     assert response.json["degraded"] is True
@@ -204,3 +206,20 @@ def test_tier_service_history_query_returns_tier_labelled_operational_samples(mo
     assert "data_provenance = 'OPERATIONAL'" in cursor.sql
     assert "INTERVAL '90 days'" in cursor.sql
     assert "LIMIT 500" in cursor.sql
+
+
+
+def test_forecast_calibration_query_is_operational_and_horizon_bounded(monkeypatch):
+    cursor = FakeCursor([(4, 12.0, 10.0)])
+    monkeypatch.setattr(analytics, "_connect", lambda: FakeConnection(cursor))
+
+    values = analytics.forecast_calibration_observations()
+
+    assert values == [{"tier": 4, "predicted_wait_minutes": 12.0, "actual_wait_minutes": 10.0}]
+    assert "flow_forecast_samples" in cursor.sql
+    assert "flow_forecasts" in cursor.sql
+    assert "data_provenance = 'OPERATIONAL'" in cursor.sql
+    assert "flow_forecast_samples" in cursor.sql
+    assert "f.model_version = 'queue-workload-3.1.0'" in cursor.sql
+    assert "f.horizon_minutes" in cursor.sql
+    assert "ROW_NUMBER() OVER" in cursor.sql
