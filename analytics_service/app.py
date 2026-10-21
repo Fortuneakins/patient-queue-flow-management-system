@@ -11,7 +11,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-from .estimator import estimate_waits, estimate_metadata, estimate_current_visit_waits
+from .estimator import estimate_waits, estimate_metadata, estimate_current_visit_waits, calibrate_wait_estimates
 from .runtime_config import PROVENANCE_MODES, resolve_provenance_mode, validate_production_config
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -170,6 +170,53 @@ def tier_service_time_samples() -> list[dict]:
             ]
 
 
+def forecast_calibration_observations() -> list[dict]:
+    """Read one recent, in-horizon operational truth observation per visit."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                WITH eligible AS (
+                    SELECT
+                        s.queue_id,
+                        s.tier,
+                        s.predicted_wait_minutes,
+                        s.created_at AS sample_created_at,
+                        EXTRACT(EPOCH FROM (q.called_at - s.created_at)) / 60.0 AS actual_wait_minutes,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY s.queue_id
+                            ORDER BY s.created_at DESC, s.sample_id DESC
+                        ) AS visit_rank
+                    FROM flow_forecast_samples s
+                    JOIN flow_forecasts f ON f.forecast_id = s.forecast_id
+                    JOIN queue_entries q ON q.queue_id = s.queue_id
+                    WHERE f.model_version = 'queue-workload-3.1.0'
+                      AND f.created_at >= NOW() - INTERVAL '90 days'
+                      AND s.created_at >= NOW() - INTERVAL '90 days'
+                      AND q.data_provenance = 'OPERATIONAL'
+                      AND q.called_at IS NOT NULL
+                      AND q.called_at >= s.created_at
+                      AND EXTRACT(EPOCH FROM (q.called_at - s.created_at)) / 60.0 BETWEEN 0 AND 720
+                      AND EXTRACT(EPOCH FROM (q.called_at - s.created_at)) / 60.0 <= f.horizon_minutes
+                )
+                SELECT tier, predicted_wait_minutes, actual_wait_minutes
+                FROM eligible
+                WHERE visit_rank = 1
+                ORDER BY sample_created_at DESC
+                LIMIT 2000
+                """
+            )
+            return [
+                {
+                    "tier": int(row[0] or 4),
+                    "predicted_wait_minutes": float(row[1]),
+                    "actual_wait_minutes": float(row[2]),
+                }
+                for row in cur.fetchall()
+                if row[1] is not None and row[2] is not None
+            ]
+
+
 def on_duty_count() -> int:
     if not INTERNAL_SERVICE_TOKEN:
         if NODE_ENV == "production":
@@ -241,14 +288,19 @@ def predict():
         visits = db_rows()
         staff = on_duty_count()
         service_samples = tier_service_time_samples()
+        calibration_observations = forecast_calibration_observations()
+        wait_calibration = calibrate_wait_estimates(calibration_observations)
         estimates = estimate_waits(visits, staff, service_minutes=service_samples)
-        visit_estimates = estimate_current_visit_waits(visits, staff, service_minutes=service_samples)
+        visit_estimates = estimate_current_visit_waits(
+            visits, staff, service_minutes=service_samples, calibration=wait_calibration
+        )
         active_consultations = sum(1 for visit in visits if visit.get("status") == "In-Consultation")
         metadata = estimate_metadata(
             service_samples,
             staff,
             len(visits),
             active_consultation_count=active_consultations,
+            wait_calibration=wait_calibration,
         )
         return jsonify({
             **estimates,
