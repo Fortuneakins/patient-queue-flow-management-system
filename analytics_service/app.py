@@ -11,7 +11,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-from .estimator import estimate_waits, estimate_metadata
+from .estimator import estimate_waits, estimate_metadata, estimate_current_visit_waits
 from .runtime_config import PROVENANCE_MODES, resolve_provenance_mode, validate_production_config
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -100,11 +100,11 @@ def db_rows() -> list[dict]:
         with conn.cursor() as cur:
             cur.execute(
                 f"""
-                SELECT status, priority_level, queued_at, called_at, data_provenance
+                SELECT status, priority_level, queued_at, called_at, data_provenance, queue_id
                 FROM queue_entries
                 WHERE status IN ('Waiting', 'In-Consultation')
                   AND {visibility}
-                ORDER BY COALESCE(priority_level, 4), queued_at ASC
+                ORDER BY COALESCE(priority_level, 4), queued_at ASC, queue_id ASC
                 LIMIT 1000
                 """
             )
@@ -115,6 +115,7 @@ def db_rows() -> list[dict]:
                     "queued_at": row[2].astimezone(timezone.utc) if row[2] else None,
                     "called_at": row[3].astimezone(timezone.utc) if row[3] else None,
                     "data_provenance": row[4],
+                    "queue_id": row[5],
                 }
                 for row in cur.fetchall()
             ]
@@ -241,6 +242,7 @@ def predict():
         staff = on_duty_count()
         service_samples = tier_service_time_samples()
         estimates = estimate_waits(visits, staff, service_minutes=service_samples)
+        visit_estimates = estimate_current_visit_waits(visits, staff, service_minutes=service_samples)
         active_consultations = sum(1 for visit in visits if visit.get("status") == "In-Consultation")
         metadata = estimate_metadata(
             service_samples,
@@ -251,6 +253,7 @@ def predict():
         return jsonify({
             **estimates,
             **metadata,
+            "visit_estimates": visit_estimates,
             "degraded": metadata["degraded"],
             "provenance_mode": DATA_PROVENANCE_MODE,
             "generated_at": datetime.now(timezone.utc).isoformat(),
