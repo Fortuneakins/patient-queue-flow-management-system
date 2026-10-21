@@ -124,7 +124,7 @@ def test_predict_does_not_report_zero_wait_when_no_staff_are_available(monkeypat
     ])
     monkeypatch.setattr(analytics, "on_duty_count", lambda: 0)
     monkeypatch.setattr(analytics, "service_time_samples", lambda: [12.0] * 35)
-    response = analytics.app.test_client().get("/api/predict")
+    response = analytics.app.test_client().get("/api/predict", headers=_test_service_headers(monkeypatch))
     assert response.status_code == 200
     assert response.json["degraded"] is True
     assert response.json["estimate_quality"] == "UNAVAILABLE_NO_STAFF"
@@ -135,7 +135,7 @@ def test_predict_degrades_to_unavailable_not_zero_when_dependency_fails(monkeypa
     def fail():
         raise RuntimeError("underlying credentials must not be returned")
     monkeypatch.setattr(analytics, "db_rows", fail)
-    response = analytics.app.test_client().get("/api/predict")
+    response = analytics.app.test_client().get("/api/predict", headers=_test_service_headers(monkeypatch))
     assert response.status_code == 200
     assert response.json["degraded"] is True
     assert response.json["1"] is None
