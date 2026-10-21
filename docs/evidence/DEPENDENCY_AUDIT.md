@@ -26,3 +26,9 @@ No forced major-version upgrades or unverified dependency overrides were applied
 
 A clean production dependency audit does not imply that all development dependencies or application code are free of security issues.
 
+
+
+## Analytics runtime maintenance
+
+The analytics runtime pins are maintained separately from test tooling in `requirements-dev.txt`. The runtime dependency set is checked in CI with `pip-audit`; a release must remediate reported known vulnerabilities or record a reviewed, time-limited exception before proceeding. Flask, Flask-CORS, Requests and Gunicorn pins were updated to supported patched releases during the Clinic Intelligence deployment-readiness overhaul. The audit is a point-in-time vulnerability check, not proof that application logic is secure.
+
