@@ -2,6 +2,7 @@ const { query, withTransaction } = require('../db/pool');
 const { appendOperationalEvent } = require('./operationalEventService');
 const { MODEL_VERSION, normalizeScenario, runClinicSimulation, runSyntheticLab } = require('../utils/flowSimulation');
 const env = require('../config/env');
+const { getWaitPredictions } = require('./analyticsProxyService');
 const { queueVisibilityPredicate } = require('../config/dataProvenancePolicy');
 const queueVisibility = queueVisibilityPredicate(env.DATA_PROVENANCE_MODE, 'queue_entry');
 function httpError(message, status = 400) { return Object.assign(new Error(message), { status }); }
@@ -110,20 +111,30 @@ async function runLab(input, actorStaffId) {
   });
   return { ...stored, ...persisted };
 }
-async function recordForecast(input, actorStaffId) {
+async function recordForecast(input = {}, actorStaffId) {
   const horizon = Number(input.horizon_minutes === undefined ? 60 : input.horizon_minutes);
   if (!Number.isInteger(horizon) || horizon < 1 || horizon > 1440) throw httpError('horizon_minutes must be an integer between 1 and 1440.');
-  const estimates = input.tier_estimates && typeof input.tier_estimates === 'object' && !Array.isArray(input.tier_estimates) ? input.tier_estimates : {};
+
+  // Capture the source of truth on the server. Browser-provided estimates and
+  // model labels are untrusted and must not contaminate the prediction ledger.
+  const prediction = await getWaitPredictions();
+  if (prediction.degraded) {
+    throw httpError('The analytics service is unavailable. No forecast was recorded.', 503);
+  }
   const tierEstimates = {};
   for (let tier = 1; tier <= 4; tier += 1) {
-    if (estimates[tier] === undefined) throw httpError('tier_estimates must contain predictions for tiers 1 to 4.');
-    tierEstimates[tier] = positiveMinutes(estimates[tier], 'Tier ' + tier + ' estimate');
+    const raw = prediction[String(tier)];
+    if (raw === null || raw === undefined) {
+      throw httpError('The analytics service returned an unavailable tier estimate. No forecast was recorded.', 503);
+    }
+    tierEstimates[tier] = positiveMinutes(raw, 'Tier ' + tier + ' estimate', 0, 720);
   }
+  const modelVersion = String(prediction.model_version || 'unknown').slice(0, 40);
   const snapshot = await query(`SELECT queue_id, COALESCE(priority_level,4)::int AS tier FROM queue_entries queue_entry WHERE status = 'Waiting' AND ${queueVisibility} ORDER BY queued_at LIMIT 1000`);
   const stored = await withTransaction(async client => {
     const row = await client.query(
       'INSERT INTO flow_forecasts (model_version,horizon_minutes,tier_estimates,waiting_snapshot,created_by_staff_id) VALUES ($1,$2,$3::jsonb,$4,$5) RETURNING forecast_id,created_at',
-      [String(input.model_version || MODEL_VERSION).slice(0, 40), horizon, JSON.stringify(tierEstimates), snapshot.rowCount, actorStaffId]
+      [modelVersion, horizon, JSON.stringify(tierEstimates), snapshot.rowCount, actorStaffId]
     );
     const forecast = row.rows[0];
     for (const item of snapshot.rows) {
@@ -135,6 +146,9 @@ async function recordForecast(input, actorStaffId) {
     await appendOperationalEvent(client, { eventType: 'WAIT_FORECAST_RECORDED', entityType: 'FLOW_FORECAST', entityId: forecast.forecast_id, actorStaffId, toState: 'RECORDED', metadata: {
       waiting_snapshot: snapshot.rowCount,
       horizon_minutes: horizon,
+      model_version: modelVersion,
+      estimate_quality: prediction.estimate_quality,
+      service_history_samples: prediction.service_history_samples,
       provenance_mode: env.DATA_PROVENANCE_MODE
     } });
     return forecast;
@@ -142,6 +156,9 @@ async function recordForecast(input, actorStaffId) {
   return {
     ...stored, horizon_minutes: horizon, waiting_snapshot: snapshot.rowCount,
     tier_estimates: tierEstimates, tracked_visits: snapshot.rowCount,
+    model_version: modelVersion,
+    estimate_quality: prediction.estimate_quality,
+    service_history_samples: prediction.service_history_samples,
     provenance_mode: env.DATA_PROVENANCE_MODE
   };
 }
