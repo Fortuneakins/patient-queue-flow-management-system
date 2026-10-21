@@ -14,7 +14,7 @@ async function assertProductionDatabaseSafety({ nodeEnv, pool, migrationDirector
     throw new Error('Production startup blocked: database readiness could not be checked.');
   }
 
-  const directory = migrationDirectory || path.resolve(__dirname, '../../db/migrations');
+  const directory = migrationDirectory || path.resolve(__dirname, '../../../db/migrations');
   const filenames = fs.readdirSync(directory)
     .filter(name => /^\d{3}_[a-z0-9_]+\.sql$/i.test(name))
     .sort((a, b) => a.localeCompare(b));
