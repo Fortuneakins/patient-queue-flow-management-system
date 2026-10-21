@@ -195,6 +195,82 @@ def estimate_waits(
     return estimates
 
 
+def estimate_current_visit_waits(
+    visits: Iterable[dict],
+    on_duty_doctors: int,
+    now: datetime | None = None,
+    service_minutes: Iterable[Any] | None = None,
+) -> list[dict[str, int]]:
+    """
+    Estimate the remaining time until each currently waiting visit is called.
+
+    Unlike the per-tier hypothetical-arrival forecast, each current visit is
+    scheduled at its own position in the priority/arrival-ordered queue. These
+    visit-level values are the appropriate observations for the prediction
+    truth ledger, which later compares each estimate with that visit's actual
+    first-call time.
+    """
+    current = _parse_datetime(now) or datetime.now(timezone.utc)
+    rows: list[dict[str, Any]] = []
+    for index, item in enumerate(visits or []):
+        if not isinstance(item, dict):
+            continue
+        status = item.get("status")
+        if status not in {"Waiting", "In-Consultation"}:
+            continue
+        queue_id = item.get("queue_id")
+        try:
+            numeric_queue_id = int(queue_id) if queue_id is not None else None
+        except (TypeError, ValueError, OverflowError):
+            numeric_queue_id = None
+        rows.append({
+            "index": index,
+            "queue_id": numeric_queue_id,
+            "tier": _valid_tier(item.get("priority_level")),
+            "status": status,
+            "queued_at": _parse_datetime(item.get("queued_at")) or current,
+            "called_at": _parse_datetime(item.get("called_at")),
+        })
+
+    try:
+        staff = max(0, int(on_duty_doctors))
+    except (TypeError, ValueError, OverflowError):
+        staff = 0
+    if staff <= 0:
+        return []
+
+    profiles, _sample_size, _by_tier = _service_profiles(service_minutes)
+    active = [row for row in rows if row["status"] == "In-Consultation"]
+    waiting = sorted(
+        (row for row in rows if row["status"] == "Waiting"),
+        key=lambda row: (
+            row["tier"],
+            row["queued_at"],
+            row["queue_id"] if row["queue_id"] is not None else row["index"],
+        ),
+    )
+    simulated_slots = max(staff, len(active))
+    availability = [
+        _remaining_service_minutes(row, profiles[row["tier"]], current)
+        for row in active
+    ]
+    availability.extend([0.0] * (simulated_slots - len(availability)))
+
+    estimates: list[dict[str, int]] = []
+    for row in waiting:
+        slot = min(range(len(availability)), key=availability.__getitem__)
+        start_minutes = max(0.0, float(availability[slot]))
+        availability[slot] += float(profiles[row["tier"]]["minutes"])
+        if row["queue_id"] is None:
+            continue
+        estimates.append({
+            "queue_id": row["queue_id"],
+            "tier": row["tier"],
+            "estimated_wait_minutes": int(ceil(start_minutes * BUFFER)),
+        })
+    return estimates[:1000]
+
+
 def estimate_metadata(
     service_sample_size: int | Iterable[Any],
     staffed_doctors: int,
