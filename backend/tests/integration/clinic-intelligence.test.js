@@ -45,7 +45,7 @@ if (!dbConfigured) {
   test.before(async () => {
     // This deterministic fixture preserves the production service-token
     // contract without making CI depend on the real analytics database query.
-    analyticsServer = http.createServer((req, res) => {
+    analyticsServer = http.createServer(async (req, res) => {
       const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
       if (req.method !== 'GET' || pathname !== '/api/predict') {
         res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -57,20 +57,45 @@ if (!dbConfigured) {
         res.end(JSON.stringify({ error: 'Authentication required.' }));
         return;
       }
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({
-        '1': 2, '2': 5, '3': 10, '4': 15,
-        model: 'queue-workload-estimate',
-        model_version: 'pqfms-ci-analytics-fixture-v1',
-        estimate_quality: 'OBSERVATION_BASED',
-        service_time_basis: 'deterministic integration-test timing fixture',
-        service_history_samples: 24,
-        staffed_doctors: 2,
-        degraded: false,
-        provenance_mode: 'SYNTHETIC_TEST',
-        limitations: ['Deterministic integration-test fixture; not clinical evidence.'],
-        generated_at: new Date().toISOString()
-      }));
+      try {
+        // Use the same bounded visible queue snapshot shape as the predictor.
+        // Individual fixture predictions intentionally differ from tier summary
+        // estimates so the integration test can prove the ledger stores per-visit
+        // values rather than copying the tier-level summary into every row.
+        const snapshot = await query(
+          "WITH visible_queue AS (" +
+          "SELECT queue_id, status, COALESCE(priority_level,4)::int AS tier, queued_at " +
+          "FROM queue_entries WHERE status IN ('Waiting','In-Consultation') " +
+          "AND data_provenance <> 'DEMO' " +
+          "ORDER BY COALESCE(priority_level,4), queued_at, queue_id LIMIT 1000) " +
+          "SELECT queue_id, tier FROM visible_queue WHERE status='Waiting' ORDER BY tier, queue_id"
+        );
+        const visitEstimates = snapshot.rows.map(item => ({
+          queue_id: Number(item.queue_id),
+          tier: Number(item.tier),
+          estimated_wait_minutes: ({ 1: 1, 2: 4, 3: 7, 4: 11 })[Number(item.tier)]
+        }));
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({
+          '1': 2, '2': 5, '3': 10, '4': 15,
+          model: 'queue-workload-estimate',
+          model_version: 'pqfms-ci-analytics-fixture-v1',
+          estimate_quality: 'OBSERVATION_BASED',
+          service_time_basis: 'deterministic integration-test timing fixture',
+          service_history_samples: 24,
+          staffed_doctors: 2,
+          waiting_visits: visitEstimates.length,
+          active_consultations: 0,
+          visit_estimates: visitEstimates,
+          degraded: false,
+          provenance_mode: 'SYNTHETIC_TEST',
+          limitations: ['Deterministic integration-test fixture; not clinical evidence.'],
+          generated_at: new Date().toISOString()
+        }));
+      } catch (_error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Analytics fixture failure.' }));
+      }
     });
     await new Promise(resolve => analyticsServer.listen(0, '127.0.0.1', resolve));
     process.env.ANALYTICS_URL = 'http://127.0.0.1:' + analyticsServer.address().port;
@@ -134,6 +159,7 @@ if (!dbConfigured) {
       assert.equal(adminModel.body.model_version, 'pqfms-ci-analytics-fixture-v1');
       assert.equal(adminModel.body.staffed_doctors, 2);
       assert.equal(adminModel.body.service_history_samples, 24);
+      assert.equal(Object.hasOwn(adminModel.body, 'visit_estimates'), false);
 
       const nursePathways = await request('/api/intelligence/pathways', { headers: auth(tokens.nurse) });
       assert.equal(nursePathways.response.status, 200);
@@ -288,6 +314,15 @@ if (!dbConfigured) {
     assert.equal(forecast.body.model_version, 'pqfms-ci-analytics-fixture-v1');
     assert.deepEqual(forecast.body.tier_estimates, { 1: 2, 2: 5, 3: 10, 4: 15 });
     forecastIds.push(forecast.body.forecast_id);
+    const recordedSample = await query(
+      'SELECT predicted_wait_minutes FROM flow_forecast_samples WHERE forecast_id=$1 AND queue_id=$2',
+      [forecast.body.forecast_id, queueId]
+    );
+    assert.equal(recordedSample.rowCount, 1);
+    const recordedTier = await query('SELECT COALESCE(priority_level,4)::int AS tier FROM queue_entries WHERE queue_id=$1', [queueId]);
+    const perVisitExpected = ({ 1: 1, 2: 4, 3: 7, 4: 11 })[recordedTier.rows[0].tier];
+    assert.equal(Number(recordedSample.rows[0].predicted_wait_minutes), perVisitExpected,
+      'truth ledger should use the per-visit estimate, not the tier-level summary');
 
     // Model an observation that arrives after its declared horizon. The overall
     // MAE remains auditable, while the API must separately identify in-horizon
