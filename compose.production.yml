@@ -26,6 +26,7 @@ services:
       TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
       ANALYTICS_URL: http://analytics:5001
       STAFFED_STATIONS: ${STAFFED_STATIONS:-1}
+      DELAY_REVIEW_THRESHOLD_MINUTES: ${DELAY_REVIEW_THRESHOLD_MINUTES:-60}
     expose:
       - "5000"
     healthcheck:
