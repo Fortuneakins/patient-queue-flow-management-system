@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateProductionConfig, parseTrustProxyHops } = require('../../src/config/runtimePolicy');
+const { validateProductionConfig, parseTrustProxyHops, parseDelayReviewThresholdMinutes } = require('../../src/config/runtimePolicy');
 
 const validProductionConfig = {
   nodeEnv: 'production',
@@ -106,4 +106,15 @@ test('trust proxy parser requires a numeric hop count or explicit false', () => 
   assert.throws(() => parseTrustProxyHops('true'), /do not trust all proxies/);
   assert.throws(() => parseTrustProxyHops('-1'), /non-negative integer/);
   assert.throws(() => parseTrustProxyHops('two'), /non-negative integer/);
+});
+
+
+test('parses a bounded delay-review threshold and rejects ambiguous values', () => {
+  assert.equal(parseDelayReviewThresholdMinutes(undefined), 60);
+  assert.equal(parseDelayReviewThresholdMinutes(''), 60);
+  assert.equal(parseDelayReviewThresholdMinutes('45'), 45);
+  assert.equal(parseDelayReviewThresholdMinutes('1440'), 1440);
+  for (const invalid of ['0', '-1', '1441', '3.5', 'soon', 'NaN']) {
+    assert.throws(() => parseDelayReviewThresholdMinutes(invalid), /whole number from 1 to 1440/);
+  }
 });
