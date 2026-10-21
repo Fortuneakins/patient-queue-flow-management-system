@@ -14,14 +14,14 @@ async function authenticate(req, res, next) {
     });
     const staff = await getStaffById(decoded.staff_id);
     if (!staff || !staff.is_active) return res.status(401).json({ error: 'Authentication required.' });
-    // Role/permission claims are bound to the signed-in token. Account activation is
-    // checked against the database on every request so deactivation is immediate,
-    // while permission changes take effect on the next sign-in as specified.
+    // The signed token identifies the account; current authorization comes from
+    // the database. Role demotion, permission removal and password-reset status
+    // therefore take effect on the next request rather than waiting for token expiry.
     req.user = {
       staff_id: staff.staff_id,
       username: staff.username,
-      role: String(decoded.role || staff.role).toUpperCase(),
-      extra_permissions: Array.isArray(decoded.extra_permissions) ? decoded.extra_permissions : [],
+      role: String(staff.role || '').trim().toUpperCase(),
+      extra_permissions: Array.isArray(staff.extra_permissions) ? staff.extra_permissions : [],
       must_reset_password: staff.must_reset_password === true
     };
     next();
