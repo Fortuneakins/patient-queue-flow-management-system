@@ -21,6 +21,14 @@ Compare a current queue/staffing snapshot with a hypothetical scenario including
 
 Output is descriptive planning support. It does not allocate staff, alter a patient's tier, predict a diagnosis or trigger operational action automatically.
 
+### Live wait estimator and evidence quality
+
+The Flask analytics service's `GET /api/predict` endpoint reads the currently active queue and de-identified timing observations from completed visits in the preceding 90 days. It does not select names, identity numbers, symptoms or consultation notes. The predictor schedules the current waiting workload by PQFMS priority tier and arrival time, using the median completed consultation duration for that tier when at least eight valid tier observations are available. When the tier sample is smaller, it uses a pooled clinic median if at least eight valid service observations exist; otherwise it explicitly reports a 12-minute fallback assumption. Ongoing consultations use observed service-duration residuals when adequate data exist, with a cautious documented fallback for missing timestamps or sparse evidence.
+
+The response preserves the four numeric tier fields for existing clients and adds a model version, sample counts, the evidence source for each tier, historical queue-to-first-call medians and interpretation warnings. These metadata distinguish observed timing from assumptions; they do not constitute a statistically validated confidence interval. Predictions describe the queue currently recorded in PQFMS and do not anticipate future arrivals. They do not diagnose, triage, alter clinician-assigned priority or guarantee an individual patient's wait.
+
+The Prediction Truth Ledger remains the empirical evaluation mechanism. Staff can capture forecasts, then inspect error only after corresponding visits reach an observed first consultation call. Operational use should remain supervised until the system accumulates representative data and has completed prospective validation. Synthetic seed records and test scenarios must not be represented as actual hospital evidence.
+
 ### CareGraph
 
 Every new check-in is assigned the configured `OPD_STANDARD` pathway. The pathway initially marks registration complete, triage ready and later stages pending. Administrators can create additional ordered pathways; authorised staff can inspect and update assigned stage progress. Stage transitions are role-checked, and required earlier stages must be completed before later stages start.
