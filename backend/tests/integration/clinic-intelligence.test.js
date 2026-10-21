@@ -345,6 +345,9 @@ if (!dbConfigured) {
     assert.ok(evaluatedForecast, 'newly recorded forecast should appear in truth ledger');
     assert.ok(Number(evaluatedForecast.tracked_samples) >= 1);
     assert.ok(Number(evaluatedForecast.observed_samples) >= 1);
+    assert.equal(Number(evaluatedForecast.calibrated_samples), 0, 'the fixture stores no non-zero calibration correction');
+    assert.equal(Number(evaluatedForecast.mean_applied_calibration_offset_minutes), 0);
+    assert.equal(Number(evaluatedForecast.max_abs_applied_calibration_offset_minutes), 0);
     assert.equal(Number(evaluatedForecast.within_horizon_samples), 0, 'synthetic fixtures must not count as verified operational accuracy');
     assert.equal(Number(evaluatedForecast.out_of_horizon_samples), 0, 'synthetic observations must not be represented as operational errors');
     assert.equal(Number(evaluatedForecast.unclassified_observed_samples), 0);
