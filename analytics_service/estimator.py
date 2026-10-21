@@ -218,7 +218,7 @@ def estimate_metadata(
     all_tiers_specific = all(profiles[tier]["source"] == "TIER_HISTORY" for tier in range(1, 5))
     if sample_count >= ROBUST_SAMPLES and (all_tiers_specific or is_count_only):
         quality = "OBSERVATION_BASED"
-        basis = "recent operational call-to-discharge intervals; tier-specific medians used where sample requirements are met"
+        basis = "median of recent operational call-to-discharge intervals; tier-specific medians used where sample requirements are met"
     elif sample_count >= MIN_SAMPLES_FOR_CALIBRATION:
         quality = "LIMITED_OBSERVATIONS"
         basis = "recent operational call-to-discharge intervals; some tiers use pooled rather than tier-specific medians"
