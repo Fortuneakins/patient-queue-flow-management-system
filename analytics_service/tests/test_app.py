@@ -3,6 +3,12 @@ from datetime import datetime, timezone
 from analytics_service import app as analytics
 
 
+def _test_service_headers(monkeypatch):
+    token = "analytics-test-token-not-a-production-secret"
+    monkeypatch.setattr(analytics, "INTERNAL_SERVICE_TOKEN", token)
+    return {"X-Internal-Service-Token": token}
+
+
 class FakeCursor:
     def __init__(self, rows):
         self.rows = rows
@@ -103,7 +109,7 @@ def test_predict_returns_transparent_metadata(monkeypatch):
     ])
     monkeypatch.setattr(analytics, "on_duty_count", lambda: 1)
     monkeypatch.setattr(analytics, "service_time_samples", lambda: [12.0] * 35)
-    response = analytics.app.test_client().get("/api/predict")
+    response = analytics.app.test_client().get("/api/predict", headers=_test_service_headers(monkeypatch))
     assert response.status_code == 200
     assert response.json["degraded"] is False
     assert response.json["estimate_quality"] == "OBSERVATION_BASED"
@@ -152,3 +158,28 @@ def test_database_connections_are_read_only_and_time_bounded(monkeypatch):
     assert "statement_timeout=10000" in options
     assert "idle_in_transaction_session_timeout=10000" in options
     assert captured["kwargs"]["connect_timeout"] == 3
+
+
+
+def test_predict_rejects_missing_or_invalid_internal_service_token(monkeypatch):
+    monkeypatch.setattr(analytics, "INTERNAL_SERVICE_TOKEN", "expected-internal-token")
+    client = analytics.app.test_client()
+
+    missing = client.get("/api/predict")
+    invalid = client.get("/api/predict", headers={"X-Internal-Service-Token": "wrong-token"})
+
+    assert missing.status_code == 401
+    assert invalid.status_code == 401
+    assert missing.json["error"] == "Authentication required."
+
+
+def test_predict_fails_closed_if_internal_service_token_is_not_configured(monkeypatch):
+    monkeypatch.setattr(analytics, "INTERNAL_SERVICE_TOKEN", "")
+
+    response = analytics.app.test_client().get(
+        "/api/predict",
+        headers={"X-Internal-Service-Token": "unexpected-token"},
+    )
+
+    assert response.status_code == 503
+    assert "not configured" in response.json["error"]
