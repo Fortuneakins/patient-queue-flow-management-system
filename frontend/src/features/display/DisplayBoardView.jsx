@@ -9,6 +9,13 @@ export default function DisplayBoardView({ publicQueue, predictions, liveConnect
   }, []);
 
   const now = publicQueue.now_serving;
+  const estimateBasis = predictions.degraded
+    ? 'Unavailable — live staffing or analytics data could not support an estimate'
+    : predictions.estimate_quality === 'OBSERVATION_BASED'
+      ? `Based on recent operational consultation durations (${predictions.service_history_samples} samples)`
+      : predictions.estimate_quality === 'LIMITED_OBSERVATIONS'
+        ? `Limited operational history (${predictions.service_history_samples} samples); interpret cautiously`
+        : 'Baseline service-time assumption — insufficient verified operational history';
   const tiers = [
     { id: 1, label: 'Immediate', tone: 'critical' },
     { id: 2, label: 'Urgent', tone: 'urgent' },
@@ -73,7 +80,7 @@ export default function DisplayBoardView({ publicQueue, predictions, liveConnect
               ))}
             </div>
             {predictions.degraded && <div className="display-estimate-warning" role="status"><Icon name="alert" size={16} /> Waiting-time estimates are temporarily unavailable. Queue operations continue normally.</div>}
-            <p className="display-estimate-disclaimer"><Icon name="shield" size={15} /> Estimates are guidance, not a guarantee. Patients are called by clinical staff; reaching zero does not automatically change queue status.</p>
+            <p className="display-estimate-disclaimer" role="status"><Icon name="info" size={15} /> Estimate basis: {estimateBasis}. Estimates describe workload for a hypothetical new visit at each tier, not an individual guarantee. Patients are called by clinical staff; reaching zero never changes queue status automatically.</p>
           </section>
         </div>
 
