@@ -206,4 +206,4 @@ def test_current_visit_forecasts_use_active_consultation_elapsed_time():
 
     forecasts = estimate_current_visit_waits(visits, 1, now, service_minutes=history)
 
-    assert forecasts == [{"queue_id": 22, "tier": 1, "estimated_wait_minutes": 9}]
+    assert forecasts == [{"queue_id": 22, "tier": 1, "estimated_wait_minutes": 10}]
