@@ -38,6 +38,11 @@ function createLoginAttemptLimiter({
       bucket = { start: currentTime, attempts: 0, failures: 0 };
       map.delete(key);
       map.set(key, bucket);
+      while (map.size > maxKeys) {
+        const oldestKey = map.keys().next().value;
+        if (oldestKey === undefined) break;
+        map.delete(oldestKey);
+      }
     }
     return bucket;
   }
