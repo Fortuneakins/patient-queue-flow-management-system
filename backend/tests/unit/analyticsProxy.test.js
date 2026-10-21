@@ -95,7 +95,7 @@ test('public response reports limited, fallback and unavailable estimate bases',
   assert.equal(publicPrediction(payload({ estimate_quality: 'DEFAULT_ASSUMPTION' })).estimate_basis, 'FALLBACK_ASSUMPTION');
   const unavailable = publicPrediction(payload({ '1': null, '2': null, '3': null, '4': null, degraded: true, estimate_quality: 'UNAVAILABLE' }));
   assert.equal(unavailable.estimate_basis, 'UNAVAILABLE');
-  assert.deepEqual(unavailable.warnings, ['Wait estimates are currently unavailable.']);
+  assert.deepEqual(unavailable.warnings, ['Wait estimates are currently unavailable. Queue operations continue normally.']);
 });
 
 test('public fallback estimates preserve bounded evidence warnings', () => {
