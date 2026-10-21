@@ -131,12 +131,11 @@ This procedure does not execute migrations 001–008; it checks schema markers a
 
 For any database state other than a verified 001–008 schema, use a reviewed migration plan that records which scripts have truly been applied. Never baseline a schema just because the tables have familiar names.
 
-### Provision the read-only analytics database principal
+### Verify the read-only analytics database principal
 
-After migrations have been applied, create a separate login for analytics using the database administration process. Do not reuse the API database account/password:
+The analytics role is created in step 4A. Do not try to create the same role again on later releases. After migrations have been applied, verify that the read-only principal has the required access:
 
 ```sql
-CREATE ROLE pqfms_analytics LOGIN;
 GRANT CONNECT ON DATABASE pqfms TO pqfms_analytics;
 GRANT USAGE ON SCHEMA public TO pqfms_analytics;
 GRANT SELECT (status, priority_level, queued_at, called_at, discharged_at, data_provenance)
