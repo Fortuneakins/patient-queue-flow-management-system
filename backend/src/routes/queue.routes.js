@@ -53,6 +53,7 @@ router.post('/', authenticate, requireReadyPassword, authorizeRoles('RECEPTION',
     const result = await queueService.checkIn({ patientId: req.body?.patient_id, symptoms: req.body?.symptoms });
     if (result.duplicate) return res.status(409).json({ error: 'This patient already has an active visit.', ticket_number: result.ticket_number });
     await emitQueueUpdate(req);
+    captureOperationalForecast(req);
     res.status(201).json(result.visit);
   } catch (error) { next(error); }
 });
