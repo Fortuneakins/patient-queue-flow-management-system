@@ -3,11 +3,12 @@ process.env.JWT_SECRET ||= 'analytics-proxy-unit-test-secret-with-at-least-32-ch
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { getWaitPredictions, isPredictionPayload } = require('../../src/services/analyticsProxyService');
-const { publicPrediction } = require('../../src/routes/analytics.routes');
+const { publicPrediction, modelEvidence } = require('../../src/routes/analytics.routes');
 
 function payload(overrides = {}) {
   return {
     '1': 0, '2': 6, '3': 18, '4': 32,
+    visit_estimates: [{ queue_id: 19, tier: 4, estimated_wait_minutes: 24 }],
     model: 'queue-workload-estimate',
     model_version: 'queue-workload-2.0.0',
     estimate_quality: 'OBSERVATION_BASED',
@@ -40,6 +41,7 @@ test('analytics proxy authenticates service-to-service calls and validates data'
   assert.equal(result.model_version, 'queue-workload-2.0.0');
   assert.equal(result.service_history_samples, 35);
   assert.equal(result.degraded, false);
+  assert.deepEqual(result.visit_estimates, [{ queue_id: 19, tier: 4, estimated_wait_minutes: 24 }]);
 });
 
 test('analytics proxy fails closed when no internal token is configured', async () => {
@@ -78,12 +80,13 @@ test('healthy data requires numeric tier estimates but degraded data may use nul
   assert.equal(isPredictionPayload(payload({ '1': null, '2': null, '3': null, '4': null, degraded: true })), true);
 });
 
-test('public response strips internal staffing and model evidence', () => {
+test('public response strips internal staffing, model evidence and queue identifiers', () => {
   const result = publicPrediction(payload());
   assert.equal(result.estimate_basis, 'OBSERVED_TIMINGS');
   assert.equal(Object.hasOwn(result, 'model_version'), false);
   assert.equal(Object.hasOwn(result, 'staffed_doctors'), false);
   assert.equal(Object.hasOwn(result, 'service_history_samples'), false);
+  assert.equal(Object.hasOwn(result, 'visit_estimates'), false);
   assert.deepEqual(result.warnings, []);
 });
 
@@ -93,4 +96,13 @@ test('public response reports limited, fallback and unavailable estimate bases',
   const unavailable = publicPrediction(payload({ '1': null, '2': null, '3': null, '4': null, degraded: true, estimate_quality: 'UNAVAILABLE' }));
   assert.equal(unavailable.estimate_basis, 'UNAVAILABLE');
   assert.deepEqual(unavailable.warnings, ['Wait estimates are currently unavailable.']);
+});
+
+
+
+test('administrator model evidence omits internal per-visit queue identifiers', () => {
+  const result = modelEvidence(payload());
+
+  assert.equal(result.model_version, 'queue-workload-2.0.0');
+  assert.equal(Object.hasOwn(result, 'visit_estimates'), false);
 });
