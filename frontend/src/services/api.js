@@ -1,6 +1,6 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
-const ANALYTICS_BASE_URL = (import.meta.env.VITE_ANALYTICS_BASE_URL || 'http://localhost:5001').replace(/\/$/, '');
-export const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL || API_BASE_URL).replace(/\/$/, '');
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000').replace(/\/$/, '');
+const ANALYTICS_BASE_URL = (import.meta.env.VITE_ANALYTICS_BASE_URL ?? 'http://localhost:5001').replace(/\/$/, '');
+export const SOCKET_URL = (import.meta.env.VITE_SOCKET_URL ?? API_BASE_URL).replace(/\/$/, '');
 
 export class ApiError extends Error {
   constructor(status, message, data = null) {
