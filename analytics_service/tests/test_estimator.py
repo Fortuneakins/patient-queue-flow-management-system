@@ -138,6 +138,8 @@ def test_insufficient_tier_history_uses_pooled_median_with_evidence_source():
     assert metadata["tier_service_profiles"]["2"]["tier_service_samples"] == 4
     assert metadata["estimate_quality"] == "LIMITED_OBSERVATIONS"
     assert metadata["service_history_samples"] == 12
+    assert metadata["projection_buffer_percent"] == 15
+    assert any("not a calibrated prediction interval" in item for item in metadata["limitations"])
 
 
 def test_service_metadata_reports_roster_mismatch_and_no_false_confidence():
@@ -148,3 +150,18 @@ def test_service_metadata_reports_roster_mismatch_and_no_false_confidence():
     assert metadata["active_consultations"] == 2
     assert metadata["waiting_visits"] == 1
     assert any("verify the roster" in warning for warning in metadata["warnings"])
+
+
+
+def test_lower_priority_waiting_work_does_not_delay_a_higher_tier_forecast():
+    now = datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc)
+    visits = [
+        {"status": "Waiting", "priority_level": 4, "queued_at": now - timedelta(minutes=45)},
+    ]
+
+    estimates = estimate_waits(visits, 1, now)
+
+    assert estimates["1"] == 0
+    assert estimates["2"] == 0
+    assert estimates["3"] == 0
+    assert estimates["4"] == 14
