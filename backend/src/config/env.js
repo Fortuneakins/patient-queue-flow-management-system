@@ -21,7 +21,9 @@ const JWT_SECRET = required('JWT_SECRET');
 if (JWT_SECRET.length < 32) throw new Error('JWT_SECRET must be at least 32 characters');
 
 const CORS_ORIGIN = (process.env.CORS_ORIGIN || 'http://localhost:5173')
-  .split(',').map(v => v.trim()).filter(Boolean);
+  .split(',').map(v => v.trim()).filter(Boolean).map(value => {
+    try { return new URL(value).origin; } catch (_) { return value; }
+  });
 const INTERNAL_SERVICE_TOKEN = process.env.INTERNAL_SERVICE_TOKEN?.trim() || '';
 const DATABASE_URL = process.env.DATABASE_URL || null;
 const DB_SSL = asBoolean(process.env.DB_SSL);
