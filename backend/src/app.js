@@ -10,6 +10,7 @@ const queueRoutes = require('./routes/queue.routes');
 const historyRoutes = require('./routes/history.routes');
 const shiftRoutes = require('./routes/shift.routes');
 const healthRoutes = require('./routes/health.routes');
+const analyticsRoutes = require('./routes/analytics.routes');
 const intelligenceRoutes = require('./routes/intelligence.routes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
@@ -30,6 +31,7 @@ io.on('connection', socket => {
 });
 
 app.use('/api/health', healthRoutes);
+app.use('/api/analytics', analyticsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/patients', patientRoutes);
