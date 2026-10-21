@@ -36,6 +36,8 @@ def validate_production_config(
         raise RuntimeError("Production analytics requires an INTERNAL_SERVICE_TOKEN of at least 32 characters.")
     if (analytics_database_url or "").strip():
         parsed_database_url = urlparse(analytics_database_url.strip())
+        if parsed_database_url.scheme not in {"postgres", "postgresql"} or not parsed_database_url.hostname:
+            raise RuntimeError("ANALYTICS_DATABASE_URL must be a valid PostgreSQL URL.")
         analytics_url_user = unquote(parsed_database_url.username or "")
         if not analytics_url_user:
             raise RuntimeError("ANALYTICS_DATABASE_URL must identify a dedicated read-only analytics database user.")
