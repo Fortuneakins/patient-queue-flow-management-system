@@ -36,9 +36,7 @@ app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
   res.setHeader('Cache-Control', 'no-store');
-  if (env.NODE_ENV === 'production') {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000');
-  }
+  // HSTS is applied once at the HTTPS edge (Caddy), not by this private HTTP service.
   next();
 });
 
