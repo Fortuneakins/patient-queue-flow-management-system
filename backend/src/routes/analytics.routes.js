@@ -13,7 +13,8 @@ const modelLimiter = createRateLimiter({
 });
 
 function modelEvidence(prediction) {
-  const { visit_estimates: _visitEstimates, ...evidence } = prediction;
+  const evidence = { ...prediction };
+  delete evidence.visit_estimates;
   return evidence;
 }
 
