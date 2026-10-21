@@ -13,5 +13,5 @@
         X-Permitted-Cross-Domain-Policies "none"
         -Server
     }
-    reverse_proxy web:80
+    reverse_proxy web:8080
 }
