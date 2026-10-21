@@ -11,8 +11,8 @@ export class ApiError extends Error {
 }
 
 async function request(path, options = {}) {
-  // Allow both backend-relative paths and absolute URLs, such as the
-  // separate analytics service URL.
+  // The browser uses same-origin API paths in production. Absolute URLs are
+  // retained only for approved API-base configuration during local development.
   const url = /^https?:\/\//i.test(path)
     ? path
     : `${API_BASE_URL}${path}`;
