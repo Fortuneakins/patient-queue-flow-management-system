@@ -119,6 +119,24 @@ if (!dbConfigured) {
       assert.equal(admin.response.status, 200);
       assert.equal(admin.body.model_version, 'flowtwin-1.0.0');
 
+      const publicPrediction = await request('/api/analytics/predict');
+      assert.equal(publicPrediction.response.status, 200);
+      assert.equal(publicPrediction.body['1'], 2);
+      assert.equal(publicPrediction.body.degraded, false);
+      assert.equal(publicPrediction.body.estimate_basis, 'OBSERVED_TIMINGS');
+      assert.equal(Object.hasOwn(publicPrediction.body, 'model'), false);
+      assert.equal(Object.hasOwn(publicPrediction.body, 'staffed_doctors'), false);
+
+      const anonymousModel = await request('/api/analytics/model');
+      assert.equal(anonymousModel.response.status, 401);
+      const receptionModel = await request('/api/analytics/model', { headers: auth(tokens.reception) });
+      assert.equal(receptionModel.response.status, 403);
+      const adminModel = await request('/api/analytics/model', { headers: auth(tokens.admin) });
+      assert.equal(adminModel.response.status, 200);
+      assert.equal(adminModel.body.model.version, 'pqfms-ci-analytics-fixture-v1');
+      assert.equal(adminModel.body.model.staffed_doctors, undefined);
+      assert.equal(adminModel.body.model.staffing_source, 'TEST_FIXTURE');
+
       const nursePathways = await request('/api/intelligence/pathways', { headers: auth(tokens.nurse) });
       assert.equal(nursePathways.response.status, 200);
       assert.ok(nursePathways.body.some(pathway => pathway.pathway_code === 'OPD_STANDARD'));
