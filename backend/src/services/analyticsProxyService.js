@@ -37,6 +37,20 @@ function isPredictionPayload(payload) {
     const numeric = Number(value);
     if (!Number.isFinite(numeric) || numeric < 0 || numeric > 720) return false;
   }
+  if (!payload.degraded && !Array.isArray(payload.visit_estimates)) return false;
+  if (payload.visit_estimates !== undefined) {
+    if (!Array.isArray(payload.visit_estimates) || payload.visit_estimates.length > 1000) return false;
+    const seenQueueIds = new Set();
+    for (const item of payload.visit_estimates) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+      const queueId = Number(item.queue_id);
+      const tier = Number(item.tier);
+      const wait = Number(item.estimated_wait_minutes);
+      if (!Number.isSafeInteger(queueId) || queueId < 1 || !Number.isInteger(tier) || tier < 1 || tier > 4) return false;
+      if (!Number.isFinite(wait) || wait < 0 || wait > 720 || seenQueueIds.has(queueId)) return false;
+      seenQueueIds.add(queueId);
+    }
+  }
   return true;
 }
 
@@ -99,6 +113,11 @@ async function getWaitPredictions({
       limitations: Array.isArray(payload.limitations)
         ? payload.limitations.filter(item => typeof item === 'string').slice(0, 20)
         : (typeof payload.reason === 'string' ? [payload.reason] : []),
+      visit_estimates: Array.isArray(payload.visit_estimates) ? payload.visit_estimates.map(item => ({
+        queue_id: Number(item.queue_id),
+        tier: Number(item.tier),
+        estimated_wait_minutes: Number(item.estimated_wait_minutes)
+      })) : [],
       generated_at: typeof payload.generated_at === 'string' ? payload.generated_at : new Date().toISOString()
     };
     for (let tier = 1; tier <= 4; tier += 1) {
