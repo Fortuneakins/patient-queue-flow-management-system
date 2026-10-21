@@ -129,22 +129,46 @@ async function recordForecast(input = {}, actorStaffId) {
     }
     tierEstimates[tier] = positiveMinutes(raw, 'Tier ' + tier + ' estimate', 0, 720);
   }
+  if (!Array.isArray(prediction.visit_estimates) || prediction.visit_estimates.length > 1000) {
+    throw httpError('The analytics service did not return the required per-visit forecast snapshot. No forecast was recorded.', 503);
+  }
   const modelVersion = String(prediction.model_version || 'unknown').slice(0, 40);
-  const snapshot = await query(`SELECT queue_id, COALESCE(priority_level,4)::int AS tier FROM queue_entries queue_entry WHERE status = 'Waiting' AND ${queueVisibility} ORDER BY queued_at LIMIT 1000`);
+  const perVisit = new Map(prediction.visit_estimates.map(item => [
+    Number(item.queue_id),
+    { tier: Number(item.tier), wait: positiveMinutes(item.estimated_wait_minutes, 'Visit estimate', 0, 720) }
+  ]));
+  const predictedQueueIds = [...perVisit.keys()];
+  const snapshot = predictedQueueIds.length
+    ? await query(
+      `SELECT queue_id, COALESCE(priority_level,4)::int AS tier FROM queue_entries queue_entry WHERE status = 'Waiting' AND ${queueVisibility} AND queue_id = ANY($1::int[]) ORDER BY COALESCE(priority_level,4), queued_at, queue_id LIMIT 1000`,
+      [predictedQueueIds]
+    )
+    : { rows: [], rowCount: 0 };
+  for (const item of snapshot.rows) {
+    const predicted = perVisit.get(Number(item.queue_id));
+    if (!predicted || predicted.tier !== Number(item.tier)) {
+      throw httpError('The analytics visit forecast does not match the current queue snapshot. No forecast was recorded.', 503);
+    }
+  }
+  const currentWaitingCount = Number.isSafeInteger(Number(prediction.waiting_visits))
+    ? Math.max(snapshot.rowCount, Number(prediction.waiting_visits))
+    : snapshot.rowCount;
   const stored = await withTransaction(async client => {
     const row = await client.query(
       'INSERT INTO flow_forecasts (model_version,horizon_minutes,tier_estimates,waiting_snapshot,created_by_staff_id) VALUES ($1,$2,$3::jsonb,$4,$5) RETURNING forecast_id,created_at',
-      [modelVersion, horizon, JSON.stringify(tierEstimates), snapshot.rowCount, actorStaffId]
+      [modelVersion, horizon, JSON.stringify(tierEstimates), currentWaitingCount, actorStaffId]
     );
     const forecast = row.rows[0];
     for (const item of snapshot.rows) {
+      const predicted = perVisit.get(Number(item.queue_id));
       await client.query(
         'INSERT INTO flow_forecast_samples (forecast_id,queue_id,tier,predicted_wait_minutes) VALUES ($1,$2,$3,$4) ON CONFLICT (forecast_id,queue_id) DO NOTHING',
-        [forecast.forecast_id, item.queue_id, item.tier, tierEstimates[item.tier]]
+        [forecast.forecast_id, item.queue_id, item.tier, predicted.wait]
       );
     }
     await appendOperationalEvent(client, { eventType: 'WAIT_FORECAST_RECORDED', entityType: 'FLOW_FORECAST', entityId: forecast.forecast_id, actorStaffId, toState: 'RECORDED', metadata: {
-      waiting_snapshot: snapshot.rowCount,
+      waiting_snapshot: currentWaitingCount,
+      tracked_visit_samples: snapshot.rowCount,
       horizon_minutes: horizon,
       model_version: modelVersion,
       estimate_quality: prediction.estimate_quality,
@@ -154,7 +178,7 @@ async function recordForecast(input = {}, actorStaffId) {
     return forecast;
   });
   return {
-    ...stored, horizon_minutes: horizon, waiting_snapshot: snapshot.rowCount,
+    ...stored, horizon_minutes: horizon, waiting_snapshot: currentWaitingCount,
     tier_estimates: tierEstimates, tracked_visits: snapshot.rowCount,
     model_version: modelVersion,
     estimate_quality: prediction.estimate_quality,
