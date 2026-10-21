@@ -52,7 +52,7 @@ Node.js (current LTS), npm, Python 3.10+, PostgreSQL 14+ and Chrome or Edge.
 
 Run `scripts\setup.ps1` from PowerShell for local development. It creates the ignored root `.env`, generates local JWT/internal-service secrets when needed, and creates the frontend Vite environment file. Never commit `.env` or use development secrets in a deployed environment.
 
-Clinic Intelligence now returns server-generated, explainable review prompts with rule IDs, evidence, severity and suggested human actions. These operational heuristics never diagnose patients or assign/change triage priority. Wait-time values are estimates for a hypothetical new visit at a given tier; they are not individual guarantees. Five or more eligible completed operational consultation durations are required before the observed median is used, and the dashboard states when the history is limited.
+Clinic Intelligence now returns server-generated, explainable review prompts with rule IDs, evidence, severity and suggested human actions. The `DELAY_REVIEW_THRESHOLD_MINUTES` setting (default 60; allowed 1–1440) controls the operational delay-review count only; it never changes clinical triage priority. These operational heuristics never diagnose patients or assign/change triage priority. Wait-time values are estimates for a hypothetical new visit at a given tier; they are not individual guarantees. Five or more eligible completed operational consultation durations are required before the observed median is used, and the dashboard states when the history is limited.
 
 For SMS, set `SMS_ENABLED=true` and provide Twilio credentials. With SMS disabled, the core local workflow remains available.
 
