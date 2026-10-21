@@ -3,8 +3,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from datetime import datetime, timezone
-from urllib.parse import urlparse
-
 import psycopg2
 import requests
 from flask import Flask, jsonify
@@ -12,18 +10,13 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 
 from .estimator import estimate_waits, estimate_metadata
+from .runtime_config import resolve_provenance_mode, validate_production_config
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 load_dotenv()
 
 NODE_ENV = os.getenv("NODE_ENV", "development").strip().lower()
-PROVENANCE_MODES = {"OPERATIONAL", "SYNTHETIC_TEST", "DEMO"}
-_requested_mode = os.getenv("DATA_PROVENANCE_MODE", "").strip().upper()
-DATA_PROVENANCE_MODE = _requested_mode or ("OPERATIONAL" if NODE_ENV == "production" else "SYNTHETIC_TEST")
-if DATA_PROVENANCE_MODE not in PROVENANCE_MODES:
-    raise RuntimeError("DATA_PROVENANCE_MODE must be OPERATIONAL, SYNTHETIC_TEST or DEMO.")
-if NODE_ENV == "production" and DATA_PROVENANCE_MODE != "OPERATIONAL":
-    raise RuntimeError("Production analytics must use DATA_PROVENANCE_MODE=OPERATIONAL.")
+DATA_PROVENANCE_MODE = resolve_provenance_mode(NODE_ENV, os.getenv("DATA_PROVENANCE_MODE"))
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024
@@ -41,15 +34,15 @@ DB_SSLMODE = os.getenv("DB_SSLMODE", "verify-full" if NODE_ENV == "production" e
 NODE_SERVER_URL = os.getenv("NODE_SERVER_URL", "http://localhost:5000").rstrip("/")
 STAFFED_STATIONS = max(1, int(os.getenv("STAFFED_STATIONS", "1")))
 
-if NODE_ENV == "production":
-    if len(INTERNAL_SERVICE_TOKEN) < 32:
-        raise RuntimeError("Production analytics requires an INTERNAL_SERVICE_TOKEN of at least 32 characters.")
-    if not DATABASE_URL and not DB_CONFIG["password"]:
-        raise RuntimeError("Production analytics requires a database password or DATABASE_URL.")
-    if DB_SSLMODE not in {"require", "verify-ca", "verify-full"}:
-        raise RuntimeError("Production analytics requires DB_SSLMODE=require, verify-ca or verify-full.")
-    if not allowed_origins or any(urlparse(origin).scheme != "https" for origin in allowed_origins):
-        raise RuntimeError("Production analytics CORS_ORIGIN must contain only HTTPS origins.")
+validate_production_config(
+    node_env=NODE_ENV,
+    mode=DATA_PROVENANCE_MODE,
+    internal_token=INTERNAL_SERVICE_TOKEN,
+    database_url=DATABASE_URL,
+    database_password=DB_CONFIG["password"],
+    sslmode=DB_SSLMODE,
+    cors_origins=allowed_origins,
+)
 
 CORS(app, origins=allowed_origins)
 
