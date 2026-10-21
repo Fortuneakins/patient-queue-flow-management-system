@@ -19,15 +19,15 @@ async function emitQueueUpdate(req) {
 function captureOperationalForecast(req) {
   if (env.DATA_PROVENANCE_MODE !== 'OPERATIONAL') return;
 
-  setImmediate(() => {
-    flowAnalyticsService.recordForecast(
+  Promise.resolve()
+    .then(() => flowAnalyticsService.recordForecast(
       { horizon_minutes: 60 },
       req.user?.staff_id ?? null
-    ).catch(() => {
+    ))
+    .catch(() => {
       // Keep patient-flow operations successful if the optional ledger is down.
       console.warn('[forecast-truth] Automatic operational snapshot capture failed.');
     });
-  });
 }
 
 router.get('/public', async (req, res, next) => {
