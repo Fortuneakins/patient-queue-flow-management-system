@@ -108,7 +108,7 @@ def test_predict_returns_transparent_metadata(monkeypatch):
         {"status": "Waiting", "priority_level": 4, "queued_at": datetime.now(timezone.utc), "called_at": None}
     ])
     monkeypatch.setattr(analytics, "on_duty_count", lambda: 1)
-    monkeypatch.setattr(analytics, "service_time_samples", lambda: [12.0] * 35)
+    monkeypatch.setattr(analytics, "tier_service_time_samples", lambda: ([{"tier": 1, "service_minutes": 8.0}] * 8 + [{"tier": 2, "service_minutes": 10.0}] * 8 + [{"tier": 3, "service_minutes": 12.0}] * 8 + [{"tier": 4, "service_minutes": 14.0}] * 11))
     response = analytics.app.test_client().get("/api/predict", headers=_test_service_headers(monkeypatch))
     assert response.status_code == 200
     assert response.json["degraded"] is False
@@ -123,7 +123,7 @@ def test_predict_does_not_report_zero_wait_when_no_staff_are_available(monkeypat
         {"status": "Waiting", "priority_level": 4, "queued_at": datetime.now(timezone.utc), "called_at": None}
     ])
     monkeypatch.setattr(analytics, "on_duty_count", lambda: 0)
-    monkeypatch.setattr(analytics, "service_time_samples", lambda: [12.0] * 35)
+    monkeypatch.setattr(analytics, "tier_service_time_samples", lambda: ([{"tier": 1, "service_minutes": 8.0}] * 8 + [{"tier": 2, "service_minutes": 10.0}] * 8 + [{"tier": 3, "service_minutes": 12.0}] * 8 + [{"tier": 4, "service_minutes": 14.0}] * 11))
     response = analytics.app.test_client().get("/api/predict", headers=_test_service_headers(monkeypatch))
     assert response.status_code == 200
     assert response.json["degraded"] is True
@@ -183,3 +183,20 @@ def test_predict_fails_closed_if_internal_service_token_is_not_configured(monkey
 
     assert response.status_code == 503
     assert "not configured" in response.json["error"]
+
+
+
+def test_tier_service_history_query_returns_tier_labelled_operational_samples(monkeypatch):
+    cursor = FakeCursor([(1, 12.5), (4, 18.0)])
+    monkeypatch.setattr(analytics, "_connect", lambda: FakeConnection(cursor))
+
+    values = analytics.tier_service_time_samples()
+
+    assert values == [
+        {"tier": 1, "service_minutes": 12.5},
+        {"tier": 4, "service_minutes": 18.0},
+    ]
+    assert "COALESCE(priority_level, 4)::int AS tier" in cursor.sql
+    assert "data_provenance = 'OPERATIONAL'" in cursor.sql
+    assert "INTERVAL '90 days'" in cursor.sql
+    assert "LIMIT 500" in cursor.sql
