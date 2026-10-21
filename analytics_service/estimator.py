@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from math import ceil
 from statistics import median
 from typing import Iterable
 
@@ -159,7 +160,7 @@ def forecast_waits(
                 continue
             server = min(range(len(available)), key=available.__getitem__)
             available[server] += float(profile[row["tier"]]["minutes"])
-        return max(0, int(__import__("math").ceil(min(available))))
+        return max(0, int(ceil(min(available))))
 
     estimates = {str(tier): next_call_minutes(tier) for tier in range(1, 5)}
     tier_evidence = {}
