@@ -13,6 +13,7 @@ function serviceEvidenceLabel(detail, model) {
 }
 
 export default function LearningPanel({ token }) {
+  const [overview, setOverview] = useState(null);
   const [fairness, setFairness] = useState(null);
   const [truth, setTruth] = useState(null);
   const [livePrediction, setLivePrediction] = useState(null);
@@ -23,12 +24,16 @@ export default function LearningPanel({ token }) {
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
-    const [fairnessResult, truthResult, predictionResult] = await Promise.allSettled([
+    const [overviewResult, fairnessResult, truthResult, predictionResult] = await Promise.allSettled([
+      api.intelligenceOverview(token),
       api.fairnessMetrics(token),
       api.forecastTruth(token, 20),
       api.predictions()
     ]);
     const errors = [];
+
+    if (overviewResult.status === 'fulfilled') setOverview(overviewResult.value);
+    else errors.push('Operational signal review could not be loaded: ' + (overviewResult.reason?.message || 'request failed'));
 
     if (fairnessResult.status === 'fulfilled') setFairness(fairnessResult.value);
     else errors.push('Delay review could not be loaded: ' + (fairnessResult.reason?.message || 'request failed'));
@@ -74,6 +79,7 @@ export default function LearningPanel({ token }) {
 
   const predictionModel = livePrediction?.model;
   const tierEvidence = predictionModel?.tiers || {};
+  const operationalSignals = Array.isArray(overview?.signals) ? overview.signals : [];
 
   return (
     <div className="space-y-5">
@@ -138,6 +144,50 @@ export default function LearningPanel({ token }) {
             {livePrediction?.warnings?.map((warning, index) => <p key={index} className="mt-1">{warning}</p>)}
           </div>
         )}
+      </Card>
+
+      <Card className="p-5 md:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="eyebrow">Transparent rule engine</p>
+            <h2 className="font-display text-lg font-bold">Live operational signals</h2>
+            <p className="mt-1 max-w-3xl text-sm text-stone-500">
+              Signals are derived from the current queue, completed-visit timing evidence and registered room status. Each signal explains the triggering evidence and a staff-review step; the engine does not make clinical decisions or change patient records.
+            </p>
+          </div>
+          <Badge tone={operationalSignals.some(item => item.severity === 'CRITICAL') ? 'red' : operationalSignals.length ? 'orange' : 'teal'}>
+            {overview ? `${operationalSignals.length} signal(s)` : 'Signal review unavailable'}
+          </Badge>
+        </div>
+        {operationalSignals.length ? (
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {operationalSignals.map(item => (
+              <article key={item.code} className="rounded-xl border border-stone-200 bg-white p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <h3 className="font-semibold text-stone-900">{item.title}</h3>
+                  <Badge tone={item.severity === 'CRITICAL' ? 'red' : item.severity === 'WARNING' ? 'orange' : item.severity === 'WATCH' ? 'yellow' : 'teal'}>{item.severity}</Badge>
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-stone-700">{item.evidence}</p>
+                <div className="mt-3 rounded-lg bg-stone-50 p-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-stone-500">Recommended staff review</p>
+                  <p className="mt-1 text-sm text-stone-700">{item.recommended_review}</p>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                  <span>Rule: <code>{item.code}</code></span>
+                  <span aria-hidden="true">·</span>
+                  <span>Source: {item.source}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{item.automatic_action ? 'Automated action' : 'No automatic action'}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : overview ? (
+          <EmptyState title="No operational review signals" message="The current queue, timing history and recorded room states did not trigger the configured review rules at this snapshot. This is not a guarantee that the clinic has no operational issues."/>
+        ) : (
+          <EmptyState title="Operational signals unavailable" message="The system could not retrieve the current operational snapshot. Do not interpret this as an all-clear state."/>
+        )}
+        {overview?.generated_at && <p className="mt-4 border-t border-stone-100 pt-3 text-xs leading-relaxed text-stone-500">Snapshot generated {new Date(overview.generated_at).toLocaleString()}. Signals are deterministic operational prompts, not diagnosis, a fairness finding or a substitute for clinical and operational judgement.</p>}
       </Card>
 
       <Card className="p-5 md:p-6">
