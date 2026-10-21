@@ -10,7 +10,7 @@ function payload(overrides = {}) {
     '1': 0, '2': 6, '3': 18, '4': 32,
     visit_estimates: [{ queue_id: 19, tier: 4, estimated_wait_minutes: 24 }],
     model: 'queue-workload-estimate',
-    model_version: 'queue-workload-3.0.0',
+    model_version: 'queue-workload-3.1.0',
     estimate_quality: 'OBSERVATION_BASED',
     service_time_basis: 'median of operational call-to-discharge intervals',
     service_history_samples: 35,
@@ -38,7 +38,7 @@ test('analytics proxy authenticates service-to-service calls and validates data'
 
   assert.equal(urlSeen, 'http://analytics.internal:5001/api/predict');
   assert.equal(optionsSeen.headers['X-Internal-Service-Token'], 'test-token');
-  assert.equal(result.model_version, 'queue-workload-3.0.0');
+  assert.equal(result.model_version, 'queue-workload-3.1.0');
   assert.equal(result.service_history_samples, 35);
   assert.equal(result.degraded, false);
   assert.deepEqual(result.visit_estimates, [{ queue_id: 19, tier: 4, estimated_wait_minutes: 24 }]);
@@ -103,6 +103,6 @@ test('public response reports limited, fallback and unavailable estimate bases',
 test('administrator model evidence omits internal per-visit queue identifiers', () => {
   const result = modelEvidence(payload());
 
-  assert.equal(result.model_version, 'queue-workload-3.0.0');
+  assert.equal(result.model_version, 'queue-workload-3.1.0');
   assert.equal(Object.hasOwn(result, 'visit_estimates'), false);
 });
