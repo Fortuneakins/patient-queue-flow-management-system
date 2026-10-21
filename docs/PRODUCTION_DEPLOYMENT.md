@@ -103,7 +103,7 @@ GRANT SELECT (queue_id, status, priority_level, queued_at, called_at, discharged
   ON TABLE public.queue_entries TO pqfms_analytics;
 GRANT SELECT (forecast_id, model_version, horizon_minutes, created_at)
   ON TABLE public.flow_forecasts TO pqfms_analytics;
-GRANT SELECT (sample_id, forecast_id, queue_id, tier, predicted_wait_minutes, baseline_wait_minutes, calibration_offset_minutes, created_at)
+GRANT SELECT (sample_id, forecast_id, queue_id, tier, baseline_wait_minutes, created_at)
   ON TABLE public.flow_forecast_samples TO pqfms_analytics;
 ```
 
@@ -156,7 +156,7 @@ GRANT SELECT (queue_id, status, priority_level, queued_at, called_at, discharged
   ON TABLE public.queue_entries TO pqfms_analytics;
 GRANT SELECT (forecast_id, model_version, horizon_minutes, created_at)
   ON TABLE public.flow_forecasts TO pqfms_analytics;
-GRANT SELECT (sample_id, forecast_id, queue_id, tier, predicted_wait_minutes, baseline_wait_minutes, calibration_offset_minutes, created_at)
+GRANT SELECT (sample_id, forecast_id, queue_id, tier, baseline_wait_minutes, created_at)
   ON TABLE public.flow_forecast_samples TO pqfms_analytics;
 ```
 
