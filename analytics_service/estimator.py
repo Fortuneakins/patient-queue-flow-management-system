@@ -148,7 +148,10 @@ def forecast_waits(
             row["queued_at"] or datetime.min.replace(tzinfo=timezone.utc),
         )
     )
-    staffing = max(1, int(on_duty_doctors or 0), len(active))
+    reported_staff_count = max(1, int(on_duty_doctors or 0))
+    # Active consultations prove that at least that many service slots are occupied,
+    # but a mismatch with the roster must be surfaced rather than silently hidden.
+    staffing = max(reported_staff_count, len(active))
 
     def next_call_minutes(target_tier: int) -> int:
         # A newly arriving visit can be preceded by every current visit at the
@@ -192,6 +195,12 @@ def forecast_waits(
             f"{missing_call_times} active consultation(s) lack a usable called_at timestamp; "
             "their remaining time uses the typical service duration."
         )
+    if len(active) > reported_staff_count:
+        warnings.append(
+            f"{len(active)} consultations are already active while the available staffing count is "
+            f"{reported_staff_count}. The simulation uses {len(active)} occupied service slot(s) inferred "
+            "from current consultations; verify the shift roster and room assignments."
+        )
     warnings.append(
         "The projection schedules the queue currently recorded in PQFMS. It does not anticipate future arrivals, "
         "diagnose patients, validate clinical priority, or replace staff judgement."
@@ -206,7 +215,9 @@ def forecast_waits(
             "valid_service_samples": len(all_service),
             "valid_wait_samples": sum(len(values) for values in wait_by_tier.values()),
             "default_service_minutes": DEFAULT_SERVICE_MINUTES,
+            "reported_staff_count": reported_staff_count,
             "staff_slots_simulated": staffing,
+            "staffing_slots_inferred_from_active": len(active) > reported_staff_count,
             "active_consultations": len(active),
             "waiting_visits": len(waiting),
             "tiers": tier_evidence,
