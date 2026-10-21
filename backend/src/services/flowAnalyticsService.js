@@ -220,8 +220,11 @@ async function getForecastTruth(limit = 20) {
     'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\' AND s.actual_wait_minutes <= f.horizon_minutes)::int AS within_horizon_samples, ' +
     'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\' AND s.actual_wait_minutes > f.horizon_minutes)::int AS out_of_horizon_samples, ' +
     'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND COALESCE(q.data_provenance,\'UNCLASSIFIED\') = \'UNCLASSIFIED\' AND s.actual_wait_minutes > f.horizon_minutes)::int AS unclassified_out_of_horizon_samples, ' +
+    'ROUND(AVG(ABS(s.actual_wait_minutes - s.baseline_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL)::numeric,1) AS baseline_mean_absolute_error_minutes, ' +
     'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL)::numeric,1) AS mean_absolute_error_minutes, ' +
+    'ROUND(AVG(ABS(s.actual_wait_minutes - s.baseline_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\')::numeric,1) AS operational_baseline_mean_absolute_error_minutes, ' +
     'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\')::numeric,1) AS operational_mean_absolute_error_minutes, ' +
+    'ROUND(AVG(ABS(s.actual_wait_minutes - s.baseline_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\' AND s.actual_wait_minutes <= f.horizon_minutes)::numeric,1) AS within_horizon_baseline_mean_absolute_error_minutes, ' +
     'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\' AND s.actual_wait_minutes <= f.horizon_minutes)::numeric,1) AS within_horizon_mean_absolute_error_minutes, ' +
     'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND COALESCE(q.data_provenance,\'UNCLASSIFIED\') = \'UNCLASSIFIED\')::numeric,1) AS unclassified_mean_absolute_error_minutes ' +
     'FROM flow_forecasts f LEFT JOIN flow_forecast_samples s ON s.forecast_id = f.forecast_id ' +
