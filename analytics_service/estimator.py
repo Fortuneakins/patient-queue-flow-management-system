@@ -110,10 +110,10 @@ def estimate_metadata(
     sample_size = max(0, int(service_sample_size or 0))
     if sample_size >= ROBUST_SAMPLES:
         quality = "OBSERVATION_BASED"
-        basis = "median of recent completed operational consultation durations"
+        basis = "median of recent operational call-to-discharge intervals"
     elif sample_size >= MIN_SAMPLES_FOR_CALIBRATION:
         quality = "LIMITED_OBSERVATIONS"
-        basis = "median of a small sample of completed operational consultation durations"
+        basis = "median of a small sample of operational call-to-discharge intervals"
     else:
         quality = "DEFAULT_ASSUMPTION"
         basis = f"default {DEFAULT_SERVICE_MINUTES:g}-minute service-time assumption; fewer than {MIN_SAMPLES_FOR_CALIBRATION} eligible operational samples"
@@ -129,6 +129,7 @@ def estimate_metadata(
         "limitations": [
             "Estimates describe workload for a hypothetical new visit at each tier, not a guarantee for an individual patient.",
             "The model assumes work can be distributed across the reported staffed doctors.",
+            "Historical service time is measured from first doctor call to recorded discharge, so it can include post-consultation work and is a proxy rather than pure face-to-face consultation time.",
             "Each active consultation is assigned an assumed half-service-time remaining because exact remaining duration is not observable.",
             "Triage tier is assigned by authorised clinical staff; the estimate never changes clinical priority.",
         ],
