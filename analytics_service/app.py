@@ -180,7 +180,7 @@ def forecast_calibration_observations() -> list[dict]:
                     SELECT
                         s.queue_id,
                         s.tier,
-                        s.predicted_wait_minutes,
+                        s.baseline_wait_minutes AS predicted_wait_minutes,
                         s.created_at AS sample_created_at,
                         EXTRACT(EPOCH FROM (q.called_at - s.created_at)) / 60.0 AS actual_wait_minutes,
                         ROW_NUMBER() OVER (
@@ -190,7 +190,7 @@ def forecast_calibration_observations() -> list[dict]:
                     FROM flow_forecast_samples s
                     JOIN flow_forecasts f ON f.forecast_id = s.forecast_id
                     JOIN queue_entries q ON q.queue_id = s.queue_id
-                    WHERE f.model_version = 'queue-workload-3.1.0'
+                    WHERE f.model_version = 'queue-workload-3.2.0'
                       AND f.created_at >= NOW() - INTERVAL '90 days'
                       AND s.created_at >= NOW() - INTERVAL '90 days'
                       AND q.data_provenance = 'OPERATIONAL'
@@ -316,7 +316,7 @@ def predict():
         return jsonify({
             "1": None, "2": None, "3": None, "4": None,
             "model": "queue-workload-estimate",
-            "model_version": "queue-workload-3.1.0",
+            "model_version": "queue-workload-3.2.0",
             "estimate_quality": "UNAVAILABLE",
             "degraded": True,
             "reason": "The live estimate could not be calculated. Queue operations continue normally.",
