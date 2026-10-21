@@ -16,6 +16,7 @@ function formatErrorDuration(value) {
 export default function LearningPanel({ token, onOpenTool }) {
   const [fairness, setFairness] = useState(null);
   const [truth, setTruth] = useState(null);
+  const [prediction, setPrediction] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -46,30 +47,62 @@ export default function LearningPanel({ token, onOpenTool }) {
   const unclassifiedWaitingCount = (fairness?.tiers || []).reduce((total, item) => total + Number(item.unclassified_waiting || 0), 0);
   const refresh = useCallback(async () => {
     try {
-      const [fair, ledger] = await Promise.all([api.fairnessMetrics(token), api.forecastTruth(token, 20)]);
-      setFairness(fair); setTruth(ledger);
+      const [fair, ledger, evidence] = await Promise.all([api.fairnessMetrics(token), api.forecastTruth(token, 20), api.predictionEvidence(token)]);
+      setFairness(fair); setTruth(ledger); setPrediction(evidence);
     } catch (e) { setError(e.message); }
   }, [token]);
   useEffect(() => { refresh(); }, [refresh]);
   async function captureForecast() {
     setBusy(true); setError(''); setNotice('');
     try {
-      const prediction = await api.predictions();
-      if (prediction?.degraded) throw new Error('The analytics service is in degraded mode. No forecast was recorded because the estimate is not available.');
-      const estimates = {};
-      for (let tier = 1; tier <= 4; tier += 1) {
-        const value = Number(prediction[String(tier)]);
-        if (!Number.isFinite(value) || value < 0) throw new Error('The analytics service returned an invalid tier estimate.');
-        estimates[tier] = value;
-      }
-      const saved = await api.recordFlowForecast(token, { horizon_minutes: 60, tier_estimates: estimates, model_version: 'pqfms-analytics-current' });
-      setNotice('Forecast #' + saved.forecast_id + ' recorded with ' + saved.tracked_visits + ' waiting-visit sample(s).');
+      // The API captures its current predictor output itself; browser-supplied
+      // estimates or model-version strings are not accepted as ledger truth.
+      const saved = await api.recordFlowForecast(token, { horizon_minutes: 60 });
+      setNotice('Forecast #' + saved.forecast_id + ' recorded with ' + saved.tracked_visits + ' waiting-visit sample(s) using model ' + saved.model_version + '.');
       await refresh();
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }
+
   return (
     <div className="space-y-5">
+      <Card className="p-5 md:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="eyebrow">Evidence-aware operational estimate</p>
+            <h2 className="font-display text-lg font-bold">Current queue workload projection</h2>
+            <p className="mt-1 max-w-3xl text-sm text-stone-500">
+              Estimates combine the recorded queue, the current roster and completed operational call-to-discharge timings. This is a workload proxy, not a guarantee for an individual patient, a diagnosis or a triage recommendation.
+            </p>
+          </div>
+          <Badge tone={prediction?.degraded ? 'red' : prediction?.estimate_quality === 'OBSERVATION_BASED' ? 'teal' : 'orange'}>
+            {prediction?.degraded ? 'Unavailable' : prediction?.estimate_quality === 'OBSERVATION_BASED' ? 'Observation-based' : prediction?.estimate_quality === 'LIMITED_OBSERVATIONS' ? 'Limited history' : 'Fallback assumption'}
+          </Badge>
+        </div>
+        {prediction ? (
+          <>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[1, 2, 3, 4].map(tier => {
+                const raw = prediction[String(tier)];
+                const available = raw !== null && raw !== undefined && Number.isFinite(Number(raw));
+                return <div key={tier} className="rounded-xl border border-stone-200 bg-stone-50 p-4">
+                  <span className="text-sm font-semibold text-stone-700">Tier {tier}</span>
+                  <p className="mt-2 font-display text-3xl font-bold tabular-nums">{available && !prediction.degraded ? Number(raw) : '—'}<span className="ml-1 text-sm font-medium text-stone-500">{available && !prediction.degraded ? 'min' : ''}</span></p>
+                </div>;
+              })}
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Completed timing samples</span><p className="mt-1 font-semibold tabular-nums">{prediction.service_history_samples ?? 0}</p></div>
+              <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Rostered doctors</span><p className="mt-1 font-semibold tabular-nums">{prediction.staffed_doctors ?? 'Unknown'}</p></div>
+              <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Model version</span><p className="mt-1 break-all text-sm font-semibold">{prediction.model_version || 'Not reported'}</p></div>
+              <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Data provenance</span><p className="mt-1 text-sm font-semibold">{prediction.provenance_mode || 'Not reported'}</p></div>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-stone-600">{prediction.service_time_basis || 'Service-time basis not reported.'}</p>
+            {Array.isArray(prediction.limitations) && prediction.limitations.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-xs leading-relaxed text-stone-500">{prediction.limitations.map((item, i) => <li key={i}>{item}</li>)}</ul>}
+          </>
+        ) : <EmptyState title="Prediction evidence unavailable" message="The protected model endpoint did not provide current evidence. Do not treat missing estimates as zero-minute waits."/>}
+      </Card>
+
       <Card className="p-5 md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-display text-lg font-bold">Prediction Truth Ledger</h2><p className="mt-1 max-w-3xl text-sm text-stone-500">Record the current wait estimate and later compare it with the observed remaining time from forecast capture to the first consultation call. Metrics are descriptive operational checks, not clinical validation.</p></div><Button icon="chart" onClick={captureForecast} disabled={busy}>{busy ? 'Recording…' : 'Capture current forecast'}</Button></div>
         <div className="prediction-truth-guidance mt-4 rounded-xl border p-4 text-sm">A forecast only becomes evaluable after a tracked visit reaches its observed first call. Small samples, incomplete timestamps and changing conditions should be considered before drawing conclusions.</div>
