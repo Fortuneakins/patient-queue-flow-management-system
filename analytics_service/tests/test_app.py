@@ -117,4 +117,5 @@ def test_staffing_profile_falls_back_when_shift_service_returns_invalid_shape(mo
 
     assert profile["count"] == 2
     assert profile["source"] == "CONFIGURED_FALLBACK"
-    assert "not a JSON object" in profile["warning"]
+    assert "could not provide a verified on-duty count" in profile["warning"]
+    assert "configured fallback of 2 staffed station(s)" in profile["warning"]
