@@ -97,10 +97,17 @@ GRANT DELETE ON TABLE public.shifts, public.queue_pathway_progress TO pqfms_serv
 GRANT SELECT ON TABLE public.pqfms_schema_migrations TO pqfms_service;
 REVOKE INSERT, UPDATE, DELETE ON TABLE public.pqfms_schema_migrations FROM pqfms_service;
 
--- The analytics principal receives only the columns queried by the estimator.
-GRANT SELECT (status, priority_level, queued_at, called_at, discharged_at, data_provenance)
+-- The analytics principal receives only the columns needed for live queue/service
+-- estimates and bounded calibration from the Prediction Truth Ledger.
+GRANT SELECT (queue_id, status, priority_level, queued_at, called_at, discharged_at, data_provenance)
   ON TABLE public.queue_entries TO pqfms_analytics;
+GRANT SELECT (forecast_id, model_version, horizon_minutes, created_at)
+  ON TABLE public.flow_forecasts TO pqfms_analytics;
+GRANT SELECT (sample_id, forecast_id, queue_id, tier, predicted_wait_minutes, created_at)
+  ON TABLE public.flow_forecast_samples TO pqfms_analytics;
 ```
+
+The analytics role may read only the forecast/version/timestamps and per-visit predicted minutes needed to compute a bounded error correction. It cannot read patient identity, symptoms, consultation notes, staff records or contact preferences. Calibration excludes non-operational visits and forecasts outside their declared horizon; only aggregated median offsets are returned in the model metadata.
 
 Set `DB_USER/DB_PASSWORD` to the API runtime role, `MIGRATION_DB_USER/MIGRATION_DB_PASSWORD` to the migration owner, and `ANALYTICS_DB_USER/ANALYTICS_DB_PASSWORD` to the read-only analytics principal. The API container must never receive the migration-owner password. Do not start the API until grants are verified. On future releases, apply new migrations only with the migration role, then verify new table/sequence default privileges and extend analytics column grants only when required by an independently reviewed query change.
 
@@ -145,8 +152,12 @@ The analytics role is created in step 4A. Do not try to create the same role aga
 ```sql
 GRANT CONNECT ON DATABASE pqfms TO pqfms_analytics;
 GRANT USAGE ON SCHEMA public TO pqfms_analytics;
-GRANT SELECT (status, priority_level, queued_at, called_at, discharged_at, data_provenance)
+GRANT SELECT (queue_id, status, priority_level, queued_at, called_at, discharged_at, data_provenance)
   ON TABLE public.queue_entries TO pqfms_analytics;
+GRANT SELECT (forecast_id, model_version, horizon_minutes, created_at)
+  ON TABLE public.flow_forecasts TO pqfms_analytics;
+GRANT SELECT (sample_id, forecast_id, queue_id, tier, predicted_wait_minutes, created_at)
+  ON TABLE public.flow_forecast_samples TO pqfms_analytics;
 ```
 
 Set a unique strong password for this role through the approved secret-management process (for example, `\\password pqfms_analytics` in an interactive `psql` session). If you use a database name other than `pqfms`, adjust the `GRANT CONNECT` statement. Put these values in `ANALYTICS_DB_USER` and `ANALYTICS_DB_PASSWORD` in the protected deployment environment. The production analytics service receives only the analytics principal and the API username for a startup check; it does not receive the API password. It reads only the columns used to estimate active queue workload and historical consultation duration. It has no write grant. If a future feature needs extra columns or tables, review and grant only the minimum additional permissions.
