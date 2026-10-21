@@ -27,9 +27,10 @@ function publicPrediction(prediction) {
   else if (quality === 'UNAVAILABLE_NO_STAFF') estimateBasis = 'UNAVAILABLE';
 
   const warnings = Array.isArray(prediction.warnings)
-    ? [...new Set(prediction.warnings
-      .filter(item => typeof item === 'string' && item.trim())
-      .map(item => item.trim().slice(0, 500))]
+    ? [...new Set(
+      prediction.warnings
+        .filter(item => typeof item === 'string' && item.trim())
+        .map(item => item.trim().slice(0, 500))
     )].slice(0, 5)
     : [];
 
