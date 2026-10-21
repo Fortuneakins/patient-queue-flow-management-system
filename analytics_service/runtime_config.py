@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 from urllib.parse import urlparse, unquote
+import re
 
 PROVENANCE_MODES = frozenset({"OPERATIONAL", "SYNTHETIC_TEST", "DEMO"})
 
 
 def is_placeholder_secret(value: str | None) -> bool:
-    return bool(value and __import__("re").search(
+    return bool(value and re.search(
         r"REPLACE[_ -]?WITH|GENERATED[_ -]?BY|PLACEHOLDER|YOUR[_ -]|CHANGE[_ -]?ME|EXAMPLE[_ -]?SECRET|CI[_ -]?SECRET",
         str(value),
-        flags=__import__("re").IGNORECASE,
+        flags=re.IGNORECASE,
     ))
 
 
