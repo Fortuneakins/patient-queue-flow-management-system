@@ -19,8 +19,9 @@ async function getOverview() {
       "COUNT(*) FILTER (WHERE status = 'In-Consultation')::int AS in_consultation, " +
       "COUNT(*) FILTER (WHERE status = 'Discharged' AND discharged_at::date = (NOW() AT TIME ZONE 'Africa/Johannesburg')::date)::int AS discharged_today, " +
       "ROUND((EXTRACT(EPOCH FROM (NOW() - MIN(queued_at) FILTER (WHERE status = 'Waiting'))) / 60.0)::numeric, 1) AS oldest_wait_minutes, " +
-      "COUNT(*) FILTER (WHERE status = 'Waiting' AND queued_at < NOW() - INTERVAL '60 minutes')::int AS overdue_waiting " +
-      "FROM queue_entries q WHERE " + queueVisibility
+      "COUNT(*) FILTER (WHERE status = 'Waiting' AND queued_at < NOW() - ($1::int * INTERVAL '1 minute'))::int AS overdue_waiting " +
+      "FROM queue_entries q WHERE " + queueVisibility,
+      [env.DELAY_REVIEW_THRESHOLD_MINUTES]
     ),
     query(
       'SELECT resource_type, status, COUNT(*)::int AS resource_count, COALESCE(SUM(capacity),0)::int AS capacity ' +
@@ -68,6 +69,7 @@ async function getOverview() {
     unclassified_completed: Number(provenanceRow.unclassified_completed),
     unclassified_active: Number(provenanceRow.unclassified_active),
     service_history_samples: sampleCount,
+    delay_review_threshold_minutes: env.DELAY_REVIEW_THRESHOLD_MINUTES,
     generated_at: generatedAt
   };
   const insightResult = buildClinicInsights(insightSnapshot);
@@ -79,6 +81,7 @@ async function getOverview() {
     event_count: events.rows[0].event_count,
     last_event_at: events.rows[0].last_event_at,
     model_version: MODEL_VERSION,
+    delay_review_threshold_minutes: env.DELAY_REVIEW_THRESHOLD_MINUTES,
     generated_at: generatedAt,
     staffing: { on_duty_doctors: staffedDoctors, source: 'ROSTERED_ACTIVE_SHIFTS' },
     data_quality: {
