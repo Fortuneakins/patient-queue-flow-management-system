@@ -30,7 +30,10 @@ function isPredictionPayload(payload) {
 
   for (let tier = 1; tier <= 4; tier += 1) {
     const value = payload[String(tier)];
-    if (payload.degraded && (value === null || value === undefined)) continue;
+    if (value === null || value === undefined) {
+      if (payload.degraded) continue;
+      return false;
+    }
     const numeric = Number(value);
     if (!Number.isFinite(numeric) || numeric < 0 || numeric > 720) return false;
   }
