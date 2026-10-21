@@ -105,3 +105,29 @@ def test_dedicated_analytics_database_url_is_accepted():
         api_database_user="pqfms_api",
         analytics_database_url="postgresql://pqfms_analytics:secret@db.example.org:5432/pqfms",
     )
+
+
+
+def test_production_rejects_placeholder_internal_and_database_secrets():
+    with pytest.raises(RuntimeError, match="non-placeholder INTERNAL_SERVICE_TOKEN"):
+        validate_production_config(
+            node_env="production",
+            mode="OPERATIONAL",
+            internal_token="REPLACE_WITH_A_DIFFERENT_48_BYTE_RANDOM_SECRET",
+            sslmode="verify-full",
+            cors_origins=["https://clinic.example.org"],
+            api_database_user="pqfms_api",
+            analytics_database_user="pqfms_analytics",
+            analytics_database_password="read-only-db-secret",
+        )
+    with pytest.raises(RuntimeError, match="cannot be a placeholder"):
+        validate_production_config(
+            node_env="production",
+            mode="OPERATIONAL",
+            internal_token="a" * 40,
+            sslmode="verify-full",
+            cors_origins=["https://clinic.example.org"],
+            api_database_user="pqfms_api",
+            analytics_database_user="pqfms_analytics",
+            analytics_database_password="REPLACE_WITH_READ_ONLY_ANALYTICS_DATABASE_SECRET",
+        )
