@@ -182,10 +182,10 @@ def test_current_visit_forecasts_are_individual_and_follow_priority_order():
     forecasts = estimate_current_visit_waits(visits, 2, now)
 
     assert forecasts == [
-        {"queue_id": 11, "tier": 1, "estimated_wait_minutes": 0},
-        {"queue_id": 12, "tier": 1, "estimated_wait_minutes": 0},
-        {"queue_id": 13, "tier": 2, "estimated_wait_minutes": 14},
-        {"queue_id": 14, "tier": 4, "estimated_wait_minutes": 14},
+        {"queue_id": 11, "tier": 1, "baseline_wait_minutes": 0, "calibration_offset_minutes": 0.0, "estimated_wait_minutes": 0},
+        {"queue_id": 12, "tier": 1, "baseline_wait_minutes": 0, "calibration_offset_minutes": 0.0, "estimated_wait_minutes": 0},
+        {"queue_id": 13, "tier": 2, "baseline_wait_minutes": 14, "calibration_offset_minutes": 0.0, "estimated_wait_minutes": 14},
+        {"queue_id": 14, "tier": 4, "baseline_wait_minutes": 14, "calibration_offset_minutes": 0.0, "estimated_wait_minutes": 14},
     ]
 
 
@@ -206,7 +206,7 @@ def test_current_visit_forecasts_use_active_consultation_elapsed_time():
 
     forecasts = estimate_current_visit_waits(visits, 1, now, service_minutes=history)
 
-    assert forecasts == [{"queue_id": 22, "tier": 1, "estimated_wait_minutes": 10}]
+    assert forecasts == [{"queue_id": 22, "tier": 1, "baseline_wait_minutes": 10, "calibration_offset_minutes": 0.0, "estimated_wait_minutes": 10}]
 
 
 
@@ -250,7 +250,7 @@ def test_forecast_calibration_offset_is_applied_only_to_visit_level_forecast():
 
     individual = estimate_current_visit_waits(visits, 1, now, calibration=calibration)
 
-    assert individual == [{"queue_id": 91, "tier": 1, "estimated_wait_minutes": 8}]
+    assert individual == [{"queue_id": 91, "tier": 1, "baseline_wait_minutes": 0, "calibration_offset_minutes": 7.5, "estimated_wait_minutes": 8}]
     # Aggregate tier-level estimates remain transparent queue simulations and
     # are not silently adjusted using errors measured on individual visit samples.
     assert estimate_waits(visits, 1, now)["1"] == 14
