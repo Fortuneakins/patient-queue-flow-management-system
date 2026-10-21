@@ -220,6 +220,7 @@ def test_forecast_calibration_query_is_operational_and_horizon_bounded(monkeypat
     assert "flow_forecasts" in cursor.sql
     assert "data_provenance = 'OPERATIONAL'" in cursor.sql
     assert "flow_forecast_samples" in cursor.sql
-    assert "f.model_version = 'queue-workload-3.1.0'" in cursor.sql
+    assert "f.model_version = 'queue-workload-3.2.0'" in cursor.sql
     assert "f.horizon_minutes" in cursor.sql
+    assert "s.baseline_wait_minutes AS predicted_wait_minutes" in cursor.sql
     assert "ROW_NUMBER() OVER" in cursor.sql
