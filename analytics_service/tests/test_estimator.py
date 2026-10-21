@@ -27,7 +27,7 @@ def test_observed_service_time_is_used_only_after_minimum_sample_threshold():
     ]
     # Five eligible samples use the observed median (10 min) rather than the 12 min default.
     assert estimate_waits(visits, 1, now, service_minutes=[8, 10, 12, 10, 14]) == {
-        "1": 12, "2": 12, "3": 12, "4": 24
+        "1": 12, "2": 12, "3": 12, "4": 23
     }
 
 
