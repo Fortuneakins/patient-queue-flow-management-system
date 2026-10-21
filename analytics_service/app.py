@@ -29,14 +29,17 @@ for origin_value in os.getenv("CORS_ORIGIN", "http://localhost:5173").split(",")
     parsed_origin = urlparse(origin_value)
     allowed_origins.append(f"{parsed_origin.scheme}://{parsed_origin.netloc}" if parsed_origin.scheme and parsed_origin.netloc else origin_value)
 INTERNAL_SERVICE_TOKEN = os.getenv("INTERNAL_SERVICE_TOKEN", "").strip()
-DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+DATABASE_URL = os.getenv("ANALYTICS_DATABASE_URL", "").strip()
 DB_CONFIG = {
     "host": os.getenv("DB_HOST", "localhost"),
     "port": int(os.getenv("DB_PORT", "5432")),
     "dbname": os.getenv("DB_NAME", "pqfms_db"),
-    "user": os.getenv("DB_USER", "postgres"),
-    "password": os.getenv("DB_PASSWORD", ""),
+    "user": os.getenv("ANALYTICS_DB_USER") or os.getenv("DB_USER", "postgres"),
+    "password": os.getenv("ANALYTICS_DB_PASSWORD") or os.getenv("DB_PASSWORD", ""),
 }
+API_DATABASE_USER = os.getenv("DB_USER", "postgres")
+ANALYTICS_DATABASE_USER = DB_CONFIG["user"]
+ANALYTICS_DATABASE_PASSWORD = DB_CONFIG["password"]
 DB_SSLMODE = os.getenv("DB_SSLMODE", "verify-full" if NODE_ENV == "production" else "prefer").strip().lower()
 NODE_SERVER_URL = os.getenv("NODE_SERVER_URL", "http://localhost:5000").rstrip("/")
 STAFFED_STATIONS = max(1, int(os.getenv("STAFFED_STATIONS", "1")))
@@ -49,6 +52,10 @@ validate_production_config(
     database_password=DB_CONFIG["password"],
     sslmode=DB_SSLMODE,
     cors_origins=allowed_origins,
+    api_database_user=API_DATABASE_USER,
+    analytics_database_user=ANALYTICS_DATABASE_USER,
+    analytics_database_password=ANALYTICS_DATABASE_PASSWORD,
+    analytics_database_url=DATABASE_URL,
 )
 
 CORS(app, origins=allowed_origins)
