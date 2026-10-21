@@ -1,0 +1,157 @@
+# PQFMS deployment and release-readiness runbook
+
+> **Important boundary:** this is a technical deployment scaffold for controlled staging and an academic prototype. It is not clinical-go-live approval. The repository has not been clinically validated, has not been deployed at RMSH, and has not completed an independent production security/privacy assessment. Do not enter real patient data or rely on the wait-time outputs for care delivery until the deployment, clinical governance, legal/privacy, security, recovery and usability gates in this document have been independently completed and signed off.
+
+## 1. Deployment design
+
+The production Compose stack in `compose.production.yml` uses:
+
+- **Caddy** as the only public entry point, with automatic HTTPS certificates and persisted certificate state.
+- **Nginx** to serve the compiled React application and reverse-proxy same-origin requests to the API and analytics service.
+- **Node/Express API** for authentication, workflow validation, authorisation and PostgreSQL transactions.
+- **Flask analytics under Gunicorn**, not Flask's development server.
+- **Externally managed PostgreSQL with verified TLS**. The database is intentionally not exposed by Compose and the deployment stack does not seed demonstration data.
+- A dedicated, checksum-tracked migration command (`npm run db:migrate`) and one-time first-administrator bootstrap (`npm run bootstrap:admin`).
+
+The API and analytics services are on a private Compose network and are not published as host ports. The frontend uses same-origin `/api`, `/analytics` and `/socket.io` routes, so browser configuration does not need to embed internal hostnames or database credentials.
+
+## 2. Production prerequisites
+
+Before deployment, provision and test:
+
+1. A supported Linux host or managed container platform with Docker Engine and Docker Compose v2. Keep the operating system and container runtime patched.
+2. A DNS name whose public A/AAAA record points at the deployment host. Allow inbound TCP 80/443 (and UDP 443 only if HTTP/3 is enabled). Do not publish ports 5000, 5001 or 5432 publicly.
+3. A managed PostgreSQL database and dedicated least-privilege application owner/service account. The TLS certificate must chain to a CA trusted in the application containers, and its hostname must match `DB_HOST`. The service account needs the schema permissions used by migrations.
+4. Automated encrypted backups, point-in-time recovery where available, a retention policy, and a **successfully rehearsed restore** to a separate database. A backup is not proven until restore is tested.
+5. A secret manager or protected host-level secret file, a monitored certificate contact email, an operational owner and a documented incident/rollback contact.
+6. An independent decision from the organisation responsible for the clinic that the application is permitted to process patient information. This requires privacy/legal review and clinical/safety governance, not just passing software tests.
+
+## 3. Prepare production secrets
+
+On the deployment host, copy the template and **edit the copy only**:
+
+```powershell
+Copy-Item .env.production.example .env.production
+```
+
+The actual `.env.production` file is ignored by Git. Never put its values in source control, screenshots, support tickets, build arguments or application logs.
+
+Populate the file with the public domain, monitored TLS contact email, managed PostgreSQL host/database/user/password, and two independently generated random secrets:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+```
+
+Use separate outputs for `JWT_SECRET` and `INTERNAL_SERVICE_TOKEN`; do not use example text or the demo password. For a real deployment, generate and deliver these values through your secrets manager rather than leaving them in command history. Restrict access to the production environment file (for example, file ACLs to the deployment operator and service account only).
+
+`DATA_PROVENANCE_MODE` is fixed to `OPERATIONAL` by the production Compose definition. Production refuses synthetic/demo mode. Run acceptance tests and demonstrations in a separate non-production environment with a separate database and credentials.
+
+## 4. Validate the deployment configuration
+
+From the repository root, first inspect the resolved Compose configuration without starting any containers:
+
+```powershell
+docker compose --env-file .env.production -f compose.production.yml config --quiet
+```
+
+If validation reports missing variables, fix the environment file before continuing. Confirm that the resolved configuration does not publish API/analytics/database ports and that only Caddy publishes 80/443.
+
+Build the three application images:
+
+```powershell
+docker compose --env-file .env.production -f compose.production.yml build
+```
+
+The project CI builds these images as a basic packaging check. This does not certify their runtime configuration, database reachability or operational security.
+
+## 5. Apply migrations safely
+
+### New, empty production database
+
+Run migrations **before** starting the API:
+
+```powershell
+docker compose --env-file .env.production -f compose.production.yml run --rm migrate
+```
+
+The runner serialises migrations with a PostgreSQL advisory lock, stores filename and SHA-256 checksum in `pqfms_schema_migrations`, records each migration transactionally, refuses to run a changed version of an already-applied migration, and leaves future migration files pending. Review the migration output and database state before continuing.
+
+**Do not run** `scripts/database.ps1` in production: it is a development initialiser that loads demonstration patients and accounts, and explicitly refuses production mode.
+
+### Existing database
+
+Take a backup and verify it can be restored before baselining or applying schema changes. The migration runner will not guess the history of an existing database that has no migration ledger.
+
+For a previously reviewed database whose schema and source backfill already match migrations 001–008, the explicit baseline flow is:
+
+```powershell
+.\scripts\migrate.ps1 -BaselineExisting
+```
+
+This procedure does not execute migrations 001–008; it checks schema markers and requires explicit confirmation before writing their checksums to the ledger. It also checks the migration-008 provenance-source backfill. If any check fails, stop and compare the restored backup, schema and migration history. Do not force the baseline, delete the ledger, reset the database or run old migrations against retained data. If the source backfill has not been applied, apply migration 008 explicitly after backup and review before attempting the baseline.
+
+For any database state other than a verified 001–008 schema, use a reviewed migration plan that records which scripts have truly been applied. Never baseline a schema just because the tables have familiar names.
+
+## 6. Create the first production administrator
+
+The normal API intentionally refuses to start in production while the seeded demonstration usernames remain. Do not seed the demo accounts in production.
+
+After a successful schema migration and while the staff table is empty, provision the first named administrator through the one-time utility. Obtain the username and high-entropy password from the organisation's approved identity/secrets process, set them temporarily in the deployment environment and run:
+
+```powershell
+$env:PQFMS_BOOTSTRAP_ADMIN_USERNAME = "<approved-admin-username>"
+$env:PQFMS_BOOTSTRAP_ADMIN_PASSWORD = "<unique 14+ character password from the secret manager>"
+docker compose --env-file .env.production -f compose.production.yml run --rm --no-deps -e PQFMS_BOOTSTRAP_ADMIN_USERNAME -e PQFMS_BOOTSTRAP_ADMIN_PASSWORD api npm run bootstrap:admin
+Remove-Item Env:PQFMS_BOOTSTRAP_ADMIN_USERNAME
+Remove-Item Env:PQFMS_BOOTSTRAP_ADMIN_PASSWORD
+```
+
+The utility only operates in production, refuses to create an account if any staff record already exists, hashes the password, writes an audit event and does not print the password. If an account already exists, do not delete staff records just to rerun the bootstrap. Follow the organisation's controlled account-recovery process instead.
+
+This bootstrap does **not** implement multi-factor authentication. MFA is a release blocker for genuine clinical deployment unless the responsible organisation formally accepts an alternative control through its security risk process.
+
+## 7. Start services and verify health
+
+```powershell
+docker compose --env-file .env.production -f compose.production.yml up -d
+docker compose --env-file .env.production -f compose.production.yml ps
+docker compose --env-file .env.production -f compose.production.yml logs --tail=100 caddy web api analytics
+```
+
+Use the deployment's public HTTPS hostname to check:
+
+- `/api/health/live` reports the API process is alive.
+- `/api/health/ready` reports database readiness.
+- `/analytics/api/health/live` reports the analytics process is alive.
+- `/analytics/api/health/ready` reports analytics database readiness and provenance mode.
+- The public display board hides patient names, identification numbers and consultation notes.
+- A synthetic check-in, call, note, discharge and history lookup pass in the *separate staging environment*.
+- Every new check-in has its expected server-assigned provenance source; test/demo observations never count as operational model evidence.
+- If there are no rostered doctors while work is active, wait estimates become unavailable rather than falsely returning zero minutes.
+- Clinic Intelligence review prompts show their rule ID, evidence, assumptions and human action; no rule changes a clinician-assigned tier.
+- Caddy has obtained a valid certificate and the browser sees HTTPS without certificate warnings.
+
+Do not test using real patient identifiers or clinical notes in the development/CI environment.
+
+## 8. Operational controls required before a real-clinic go-live
+
+Passing application CI is necessary, not sufficient. Obtain written evidence for all of these items:
+
+- **Identity and access:** MFA for privileged staff, documented staff account provisioning/deprovisioning, role/permission review, credential rotation, session/token expiry and recovery procedures.
+- **Privacy/security:** independent penetration test, threat model, access-log/privacy review, retention/deletion policy, secrets management, vulnerability remediation, incident response and relevant jurisdictional legal/privacy approval.
+- **Database and recovery:** encrypted backups, restore rehearsal, restore-time objective, recovery-point objective, failover behaviour, migration rollback strategy and database least-privilege.
+- **Clinical safety and usability:** clinical owner approval of the workflow, prioritisation and patient-display semantics; accessibility testing; downtime/paper fallback; human factors; staff training; and a tested process for correcting erroneous queue data.
+- **Analytics validation:** prospective evaluation against independently collected, representative operational observations; sufficient sample size and confidence intervals; drift and missing-data monitoring; stratified review; transparent uncertainty; and sign-off by responsible clinical/operations staff. Do not represent a deterministic scenario or the synthetic Continuity Lab as a clinical validation study.
+- **Communications/integration:** verified consent handling, real provider delivery tests and failure handling if SMS is enabled; contracts and interface validation before any real external-health-system exchange.
+- **Release governance:** immutable image digests, software bill of materials, vulnerability scans, pinned dependency/image updates, release tag, change approvals, monitoring/alerting, service ownership, rollback/incident runbooks and a documented maintenance window.
+
+The repository's current academic scope does not itself supply evidence for these approvals. In particular, it does not provide MFA, clinical validation, a complete disaster-recovery rehearsal or independent production security/privacy sign-off.
+
+## 9. Rollback and incident safety
+
+- Never roll back by running older SQL migrations or deleting migration checksums.
+- Prefer deploying the previous immutable image while using a schema that is backward-compatible with both versions. Database schema rollback needs a separately reviewed recovery plan.
+- Stop traffic before a recovery action that might cause patient-queue divergence; follow the clinic's approved paper/downtime procedure.
+- Preserve database backups and append-only operational event evidence; do not edit records merely to make metrics look normal.
+- If analytics is unavailable, the queue workflow should continue while estimates clearly show unavailable/degraded state. Clinical staff must use established procedures, not a missing estimate, to determine patient priority.
