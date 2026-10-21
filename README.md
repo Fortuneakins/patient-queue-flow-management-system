@@ -30,7 +30,7 @@ PQFMS is an academic software-development project for the Outpatient Department 
 React + Vite frontend → HTTPS reverse proxy → Express/Node.js REST API → PostgreSQL
                                  ↘ Flask/Gunicorn analytics service → PostgreSQL
 
-In local development, the Flask service may run directly for convenience. The production Compose stack places Caddy at the public HTTPS boundary, serves the static frontend with Nginx, keeps API/analytics/database ports private, and runs analytics with Gunicorn. Socket.IO is used as a payload-free queue-refresh signal; clients re-fetch authorised data through the API.
+In local development, the Flask service runs as a private dependency of the Express API. The production Compose stack places Caddy at the public HTTPS boundary, serves the static frontend with Nginx, keeps API/analytics/database ports private, and runs analytics with Gunicorn. The browser reaches wait estimates through Express; the private analytics hostname and service token are never embedded in the frontend. Socket.IO is used as a payload-free queue-refresh signal; clients re-fetch authorised data through the API.
 
 ## Repository structure
 
@@ -75,7 +75,7 @@ The seed script uses synthetic patient data and demo staff accounts. Never run i
 
 ## Production deployment
 
-A containerised deployment scaffold is provided in `compose.production.yml`: Caddy terminates HTTPS; the static web server proxies same-origin API/analytics/WebSocket traffic; the API and analytics services are not published as public ports; PostgreSQL is external and configured for TLS. See [docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md) for prerequisites, migrations, administrator bootstrap, validation and go-live gates. This is not a claim of clinical deployment approval. The project remains an academic prototype until independent security/privacy assessment, backup restoration drills, identity controls including MFA, and clinical/operational validation are signed off.
+A containerised deployment scaffold is provided in `compose.production.yml`: Caddy terminates HTTPS; Nginx proxies same-origin API and WebSocket traffic to Express; Express authenticates server-to-server requests to the private analytics service; the API and analytics services are not published as public ports; PostgreSQL is external and configured for TLS. See [docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md) for prerequisites, migrations, administrator bootstrap, validation and go-live gates. This is not a claim of clinical deployment approval. The project remains an academic prototype until independent security/privacy assessment, backup restoration drills, identity controls including MFA, and clinical/operational validation are signed off.
 
 ## Run the system
 
