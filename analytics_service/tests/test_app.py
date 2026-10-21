@@ -70,13 +70,14 @@ def test_ready_endpoint_reports_dependency_failure(monkeypatch):
 
 
 def test_db_rows_apply_configured_provenance_visibility(monkeypatch):
-    rows = [("Waiting", 4, datetime.now(timezone.utc), None, "OPERATIONAL")]
+    rows = [("Waiting", 4, datetime.now(timezone.utc), None, "OPERATIONAL", 42)]
     cursor = FakeCursor(rows)
     monkeypatch.setattr(analytics, "_connect", lambda: FakeConnection(cursor))
     monkeypatch.setattr(analytics, "DATA_PROVENANCE_MODE", "OPERATIONAL")
     visits = analytics.db_rows()
     assert len(visits) == 1
     assert visits[0]["data_provenance"] == "OPERATIONAL"
+    assert visits[0]["queue_id"] == 42
     # The SQL predicate must exclude synthetic/demo records in OPERATIONAL mode.
     assert "data_provenance NOT IN ('SYNTHETIC_TEST', 'DEMO')" in cursor.sql
     assert "LIMIT 1000" in cursor.sql
@@ -105,7 +106,7 @@ def test_service_history_query_only_uses_operational_records(monkeypatch):
 
 def test_predict_returns_transparent_metadata(monkeypatch):
     monkeypatch.setattr(analytics, "db_rows", lambda: [
-        {"status": "Waiting", "priority_level": 4, "queued_at": datetime.now(timezone.utc), "called_at": None}
+        {"queue_id": 42, "status": "Waiting", "priority_level": 4, "queued_at": datetime.now(timezone.utc), "called_at": None}
     ])
     monkeypatch.setattr(analytics, "on_duty_count", lambda: 1)
     monkeypatch.setattr(analytics, "tier_service_time_samples", lambda: ([{"tier": 1, "service_minutes": 8.0}] * 8 + [{"tier": 2, "service_minutes": 10.0}] * 8 + [{"tier": 3, "service_minutes": 12.0}] * 8 + [{"tier": 4, "service_minutes": 14.0}] * 11))
@@ -116,6 +117,9 @@ def test_predict_returns_transparent_metadata(monkeypatch):
     assert response.json["service_history_samples"] == 35
     assert "operational call-to-discharge intervals" in response.json["service_time_basis"]
     assert response.json["4"] > 0
+    assert response.json["visit_estimates"] == [
+        {"queue_id": 42, "tier": 4, "estimated_wait_minutes": 0}
+    ]
 
 
 def test_predict_does_not_report_zero_wait_when_no_staff_are_available(monkeypatch):
