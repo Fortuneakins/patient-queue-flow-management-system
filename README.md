@@ -30,7 +30,9 @@ PQFMS is an academic software-development project for the Outpatient Department 
 
 React + Vite frontend → Express/Node.js REST API → PostgreSQL
 
-The system also contains a small Flask analytics service for wait-time estimation and an optional Twilio SMS integration. Socket.IO is used as a payload-free queue-refresh signal; clients re-fetch authorised data through the API.
+The system also contains a private Flask analytics service for wait-time estimation and an optional Twilio SMS integration. The browser obtains aggregate predictions through the rate-limited Express API proxy; the Flask predictor requires an internal service token. Socket.IO is used as a payload-free queue-refresh signal; clients re-fetch authorised data through the API.
+
+**Deployment boundary:** this is still an academic prototype, not a clinically validated or hospital-approved service. Review [the deployment-readiness gates](docs/DEPLOYMENT_READINESS.md) before exposing it to real data or users.
 
 ## Repository structure
 
