@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "test": "node --test tests/unit/*.test.js",
     "test:integration": "RUN_DB_TESTS=1 node --test tests/integration/*.test.js",
-    "verify": "npm run lint && npm test"
+    "verify": "npm run lint && npm test",
+    "bootstrap:admin": "node scripts/bootstrap-admin.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
