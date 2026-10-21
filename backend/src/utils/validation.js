@@ -83,11 +83,19 @@ function validateUsername(value) {
   return typeof value === 'string' && USERNAME.test(value.trim());
 }
 
+function isProductionPasswordPolicy() {
+  return String(process.env.NODE_ENV || 'development').toLowerCase() === 'production';
+}
+
+function passwordPolicyMessage() {
+  return isProductionPasswordPolicy()
+    ? 'Password must be at least 14 characters and include uppercase, lowercase, numeric and special characters; do not use a known demo or placeholder password.'
+    : 'Password must be at least 8 characters.';
+}
+
 function validatePassword(value) {
   if (typeof value !== 'string') return false;
-  if (String(process.env.NODE_ENV || 'development').toLowerCase() !== 'production') {
-    return value.length >= 8;
-  }
+  if (!isProductionPasswordPolicy()) return value.length >= 8;
   // Production staff accounts use a stronger floor than local academic fixtures.
   // MFA remains a separate production go-live requirement; this is not a substitute.
   return value.length >= 14
@@ -108,5 +116,7 @@ module.exports = {
   validateTier,
   validateUsername,
   validatePassword,
+  passwordPolicyMessage,
+  isProductionPasswordPolicy,
   STAFF_ROLES
 };
