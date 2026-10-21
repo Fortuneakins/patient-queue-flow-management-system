@@ -42,6 +42,10 @@ function validateProductionConfig(input = {}) {
     if (!parsedDatabaseUrl.username || !parsedDatabaseUrl.password || isPlaceholderSecret(decodeURIComponent(parsedDatabaseUrl.password))) {
       throw new Error('DATABASE_URL must contain non-placeholder database credentials.');
     }
+    const configuredSslMode = parsedDatabaseUrl.searchParams.get('sslmode');
+    if (configuredSslMode && !['require', 'verify-ca', 'verify-full'].includes(configuredSslMode.toLowerCase())) {
+      throw new Error('DATABASE_URL cannot override verified PostgreSQL TLS with a weaker sslmode.');
+    }
   }
   if (input.databaseSsl !== true) {
     throw new Error('Production requires DB_SSL=true with certificate validation enabled.');
