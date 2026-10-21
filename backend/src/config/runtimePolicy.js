@@ -11,7 +11,7 @@ function isPlaceholderSecret(value) {
 function parseTrustProxyHops(value) {
   const normalized = String(value ?? '0').trim().toLowerCase();
   if (normalized === '' || normalized === 'false') return false;
-  if (/^\\d+$/.test(normalized) && Number.isSafeInteger(Number(normalized))) {
+  if (/^\d+$/.test(normalized) && Number.isSafeInteger(Number(normalized))) {
     return Number(normalized);
   }
   throw new Error('TRUST_PROXY_HOPS must be a non-negative integer or false; do not trust all proxies.');
