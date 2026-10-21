@@ -125,7 +125,25 @@ export default function LearningPanel({ token, onOpenTool }) {
     }
     setError(errors.join(' '));
   }, [token]);
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    refresh();
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+
+    const interval = window.setInterval(refreshWhenVisible, 30000);
+    window.addEventListener('focus', refreshWhenVisible);
+    window.addEventListener('online', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshWhenVisible);
+      window.removeEventListener('online', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [refresh]);
   async function captureForecast() {
     setBusy(true); setError(''); setNotice('');
     try {
@@ -180,7 +198,7 @@ export default function LearningPanel({ token, onOpenTool }) {
                 <div>
                   <h3 className="text-sm font-semibold text-stone-900">Per-visit forecast calibration</h3>
                   <p className="mt-1 text-xs leading-relaxed text-stone-600">
-                    A bounded median-error correction is learned only from earlier, in-horizon OPERATIONAL truth samples. It adjusts individual waiting-visit forecasts used by the Truth Ledger and consent-gated SMS; the aggregate tier projections above remain the unadjusted queue simulation.
+                    A bounded median-error correction is learned only from earlier, in-horizon OPERATIONAL first-call outcomes. It adjusts individual waiting-visit forecasts used by the Truth Ledger and consent-gated SMS. Public aggregate tier estimates remain separate queue-workload projections because their hypothetical-new-visit target differs from an individual visit's observed wait. This correction is not a confidence interval or clinical validation.
                   </p>
                 </div>
                 <Badge tone={prediction.degraded ? 'red' : Number(prediction.wait_calibration?.global_samples || 0) >= Number(prediction.wait_calibration?.minimum_samples || 20) ? 'teal' : 'orange'}>
@@ -189,6 +207,31 @@ export default function LearningPanel({ token, onOpenTool }) {
               </div>
               <p className="mt-2 text-xs text-stone-500">
                 Eligible prior visits: {prediction.wait_calibration?.global_samples ?? 0}; minimum required: {prediction.wait_calibration?.minimum_samples ?? 'Not reported'}; maximum correction: ±{prediction.wait_calibration?.maximum_absolute_offset_minutes ?? 'Not reported'} min.
+              </p>
+              <div
+                className="mt-3 h-2 overflow-hidden rounded-full bg-stone-200"
+                role="progressbar"
+                aria-label="Operational forecast calibration evidence"
+                aria-valuemin={0}
+                aria-valuemax={Number(prediction.wait_calibration?.minimum_samples || 20)}
+                aria-valuenow={Math.min(
+                  Number(prediction.wait_calibration?.global_samples || 0),
+                  Number(prediction.wait_calibration?.minimum_samples || 20)
+                )}
+              >
+                <div
+                  className="h-full rounded-full bg-teal-700 transition-[width] duration-500"
+                  style={{
+                    width: Math.min(
+                      100,
+                      Number(prediction.wait_calibration?.global_samples || 0)
+                        / Number(prediction.wait_calibration?.minimum_samples || 20) * 100
+                    ) + '%'
+                  }}
+                />
+              </div>
+              <p className="mt-1 text-xs text-stone-500">
+                {Math.min(Number(prediction.wait_calibration?.global_samples || 0), Number(prediction.wait_calibration?.minimum_samples || 20))} of {Number(prediction.wait_calibration?.minimum_samples || 20)} eligible operational outcomes collected.
               </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 {[1, 2, 3, 4].map(tier => {
@@ -211,7 +254,7 @@ export default function LearningPanel({ token, onOpenTool }) {
 
       <Card className="p-5 md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-display text-lg font-bold">Prediction Truth Ledger</h2><p className="mt-1 max-w-3xl text-sm text-stone-500">Record the current wait estimate and later compare it with the observed remaining time from forecast capture to the first consultation call. Metrics are descriptive operational checks, not clinical validation.</p></div><Button icon="chart" onClick={captureForecast} disabled={busy}>{busy ? 'Recording…' : 'Capture current forecast'}</Button></div>
-        <div className="prediction-truth-guidance mt-4 rounded-xl border p-4 text-sm">A forecast only becomes evaluable after a tracked visit reaches its observed first call. Each baseline/applied MAE pair uses the same visits and the same provenance/horizon filter; n is shown for that exact subset. Lower applied MAE is evidence of improvement on those observations, not a guarantee of future performance.</div>
+        <div className="prediction-truth-guidance mt-4 rounded-xl border p-4 text-sm">A forecast only becomes evaluable after a tracked visit reaches its observed first call. Each baseline/applied MAE pair uses the same visits and the same provenance/horizon filter; n is shown for that exact subset. Lower applied MAE is evidence of improvement on those observations, not a guarantee of future performance. In OPERATIONAL mode, the backend also captures non-blocking forecast snapshots after successful queue changes. Only explicitly operational visits with eligible in-horizon call outcomes contribute to calibration; synthetic, demo and unclassified records do not.</div>
         {horizonBreakdownUnavailable && <div className="prediction-truth-warning mt-3 rounded-xl border p-4 text-sm" role="status">
           <p className="font-bold">Horizon breakdown unavailable</p>
           <p className="mt-1 leading-relaxed">The current API response does not include all horizon-aware fields. Missing counts are shown as unavailable, not zero. Refresh the backend service after updating the application, then refresh this panel before interpreting these metrics.</p>
