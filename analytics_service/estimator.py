@@ -117,7 +117,7 @@ def estimate_metadata(
     else:
         quality = "DEFAULT_ASSUMPTION"
         basis = f"default {DEFAULT_SERVICE_MINUTES:g}-minute service-time assumption; fewer than {MIN_SAMPLES_FOR_CALIBRATION} eligible operational samples"
-    unavailable = staffed_doctors <= 0 and active_visit_count > 0
+    unavailable = staffed_doctors <= 0
     return {
         "model": "queue-workload-estimate",
         "model_version": "queue-workload-2.0.0",
