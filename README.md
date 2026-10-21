@@ -50,7 +50,9 @@ Node.js (current LTS), npm, Python 3.10+, PostgreSQL 14+ and Chrome or Edge.
 
 ## Configuration
 
-Run `scripts\setup.ps1` from PowerShell. It creates the ignored root `.env`, generates local JWT/internal-service secrets when needed, and creates the frontend Vite environment file. Never commit `.env`.
+Run `scripts\setup.ps1` from PowerShell for local development. It creates the ignored root `.env`, generates local JWT/internal-service secrets when needed, and creates the frontend Vite environment file. Never commit `.env` or use development secrets in a deployed environment.
+
+Clinic Intelligence now returns server-generated, explainable review prompts with rule IDs, evidence, severity and suggested human actions. These operational heuristics never diagnose patients or assign/change triage priority. Wait-time values are estimates for a hypothetical new visit at a given tier; they are not individual guarantees. Five or more eligible completed operational consultation durations are required before the observed median is used, and the dashboard states when the history is limited.
 
 For SMS, set `SMS_ENABLED=true` and provide Twilio credentials. With SMS disabled, the core local workflow remains available.
 
@@ -63,11 +65,17 @@ For SMS, set `SMS_ENABLED=true` and provide Twilio credentials. With SMS disable
 
 The development database script is for a **fresh disposable development database only**: it refuses an existing database and loads synthetic demo fixtures after migrations. For an existing database, do not rerun setup/seeding to update the schema; back it up and use the tracked migration procedure in [the deployment runbook](docs/PRODUCTION_DEPLOYMENT.md). `npm --prefix backend run db:migrate` uses the SHA-256 migration ledger; the explicit baseline option must only be used after verifying the existing schema and backup.
 
-The sorted migration set creates the schema and constraints. Migrations `003_clinic_intelligence.sql` and `004_patient_communications.sql` add Clinic Intelligence modules; migration `006_data_provenance.sql` adds auditable provenance classifications, migration `007_data_provenance_source.sql` records whether each classification came from the server policy, an administrator review, or an outstanding legacy review, and migration `008_backfill_reviewed_provenance_sources.sql` reconciles earlier administrator reviews using the pre-existing reviewer and review timestamp fields. Existing queue records remain `UNCLASSIFIED` until reviewed; their origin is never guessed from names, ticket numbers or symptom text.
+For a fresh local database, `scripts\database.ps1` creates the database, applies migrations through the checksum-tracked runner and loads synthetic demo data. The runner serialises schema changes, stores the migration filename/SHA-256 checksum, rejects edits to already-applied migrations and leaves future versions pending. For a production deployment, do not run the development seeder or `scripts\database.ps1`; use `compose.production.yml` and follow [the production deployment runbook](docs/PRODUCTION_DEPLOYMENT.md).
+
+The migration set creates the schema and constraints. Migrations `003_clinic_intelligence.sql` and `004_patient_communications.sql` add Clinic Intelligence modules; migration `006_data_provenance.sql` adds auditable provenance classifications, migration `007_data_provenance_source.sql` records whether each classification came from the server policy, an administrator review, or an outstanding legacy review, and migration `008_backfill_reviewed_provenance_sources.sql` reconciles earlier administrator reviews using the pre-existing reviewer and review timestamp fields. Existing queue records remain `UNCLASSIFIED` until reviewed; their origin is never guessed from names, ticket numbers or symptom text.
 
 New check-ins are classified automatically by the **server-only** `DATA_PROVENANCE_MODE` setting: `OPERATIONAL`, `SYNTHETIC_TEST` or `DEMO`. The safe default is `OPERATIONAL` when `NODE_ENV=production`, and `SYNTHETIC_TEST` otherwise. Production refuses synthetic/demo modes, including any override attempt. Keep synthetic tests in a separate non-production deployment/database. Do not expose this setting to clients. Status, triage and discharge transitions preserve the assigned provenance; every manual correction requires an administrator reason and is written to Flight Recorder. Only visits classified `OPERATIONAL`—automatically by the production server policy or after an authorised administrator review—contribute to historical operational wait/service statistics.
 
-The seed script uses synthetic patient data and demo staff accounts. For an existing local database, take a backup and apply only unapplied migrations `006_data_provenance.sql` and `007_data_provenance_source.sql` as appropriate; do not reset or re-seed a database that contains records you need to keep.
+The seed script uses synthetic patient data and demo staff accounts. Never run it against a production database. For an existing local database without a migration ledger, make and verify a backup first, compare the actual schema and migration history, then use the explicit reviewed-baseline process in the production runbook only if its schema/source checks are satisfied. Do not reset or re-seed a database that contains records you need to keep.
+
+## Production deployment
+
+A containerised deployment scaffold is provided in `compose.production.yml`: Caddy terminates HTTPS; the static web server proxies same-origin API/analytics/WebSocket traffic; the API and analytics services are not published as public ports; PostgreSQL is external and configured for TLS. See [docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md) for prerequisites, migrations, administrator bootstrap, validation and go-live gates. This is not a claim of clinical deployment approval. The project remains an academic prototype until independent security/privacy assessment, backup restoration drills, identity controls including MFA, and clinical/operational validation are signed off.
 
 ## Run the system
 
@@ -92,7 +100,7 @@ These accounts are for the academic demonstration only. Do not reuse the passwor
 
 ## Verification
 
-The repository includes unit, integration, security, database-integrity, analytics and performance test infrastructure. GitHub Actions validates a fresh PostgreSQL migration run, backend tests, analytics tests, frontend lint/build, production Compose configuration, container image builds and Nginx/Caddy configuration syntax. A passing pipeline does not replace an environment-specific deployment rehearsal or clinical/privacy/security sign-off.
+The repository includes unit, integration, security, database-integrity, analytics and performance test infrastructure. GitHub Actions validates backend/frontend tests, fresh database migration, analytics tests, the frontend build, production Compose syntax and production container/Nginx/Caddy configuration. Passing CI proves only the checks it executes; it does not prove deployment readiness in a real clinic. GitHub Actions validates a fresh PostgreSQL migration run, backend tests, analytics tests, frontend lint/build, production Compose configuration, container image builds and Nginx/Caddy configuration syntax. A passing pipeline does not replace an environment-specific deployment rehearsal or clinical/privacy/security sign-off.
 
 Backend unit tests:
 
