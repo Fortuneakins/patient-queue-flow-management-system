@@ -4,7 +4,7 @@
 
 ## Intended service topology
 
-- **Browser → HTTPS reverse proxy → Express API.** The browser calls the public API for queue operations and `GET /api/analytics/predict`. Socket.IO carries a refresh signal; authorised queue data is re-fetched through the API.
+- **Browser → HTTPS reverse proxy → Express API.** The public `GET /api/analytics/predict` route exposes only aggregate tier estimates and an evidence-basis status. Detailed model evidence is limited to administrator-authenticated `GET /api/analytics/model`. Socket.IO carries a refresh signal; authorised queue data is re-fetched through the API.
 - **Express API → PostgreSQL** over a private network. The database port must not be open to the public internet.
 - **Express API → Flask analytics** over the private `ANALYTICS_URL` address, authenticated with `X-Internal-Service-Token`. The public-facing browser must not call Flask directly.
 - **Flask analytics → Express shift endpoint** for a live roster count, using the same internal service token. `GET /api/shifts/on-duty` is an internal service-to-service route, not a browser route.
