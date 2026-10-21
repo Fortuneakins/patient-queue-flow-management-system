@@ -61,8 +61,9 @@ services:
       DB_HOST: ${DB_HOST:?Set DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME:?Set DB_NAME}
-      DB_USER: ${DB_USER:?Set DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      API_DATABASE_USER: ${DB_USER:?Set the separate API database user name}
+      ANALYTICS_DB_USER: ${ANALYTICS_DB_USER:?Set a dedicated read-only analytics database user}
+      ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD:?Set the dedicated analytics database password}
       DB_SSLMODE: verify-full
       DATA_PROVENANCE_MODE: OPERATIONAL
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Set a distinct random internal service token}
