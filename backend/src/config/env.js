@@ -10,7 +10,7 @@ function required(name) {
 }
 
 const { resolveDataProvenancePolicy } = require('./dataProvenancePolicy');
-const { asBoolean, validateProductionConfig } = require('./runtimePolicy');
+const { asBoolean, parseTrustProxyHops, validateProductionConfig } = require('./runtimePolicy');
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const dataProvenancePolicy = resolveDataProvenancePolicy({
   nodeEnv: NODE_ENV,
@@ -32,6 +32,9 @@ const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
 const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER || '';
 
+
+
+const TRUST_PROXY_HOPS = parseTrustProxyHops(process.env.TRUST_PROXY_HOPS);
 validateProductionConfig({
   nodeEnv: NODE_ENV,
   jwtSecret: JWT_SECRET,
@@ -40,21 +43,13 @@ validateProductionConfig({
   databasePassword: process.env.DB_PASSWORD || '',
   databaseSsl: DB_SSL,
   corsOrigins: CORS_ORIGIN,
+  trustProxyHops: TRUST_PROXY_HOPS,
   allowNonOperationalProvenanceMode: process.env.ALLOW_NON_OPERATIONAL_PROVENANCE_MODE,
   smsEnabled: SMS_ENABLED,
   twilioAccountSid: TWILIO_ACCOUNT_SID,
   twilioAuthToken: TWILIO_AUTH_TOKEN,
   twilioPhoneNumber: TWILIO_PHONE_NUMBER
 });
-
-const trustProxyValue = String(process.env.TRUST_PROXY_HOPS || '0').trim();
-const TRUST_PROXY_HOPS = trustProxyValue === 'true'
-  ? true
-  : trustProxyValue === 'false' || trustProxyValue === ''
-    ? false
-    : Number.isInteger(Number(trustProxyValue)) && Number(trustProxyValue) >= 0
-      ? Number(trustProxyValue)
-      : (() => { throw new Error('TRUST_PROXY_HOPS must be a non-negative integer, true or false.'); })();
 
 module.exports = {
   NODE_ENV,
