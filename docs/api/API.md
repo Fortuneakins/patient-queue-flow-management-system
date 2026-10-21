@@ -60,7 +60,7 @@ The API is a JSON REST service on port 5000. All protected routes require `Autho
 
 `GET /api/shifts/on-duty` — internal service-to-service endpoint protected by `X-Internal-Service-Token`.
 
-The Flask analytics service exposes `GET /api/predict`, returning estimates for tiers 1–4 plus `degraded` and staffing metadata.
+`GET /api/analytics/predict` is the rate-limited public aggregate endpoint served by Express. It returns estimates for tiers 1–4, estimate-basis status and a timestamp; on failure it never implies that a wait is zero. `GET /api/analytics/model` requires an authenticated, password-ready Admin account and returns detailed model quality, sample counts, the staffing count and limitations. Express calls the private Flask `GET /api/predict` service-to-service with `X-Internal-Service-Token`. Flask's prediction endpoint rejects missing/invalid tokens and should not be routed directly to browsers or publicly exposed.
 
 
 ## Clinic Intelligence (feature branch)
