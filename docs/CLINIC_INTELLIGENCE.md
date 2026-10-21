@@ -29,6 +29,12 @@ The response preserves the four numeric tier fields for existing clients and add
 
 The Prediction Truth Ledger remains the empirical evaluation mechanism. Staff can capture forecasts, then inspect error only after corresponding visits reach an observed first consultation call. Operational use should remain supervised until the system accumulates representative data and has completed prospective validation. Synthetic seed records and test scenarios must not be represented as actual hospital evidence.
 
+### Operational signal review
+
+The administrator's **Live operational signals** view is powered by a deterministic rule engine over aggregate queue counts, completed-visit timing counts and the clinic resource registry. It flags recorded waits beyond the existing 60-minute review threshold, a waiting queue with no active consultation, sparse/limited completed-consultation timing evidence, and room capacity that is missing or marked limited/unavailable. Each signal includes a rule code, severity, source data and recommended human review step. Critical labels refer to operational review urgency, not clinical acuity.
+
+The rules are intentionally inspectable and bounded: they do not use patient names, identification numbers, symptoms or consultation-note content; they do not infer a diagnosis, conclude that a patient has been unfairly treated, change a clinical priority, reassign staff or trigger an operational action. An empty resource registry does not prove that the physical clinic has no rooms. A clean signal list means only that these configured rules did not trigger for this snapshot; it is not an all-clear assurance. Thresholds and resource states must be reviewed against the actual clinic's locally approved workflow before any real-world use.
+
 ### CareGraph
 
 Every new check-in is assigned the configured `OPD_STANDARD` pathway. The pathway initially marks registration complete, triage ready and later stages pending. Administrators can create additional ordered pathways; authorised staff can inspect and update assigned stage progress. Stage transitions are role-checked, and required earlier stages must be completed before later stages start.
