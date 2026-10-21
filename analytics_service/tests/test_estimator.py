@@ -254,3 +254,52 @@ def test_forecast_calibration_offset_is_applied_only_to_visit_level_forecast():
     # Aggregate tier-level estimates remain transparent queue simulations and
     # are not silently adjusted using errors measured on individual visit samples.
     assert estimate_waits(visits, 1, now)["1"] == 14
+
+
+
+def test_applied_calibration_offset_records_effective_change_after_clipping():
+    now = datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc)
+    visits = [
+        {"queue_id": 101, "status": "Waiting", "priority_level": 1, "queued_at": now},
+        {"queue_id": 102, "status": "Waiting", "priority_level": 1, "queued_at": now + timedelta(minutes=1)},
+    ]
+    calibration = {
+        "tiers": {
+            "1": {"source": "TIER_OPERATIONAL_TRUTH", "offset_minutes": -30.0}
+        }
+    }
+
+    forecasts = estimate_current_visit_waits(visits, 1, now, calibration=calibration)
+
+    assert forecasts[0] == {
+        "queue_id": 101,
+        "tier": 1,
+        "baseline_wait_minutes": 0,
+        "calibration_offset_minutes": 0.0,
+        "estimated_wait_minutes": 0,
+    }
+    assert forecasts[1] == {
+        "queue_id": 102,
+        "tier": 1,
+        "baseline_wait_minutes": 14,
+        "calibration_offset_minutes": -14.0,
+        "estimated_wait_minutes": 0,
+    }
+
+
+def test_long_queue_estimates_are_bounded_to_documented_maximum():
+    now = datetime(2026, 10, 5, 10, 0, tzinfo=timezone.utc)
+    visits = [
+        {"status": "Waiting", "priority_level": 1, "queued_at": now + timedelta(seconds=i)}
+        for i in range(100)
+    ]
+    aggregate = estimate_waits(visits, 1, now)
+    individual = estimate_current_visit_waits(
+        [{"queue_id": i + 1, **visit} for i, visit in enumerate(visits)],
+        1,
+        now,
+    )
+
+    assert aggregate["1"] <= 720
+    assert max(item["baseline_wait_minutes"] for item in individual) <= 720
+    assert max(item["estimated_wait_minutes"] for item in individual) <= 720
