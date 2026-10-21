@@ -10,6 +10,7 @@ PQFMS is an academic software-development project for the Outpatient Department 
 - Four-tier clinical prioritisation and queue ordering
 - Privacy-safe public Display Board with real-time refresh
 - Evidence-aware per-tier wait projections using completed-visit timings, explicit sample provenance and low-data fallbacks
+- Transparent Clinic Intelligence signals for long waits, sparse history, consultation activity and recorded room capacity
 - Doctor call-to-room, optional SMS notification, consultation notes and discharge
 - Patient visit history with Doctor-only consultation notes
 - Operational overview and administrator discharge log
