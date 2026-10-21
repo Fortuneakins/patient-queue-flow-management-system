@@ -53,9 +53,9 @@ def _connect():
     return psycopg2.connect(**DB_CONFIG, connect_timeout=3, sslmode=DB_SSLMODE)
 
 
-def _provenance_visibility(mode: str = DATA_PROVENANCE_MODE) -> str:
+def _provenance_visibility(mode: str | None = None) -> str:
     """Return SQL from an allow-list, never from request input."""
-    value = str(mode).strip().upper()
+    value = str(mode if mode is not None else DATA_PROVENANCE_MODE).strip().upper()
     if value not in PROVENANCE_MODES:
         raise ValueError("Unsupported data provenance mode.")
     if value == "OPERATIONAL":
