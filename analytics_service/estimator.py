@@ -275,6 +275,7 @@ def estimate_metadata(
             "service_minutes": round(float(profile["minutes"]), 1),
             "service_model": profile["source"],
             "tier_service_samples": int(profile["samples"]),
+            "pooled_service_samples": sample_count,
         }
 
     return {
