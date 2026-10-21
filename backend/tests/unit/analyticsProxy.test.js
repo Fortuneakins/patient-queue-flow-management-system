@@ -98,6 +98,27 @@ test('public response reports limited, fallback and unavailable estimate bases',
   assert.deepEqual(unavailable.warnings, ['Wait estimates are currently unavailable.']);
 });
 
+test('public fallback estimates preserve bounded evidence warnings', () => {
+  const result = publicPrediction(payload({
+    estimate_quality: 'DEFAULT_ASSUMPTION',
+    warnings: [
+      'No operational service-time samples are available.',
+      'Forecast calibration is inactive.',
+      '',
+      'No operational service-time samples are available.',
+      42
+    ]
+  }));
+
+  assert.equal(result.estimate_basis, 'FALLBACK_ASSUMPTION');
+  assert.deepEqual(result.warnings, [
+    'No operational service-time samples are available.',
+    'Forecast calibration is inactive.'
+  ]);
+  assert.equal(Object.hasOwn(result, 'visit_estimates'), false);
+  assert.equal(Object.hasOwn(result, 'staffed_doctors'), false);
+});
+
 
 
 test('administrator model evidence omits internal per-visit queue identifiers', () => {
