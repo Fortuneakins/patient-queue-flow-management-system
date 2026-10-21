@@ -134,3 +134,21 @@ def test_predict_degrades_to_unavailable_not_zero_when_dependency_fails(monkeypa
     assert response.json["degraded"] is True
     assert response.json["1"] is None
     assert "credentials" not in response.get_data(as_text=True)
+
+
+def test_database_connections_are_read_only_and_time_bounded(monkeypatch):
+    captured = {}
+
+    def fake_connect(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setattr(analytics.psycopg2, "connect", fake_connect)
+    analytics._connect()
+
+    options = captured["kwargs"]["options"]
+    assert "default_transaction_read_only=on" in options
+    assert "statement_timeout=10000" in options
+    assert "idle_in_transaction_session_timeout=10000" in options
+    assert captured["kwargs"]["connect_timeout"] == 3
