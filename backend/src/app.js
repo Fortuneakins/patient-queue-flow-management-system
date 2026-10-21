@@ -21,9 +21,29 @@ const io = new Server(httpServer, {
 app.set('io', io);
 
 app.disable('x-powered-by');
-app.set('trust proxy', 1);
+// Trust forwarded headers only when the deployment explicitly declares a
+// trusted reverse-proxy hop count. Never trust a proxy by default.
+if (env.TRUST_PROXY_HOPS !== false && env.TRUST_PROXY_HOPS !== 0) {
+  app.set('trust proxy', env.TRUST_PROXY_HOPS);
+} else {
+  app.set('trust proxy', false);
+}
+
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+  res.setHeader('Cache-Control', 'no-store');
+  if (env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
 app.use(cors({ origin: env.CORS_ORIGIN, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization', 'X-Internal-Service-Token'] }));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '1mb', strict: true }));
 
 io.on('connection', socket => {
   socket.emit('server_ready', { at: new Date().toISOString() });
