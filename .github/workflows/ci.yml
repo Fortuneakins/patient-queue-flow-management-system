@@ -20,6 +20,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      NODE_ENV: test
       DB_HOST: localhost
       DB_PORT: 5432
       DB_NAME: pqfms_db
@@ -41,12 +42,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Initialise database
-        run: |
-          for file in db/migrations/*.sql; do psql postgresql://postgres:postgres@localhost:5432/pqfms_db -v ON_ERROR_STOP=1 -f "$file"; done
-          psql postgresql://postgres:postgres@localhost:5432/pqfms_db -v ON_ERROR_STOP=1 -f db/seed/001_demo_data.sql
       - name: Install backend dependencies
         run: npm ci --prefix backend
+      - name: Initialise fresh schema with checksum-tracked migrations
+        run: |
+          node backend/scripts/migrate.js
+          psql postgresql://postgres:postgres@localhost:5432/pqfms_db -v ON_ERROR_STOP=1 -f db/seed/001_demo_data.sql
       - name: Backend lint and unit tests
         run: npm run verify --prefix backend
       - name: Backend integration smoke tests
