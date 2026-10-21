@@ -124,11 +124,19 @@ Take a backup and verify it can be restored before baselining or applying schema
 
 For a previously reviewed database whose schema and source backfill already match migrations 001–008, the explicit baseline flow is:
 
+Use the production Compose environment for the database operation. Only after a verified backup/restore rehearsal and manual confirmation that this database really matches migrations 001–008, run:
+
 ```powershell
-.\scripts\migrate.ps1 -BaselineExisting
+$confirmation = Read-Host 'Type BASELINE pqfms_db only after reviewing the existing schema and verified backup'
+if ($confirmation -ne 'BASELINE pqfms_db') { throw 'Baseline cancelled; no database changes were made.' }
+
+docker compose --env-file .env.production -f compose.production.yml run --rm \
+  -e PQFMS_CONFIRM_BASELINE_REVIEWED=YES_I_VERIFIED_MIGRATIONS_001_008 \
+  migrate npm run db:migrate -- --baseline-existing
+if ($LASTEXITCODE -ne 0) { throw 'Baseline failed. Stop and inspect the database before retrying.' }
 ```
 
-This procedure does not execute migrations 001–008; it checks schema markers and requires explicit confirmation before writing their checksums to the ledger. It also checks the migration-008 provenance-source backfill. If any check fails, stop and compare the restored backup, schema and migration history. Do not force the baseline, delete the ledger, reset the database or run old migrations against retained data. If the source backfill has not been applied, apply migration 008 explicitly after backup and review before attempting the baseline.
+This procedure does not execute migrations 001–008; it checks schema markers and requires explicit confirmation before writing their checksums to the ledger. It also checks the migration-008 provenance-source backfill. The one-off job uses the configured production database endpoint, TLS settings and migration-owner credentials from `.env.production`; it does not use the developer's local `.env`. If any check fails, stop and compare the restored backup, schema and migration history. Do not force the baseline, delete the ledger, reset the database or run old migrations against retained data. If the source backfill has not been applied, apply migration 008 explicitly after backup and review before attempting the baseline.
 
 For any database state other than a verified 001–008 schema, use a reviewed migration plan that records which scripts have truly been applied. Never baseline a schema just because the tables have familiar names.
 
