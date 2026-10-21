@@ -9,7 +9,7 @@ PQFMS is an academic software-development project for the Outpatient Department 
 - Daily sequential ticket numbers with duplicate-visit protection
 - Four-tier clinical prioritisation and queue ordering
 - Privacy-safe public Display Board with real-time refresh
-- Queue-workload wait-time estimates using priority, active demand, rostered staffing and eligible operational consultation-duration samples; estimate basis, sample counts and unavailable states are exposed rather than presenting a failed estimate as zero
+- Queue-workload wait-time estimates using priority, active demand, rostered staffing and eligible operational call-to-discharge elapsed-time samples; estimate basis, sample counts and unavailable states are exposed rather than presenting a failed estimate as zero
 - Doctor call-to-room, optional SMS notification, consultation notes and discharge
 - Patient visit history with Doctor-only consultation notes
 - Operational overview and administrator discharge log
