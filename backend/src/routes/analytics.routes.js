@@ -12,6 +12,11 @@ const modelLimiter = createRateLimiter({
   keyGenerator: req => String(req.user?.staff_id || req.ip)
 });
 
+function modelEvidence(prediction) {
+  const { visit_estimates: _visitEstimates, ...evidence } = prediction;
+  return evidence;
+}
+
 function publicPrediction(prediction) {
   const quality = prediction.estimate_quality;
   let estimateBasis = 'FALLBACK_ASSUMPTION';
@@ -42,7 +47,7 @@ router.get('/predict', predictionLimiter, async (_req, res, next) => {
 
 router.get('/model', authenticate, requireReadyPassword, authorizeRoles('ADMIN'), modelLimiter, async (_req, res, next) => {
   try {
-    res.json(await getWaitPredictions());
+    res.json(modelEvidence(await getWaitPredictions()));
   } catch (error) {
     next(error);
   }
@@ -50,3 +55,4 @@ router.get('/model', authenticate, requireReadyPassword, authorizeRoles('ADMIN')
 
 module.exports = router;
 module.exports.publicPrediction = publicPrediction;
+module.exports.modelEvidence = modelEvidence;
