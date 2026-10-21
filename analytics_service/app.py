@@ -60,9 +60,22 @@ CORS(app, origins=allowed_origins)
 
 
 def _connect():
+    # The estimator is read-only by design. Keep the session read-only even if
+    # a future configuration accidentally grants the analytics role extra SQL privileges.
+    options = "-c default_transaction_read_only=on -c statement_timeout=10000 -c idle_in_transaction_session_timeout=10000"
     if DATABASE_URL:
-        return psycopg2.connect(DATABASE_URL, connect_timeout=3, sslmode=DB_SSLMODE)
-    return psycopg2.connect(**DB_CONFIG, connect_timeout=3, sslmode=DB_SSLMODE)
+        return psycopg2.connect(
+            DATABASE_URL,
+            connect_timeout=3,
+            sslmode=DB_SSLMODE,
+            options=options,
+        )
+    return psycopg2.connect(
+        **DB_CONFIG,
+        connect_timeout=3,
+        sslmode=DB_SSLMODE,
+        options=options,
+    )
 
 
 def _provenance_visibility(mode: str | None = None) -> str:
