@@ -37,9 +37,9 @@ DB_CONFIG = {
     "user": os.getenv("ANALYTICS_DB_USER") or os.getenv("DB_USER", "postgres"),
     "password": os.getenv("ANALYTICS_DB_PASSWORD") or os.getenv("DB_PASSWORD", ""),
 }
-API_DATABASE_USER = os.getenv("DB_USER", "postgres")
-ANALYTICS_DATABASE_USER = DB_CONFIG["user"]
-ANALYTICS_DATABASE_PASSWORD = DB_CONFIG["password"]
+API_DATABASE_USER = os.getenv("API_DATABASE_USER", os.getenv("DB_USER", "postgres"))
+ANALYTICS_DATABASE_USER = os.getenv("ANALYTICS_DB_USER", "").strip()
+ANALYTICS_DATABASE_PASSWORD = os.getenv("ANALYTICS_DB_PASSWORD", "").strip()
 DB_SSLMODE = os.getenv("DB_SSLMODE", "verify-full" if NODE_ENV == "production" else "prefer").strip().lower()
 NODE_SERVER_URL = os.getenv("NODE_SERVER_URL", "http://localhost:5000").rstrip("/")
 STAFFED_STATIONS = max(1, int(os.getenv("STAFFED_STATIONS", "1")))
@@ -48,8 +48,6 @@ validate_production_config(
     node_env=NODE_ENV,
     mode=DATA_PROVENANCE_MODE,
     internal_token=INTERNAL_SERVICE_TOKEN,
-    database_url=DATABASE_URL,
-    database_password=DB_CONFIG["password"],
     sslmode=DB_SSLMODE,
     cors_origins=allowed_origins,
     api_database_user=API_DATABASE_USER,
