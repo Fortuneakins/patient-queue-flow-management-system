@@ -32,10 +32,15 @@ def test_production_requires_strong_internal_token_database_password_ssl_and_htt
         database_password="a-db-password",
         sslmode="verify-full",
         cors_origins=["https://clinic.example.org"],
+        api_database_user="pqfms_api",
+        analytics_database_user="pqfms_analytics",
+        analytics_database_password="read-only-db-secret",
     )
     cases = [
         {"internal_token": "short"},
         {"database_password": ""},
+        {"analytics_database_password": ""},
+        {"analytics_database_user": "pqfms_api"},
         {"sslmode": "disable"},
         {"cors_origins": ["http://clinic.example.org"]},
         {"cors_origins": []},
