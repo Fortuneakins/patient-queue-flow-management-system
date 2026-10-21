@@ -64,13 +64,13 @@ def test_ready_endpoint_reports_dependency_failure(monkeypatch):
 
 
 def test_db_rows_apply_configured_provenance_visibility(monkeypatch):
-    rows = [("Waiting", 4, datetime.now(timezone.utc), None, "SYNTHETIC_TEST")]
+    rows = [("Waiting", 4, datetime.now(timezone.utc), None, "OPERATIONAL")]
     cursor = FakeCursor(rows)
     monkeypatch.setattr(analytics, "_connect", lambda: FakeConnection(cursor))
     monkeypatch.setattr(analytics, "DATA_PROVENANCE_MODE", "OPERATIONAL")
     visits = analytics.db_rows()
     assert len(visits) == 1
-    assert visits[0]["data_provenance"] == "SYNTHETIC_TEST"
+    assert visits[0]["data_provenance"] == "OPERATIONAL"
     # The SQL predicate must exclude synthetic/demo records in OPERATIONAL mode.
     assert "data_provenance NOT IN ('SYNTHETIC_TEST', 'DEMO')" in cursor.sql
     assert "LIMIT 1000" in cursor.sql
