@@ -20,14 +20,13 @@ function resolveDataProvenancePolicy({
   }
 
   const acknowledgedNonOperationalProductionMode = asBoolean(allowNonOperationalInProduction);
-  if (
-    environment === 'production'
-    && mode !== 'OPERATIONAL'
-    && !acknowledgedNonOperationalProductionMode
-  ) {
+  if (environment === 'production' && mode !== 'OPERATIONAL') {
     throw new Error(
-      'Production requires DATA_PROVENANCE_MODE=OPERATIONAL. To intentionally run a non-operational demonstration, set ALLOW_NON_OPERATIONAL_PROVENANCE_MODE=true explicitly.'
+      'Production requires DATA_PROVENANCE_MODE=OPERATIONAL. Run synthetic tests and demonstrations in a separate non-production environment.'
     );
+  }
+  if (environment === 'production' && acknowledgedNonOperationalProductionMode) {
+    throw new Error('ALLOW_NON_OPERATIONAL_PROVENANCE_MODE is prohibited in production.');
   }
 
   return Object.freeze({
