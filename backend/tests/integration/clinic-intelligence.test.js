@@ -73,6 +73,8 @@ if (!dbConfigured) {
         const visitEstimates = snapshot.rows.map(item => ({
           queue_id: Number(item.queue_id),
           tier: Number(item.tier),
+          baseline_wait_minutes: ({ 1: 1, 2: 4, 3: 7, 4: 11 })[Number(item.tier)],
+          calibration_offset_minutes: 0,
           estimated_wait_minutes: ({ 1: 1, 2: 4, 3: 7, 4: 11 })[Number(item.tier)]
         }));
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -315,7 +317,7 @@ if (!dbConfigured) {
     assert.deepEqual(forecast.body.tier_estimates, { 1: 2, 2: 5, 3: 10, 4: 15 });
     forecastIds.push(forecast.body.forecast_id);
     const recordedSample = await query(
-      'SELECT predicted_wait_minutes FROM flow_forecast_samples WHERE forecast_id=$1 AND queue_id=$2',
+      'SELECT predicted_wait_minutes, baseline_wait_minutes, calibration_offset_minutes FROM flow_forecast_samples WHERE forecast_id=$1 AND queue_id=$2',
       [forecast.body.forecast_id, queueId]
     );
     assert.equal(recordedSample.rowCount, 1);
@@ -323,6 +325,10 @@ if (!dbConfigured) {
     const perVisitExpected = ({ 1: 1, 2: 4, 3: 7, 4: 11 })[recordedTier.rows[0].tier];
     assert.equal(Number(recordedSample.rows[0].predicted_wait_minutes), perVisitExpected,
       'truth ledger should use the per-visit estimate, not the tier-level summary');
+    assert.equal(Number(recordedSample.rows[0].baseline_wait_minutes), perVisitExpected,
+      'baseline forecast should be persisted separately from the corrected score');
+    assert.equal(Number(recordedSample.rows[0].calibration_offset_minutes), 0,
+      'test fixture has no prior operational calibration and should apply no offset');
 
     // Model an observation that arrives after its declared horizon. The overall
     // MAE remains auditable, while the API must separately identify in-horizon
