@@ -13,6 +13,19 @@ function formatErrorDuration(value) {
   return `${days} d ${hours} h ${remainder} min (${minutes.toLocaleString(undefined, { maximumFractionDigits: 1 })} min)`;
 }
 
+function describeTierServiceProfile(profile) {
+  if (!profile) return 'Service-time evidence not reported';
+  const minutes = Number(profile.service_minutes);
+  const value = Number.isFinite(minutes) ? minutes + ' min' : 'duration unavailable';
+  if (profile.service_model === 'TIER_HISTORY') {
+    return `Tier-specific median ${value} · n=${profile.tier_service_samples} completed visit(s)`;
+  }
+  if (profile.service_model === 'POOLED_HISTORY') {
+    return `Pooled clinic median ${value} · clinic n=${profile.pooled_service_samples}, tier n=${profile.tier_service_samples}`;
+  }
+  return `Default ${value} assumption · clinic n=${profile.pooled_service_samples || 0}`;
+}
+
 export default function LearningPanel({ token, onOpenTool }) {
   const [fairness, setFairness] = useState(null);
   const [truth, setTruth] = useState(null);
@@ -84,10 +97,12 @@ export default function LearningPanel({ token, onOpenTool }) {
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {[1, 2, 3, 4].map(tier => {
                 const raw = prediction[String(tier)];
+                const profile = prediction.tier_service_profiles?.[String(tier)];
                 const available = raw !== null && raw !== undefined && Number.isFinite(Number(raw));
                 return <div key={tier} className="rounded-xl border border-stone-200 bg-stone-50 p-4">
                   <span className="text-sm font-semibold text-stone-700">Tier {tier}</span>
                   <p className="mt-2 font-display text-3xl font-bold tabular-nums">{available && !prediction.degraded ? Number(raw) : '—'}<span className="ml-1 text-sm font-medium text-stone-500">{available && !prediction.degraded ? 'min' : ''}</span></p>
+                  <p className="mt-2 text-xs leading-relaxed text-stone-600">{describeTierServiceProfile(profile)}</p>
                 </div>;
               })}
             </div>
@@ -98,6 +113,10 @@ export default function LearningPanel({ token, onOpenTool }) {
               <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Data provenance</span><p className="mt-1 text-sm font-semibold">{prediction.provenance_mode || 'Not reported'}</p></div>
             </div>
             <p className="mt-3 text-sm leading-relaxed text-stone-600">{prediction.service_time_basis || 'Service-time basis not reported.'}</p>
+            {Array.isArray(prediction.warnings) && prediction.warnings.length > 0 && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-950">Model evidence warnings</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">{prediction.warnings.map((item, index) => <li key={index}>{item}</li>)}</ul>
+            </div>}
             {Array.isArray(prediction.limitations) && prediction.limitations.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-xs leading-relaxed text-stone-500">{prediction.limitations.map((item, i) => <li key={i}>{item}</li>)}</ul>}
           </>
         ) : <EmptyState title="Prediction evidence unavailable" message="The protected model endpoint did not provide current evidence. Do not treat missing estimates as zero-minute waits."/>}
