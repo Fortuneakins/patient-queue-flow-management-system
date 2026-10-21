@@ -38,16 +38,27 @@ test('rejects unsupported and user-input-like policy values', () => {
   }
 });
 
-test('requires an explicit safety acknowledgement to use non-operational provenance in production', () => {
+test('production refuses synthetic/demo provenance even when an override is set', () => {
   assert.throws(
     () => resolveDataProvenancePolicy({ nodeEnv: 'production', configuredMode: 'SYNTHETIC_TEST' }),
     /Production requires DATA_PROVENANCE_MODE=OPERATIONAL/
   );
-  assert.equal(resolveDataProvenancePolicy({
-    nodeEnv: 'production',
-    configuredMode: 'DEMO',
-    allowNonOperationalInProduction: 'true'
-  }).mode, 'DEMO');
+  assert.throws(
+    () => resolveDataProvenancePolicy({
+      nodeEnv: 'production',
+      configuredMode: 'DEMO',
+      allowNonOperationalInProduction: 'true'
+    }),
+    /Production requires DATA_PROVENANCE_MODE=OPERATIONAL/
+  );
+  assert.throws(
+    () => resolveDataProvenancePolicy({
+      nodeEnv: 'production',
+      configuredMode: 'OPERATIONAL',
+      allowNonOperationalInProduction: 'true'
+    }),
+    /ALLOW_NON_OPERATIONAL_PROVENANCE_MODE is prohibited in production/
+  );
 });
 
 test('does not permit the production override to legitimise an invalid mode', () => {
