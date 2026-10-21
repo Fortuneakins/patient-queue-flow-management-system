@@ -220,7 +220,7 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-teal-100">
               <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-300" /> API-backed data</span>
               <span>{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Waiting for first snapshot'}</span>
-              {overview?.model_version && <span>Queue model {overview.model_version}</span>}
+              {overview?.model_version && <span>FlowTwin simulation {overview.model_version}</span>}
               {overview?.insight_model_version && <span>Review rules {overview.insight_model_version}</span>}
             </div>
           </div>
