@@ -17,6 +17,19 @@ function parseTrustProxyHops(value) {
   throw new Error('TRUST_PROXY_HOPS must be a non-negative integer or false; do not trust all proxies.');
 }
 
+function parseDelayReviewThresholdMinutes(value) {
+  const normalized = String(value ?? '60').trim();
+  if (normalized === '') return 60;
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error('DELAY_REVIEW_THRESHOLD_MINUTES must be a whole number from 1 to 1440.');
+  }
+  const minutes = Number(normalized);
+  if (!Number.isSafeInteger(minutes) || minutes < 1 || minutes > 1440) {
+    throw new Error('DELAY_REVIEW_THRESHOLD_MINUTES must be a whole number from 1 to 1440.');
+  }
+  return minutes;
+}
+
 function validateProductionConfig(input = {}) {
   const nodeEnv = String(input.nodeEnv || 'development').trim().toLowerCase();
   if (nodeEnv !== 'production') return { production: false };
@@ -86,4 +99,4 @@ function validateProductionConfig(input = {}) {
   return { production: true, corsOrigins: origins.length };
 }
 
-module.exports = { asBoolean, isPlaceholderSecret, parseTrustProxyHops, validateProductionConfig };
+module.exports = { asBoolean, isPlaceholderSecret, parseTrustProxyHops, parseDelayReviewThresholdMinutes, validateProductionConfig };
