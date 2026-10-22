@@ -278,7 +278,7 @@ export default function FlowTwinPanel({ token }) {
         {error && <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
         <div className="mt-5 flex flex-wrap gap-2">
           <Button icon="chart" onClick={run} disabled={busy}>
-            {busy ? 'Simulating?' : 'Run comparison'}
+            {busy ? 'Simulating...' : 'Run comparison'}
           </Button>
           <Button
             variant="secondary"
@@ -286,7 +286,7 @@ export default function FlowTwinPanel({ token }) {
             onClick={runPairedCapacity}
             disabled={busy || !Number.isInteger(Number(form.additional_stations)) || Number(form.additional_stations) < 1}
           >
-            {busy ? 'Simulating?' : 'Run paired capacity comparison'}
+            {busy ? 'Simulating...' : 'Run paired capacity comparison'}
           </Button>
           <Button
             variant="secondary"
