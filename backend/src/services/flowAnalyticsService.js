@@ -1,6 +1,12 @@
 const { query, withTransaction } = require('../db/pool');
 const { appendOperationalEvent } = require('./operationalEventService');
-const { MODEL_VERSION, normalizeScenario, runClinicSimulation, runSyntheticLab } = require('../utils/flowSimulation');
+const {
+  MODEL_VERSION,
+  normalizeScenario,
+  calculateScenarioServers,
+  runClinicSimulation,
+  runSyntheticLab
+} = require('../utils/flowSimulation');
 const env = require('../config/env');
 const { getWaitPredictions } = require('./analyticsProxyService');
 const { queueVisibilityPredicate } = require('../config/dataProvenancePolicy');
@@ -42,7 +48,10 @@ async function currentSnapshot() {
   if (Number(room.room_rows) > 0) servers = Math.min(servers, Number(room.room_capacity));
   return {
     waiting, in_consultation: activeConsultations, servers: Math.max(0, Math.min(50, servers)),
-    configured_servers: env.STAFFED_STATIONS, on_duty_doctors: doctors,
+    configured_servers: env.STAFFED_STATIONS,
+    on_duty_doctors: doctors,
+    staffing_basis: doctors > 0 ? 'VERIFIED_ON_DUTY_DOCTORS' : 'CONFIGURED_STAFFING_FALLBACK',
+    modelled_baseline_servers: Math.max(0, Math.min(50, servers)),
     room_capacity: Number(room.room_rows) > 0 ? Number(room.room_capacity) : null,
     mean_service_minutes: Number(meanService.toFixed(2)), service_durations: durations, service_samples: durations.length
   };
@@ -59,30 +68,83 @@ function compareResults(baseline, scenario) {
 }
 async function runScenario(input, actorStaffId) {
   const scenarioInput = normalizeScenario(input);
+  const pairedCapacityComparison = input.compare_capacity === true;
+
+  if (pairedCapacityComparison && scenarioInput.additional_stations < 1) {
+    throw httpError(
+      'A paired capacity comparison requires at least one hypothetical additional station.',
+      400
+    );
+  }
+
   const snapshot = await currentSnapshot();
   const shared = {
-    waiting: snapshot.waiting, in_consultation: snapshot.in_consultation,
-    mean_service_minutes: snapshot.mean_service_minutes, service_durations: snapshot.service_durations,
-    seed: scenarioInput.seed, horizon_minutes: scenarioInput.horizon_minutes
+    waiting: snapshot.waiting,
+    in_consultation: snapshot.in_consultation,
+    mean_service_minutes: snapshot.mean_service_minutes,
+    service_durations: snapshot.service_durations,
+    seed: scenarioInput.seed,
+    horizon_minutes: scenarioInput.horizon_minutes
   };
-  const baseline = runClinicSimulation({ ...shared, servers: snapshot.servers, extra_arrivals: 0, doctor_delay_minutes: 0 });
-  const scenarioServers = Math.max(0, Math.min(50, snapshot.servers + scenarioInput.additional_stations - scenarioInput.station_loss));
-  const scenario = runClinicSimulation({ ...shared, servers: scenarioServers, extra_arrivals: scenarioInput.extra_arrivals, doctor_delay_minutes: scenarioInput.doctor_delay_minutes });
+
+  // In paired mode, only hypothetical additional stations differ.
+  const baselineServers = pairedCapacityComparison
+    ? Math.max(0, Math.min(50, snapshot.servers - scenarioInput.station_loss))
+    : snapshot.servers;
+
+ const scenarioServers = calculateScenarioServers({
+  baselineServers: snapshot.servers,
+  additionalStations: scenarioInput.additional_stations,
+  stationLoss: scenarioInput.station_loss,
+  roomCapacity: snapshot.room_capacity
+});
+
+  const baseline = runClinicSimulation({
+    ...shared,
+    servers: baselineServers,
+    extra_arrivals: pairedCapacityComparison ? scenarioInput.extra_arrivals : 0,
+    doctor_delay_minutes: pairedCapacityComparison ? scenarioInput.doctor_delay_minutes : 0
+  });
+
+  const scenario = runClinicSimulation({
+    ...shared,
+    servers: scenarioServers,
+    extra_arrivals: scenarioInput.extra_arrivals,
+    doctor_delay_minutes: scenarioInput.doctor_delay_minutes
+  });
+  const comparisonMode = pairedCapacityComparison
+    ? 'PAIRED_CAPACITY'
+    : 'CURRENT_BASELINE';
+
   const output = {
-    model_version: MODEL_VERSION, baseline, scenario, comparison: compareResults(baseline, scenario),
-    context: { on_duty_doctors: snapshot.on_duty_doctors, configured_servers: snapshot.configured_servers, room_capacity: snapshot.room_capacity, historical_service_samples: snapshot.service_samples },
-    human_review_required: true, automatic_actions_taken: false
+    model_version: MODEL_VERSION,
+    comparison_mode: comparisonMode,
+    baseline,
+    scenario,
+    comparison: compareResults(baseline, scenario),
+    context: {
+      on_duty_doctors: snapshot.on_duty_doctors,
+      configured_servers: snapshot.configured_servers,
+      staffing_basis: snapshot.staffing_basis,
+      modelled_baseline_servers: baselineServers,
+      modelled_scenario_servers: scenarioServers,
+      room_capacity: snapshot.room_capacity,
+      historical_service_samples: snapshot.service_samples
+    },
+    human_review_required: true,
+    automatic_actions_taken: false
   };
   const name = String(input.name || 'FlowTwin scenario').trim().slice(0, 120) || 'FlowTwin scenario';
+  const persistedInput = { ...scenarioInput, comparison_mode: comparisonMode };
   const stored = await withTransaction(async client => {
     const result = await client.query(
       "INSERT INTO flow_simulations (simulation_kind,name,model_version,seed,input,output,created_by_staff_id) VALUES ('SCENARIO',$1,$2,$3,$4::jsonb,$5::jsonb,$6) RETURNING simulation_id,created_at",
-      [name, MODEL_VERSION, scenarioInput.seed, JSON.stringify(scenarioInput), JSON.stringify(output), actorStaffId]
+      [name, MODEL_VERSION, scenarioInput.seed, JSON.stringify(persistedInput), JSON.stringify(output), actorStaffId]
     );
     await appendOperationalEvent(client, { eventType: 'FLOWTWIN_SIMULATION_RUN', entityType: 'FLOW_SIMULATION', entityId: result.rows[0].simulation_id, actorStaffId, toState: 'COMPLETED', metadata: { name, horizon_minutes: scenarioInput.horizon_minutes, model_version: MODEL_VERSION } });
     return result.rows[0];
   });
-  return { ...stored, name, input: scenarioInput, ...output };
+  return { ...stored, name, input: persistedInput, ...output };
 }
 async function listSimulations(limit = 20) {
   const safeLimit = Math.max(1, Math.min(100, Number(limit) || 20));

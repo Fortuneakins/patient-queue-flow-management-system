@@ -156,6 +156,33 @@ export default function FlowTwinPanel({ token }) {
     finally { setBusy(false); }
   }
 
+  async function runPairedCapacity() {
+    const additionalStations = Number(form.additional_stations);
+
+    if (!Number.isInteger(additionalStations) || additionalStations < 1) {
+      setError('Select at least one hypothetical additional station for a paired comparison.');
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+
+    try {
+      const payload = { ...form, compare_capacity: true };
+      numberFields.forEach(([key]) => {
+        payload[key] = Number(form[key]);
+      });
+
+      const next = await api.runFlowSimulation(token, payload);
+      setResult(next);
+      await refresh();
+    } catch (e) {
+      setError(e.message || 'The paired capacity comparison could not be run.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const scenario = result?.scenario;
   const baseline = result?.baseline;
   const compare = result?.comparison;
@@ -249,12 +276,45 @@ export default function FlowTwinPanel({ token }) {
           </div>
         </div>
         {error && <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-        <div className="mt-5 flex flex-wrap gap-2"><Button icon="chart" onClick={run} disabled={busy}>{busy ? 'Simulating…' : 'Run comparison'}</Button><Button variant="secondary" onClick={() => { setForm(initialScenario); setResult(null); setError(''); }}>Reset scenario</Button></div>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Button icon="chart" onClick={run} disabled={busy}>
+            {busy ? 'Simulating?' : 'Run comparison'}
+          </Button>
+          <Button
+            variant="secondary"
+            icon="activity"
+            onClick={runPairedCapacity}
+            disabled={busy || !Number.isInteger(Number(form.additional_stations)) || Number(form.additional_stations) < 1}
+          >
+            {busy ? 'Simulating?' : 'Run paired capacity comparison'}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => { setForm(initialScenario); setResult(null); setError(''); }}
+          >
+            Reset scenario
+          </Button>
+        </div>
+        <p className="mt-2 text-xs leading-relaxed text-stone-500">
+          Paired mode uses the same queue snapshot, demand, horizon, random seed,
+          station-loss setting, doctor delay and service-time observations.
+          Only the hypothetical additional station count changes.
+        </p>
       </Card>
 
       {result && <Card className="flowtwin-results-card space-y-5 p-5 md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eyebrow">Simulation result</p><h2 className="font-display text-lg font-bold">{result.name}</h2><p className="mt-1 text-xs text-stone-500">Simulation #{result.simulation_id} · {result.model_version} · seed {result.input?.seed}</p></div><Badge tone={scenario?.model_quality === 'OBSERVATION_BASED' ? 'green' : 'orange'}>{scenario?.model_quality?.replaceAll('_', ' ') || 'Estimate'}</Badge></div>
 
+        {result.comparison_mode === 'PAIRED_CAPACITY' && (
+          <div role="status" className="rounded-xl border border-teal-200 bg-teal-50 p-4 text-sm text-teal-950">
+            <strong>Paired capacity comparison.</strong> Both runs use the same queue snapshot,
+            demand, horizon, seed, station-loss setting, doctor delay and service-time observations.
+            The baseline uses {result.context?.modelled_baseline_servers ?? 'an unknown number of'}
+            modelled server(s); the intervention uses {result.context?.modelled_scenario_servers ?? 'an unknown number of'}.
+            The additional station is hypothetical, not confirmed clinical coverage.
+            Server utilisation is capped at 100%; interpret it alongside backlog and wait metrics.
+          </div>
+        )}
         <section className="rounded-xl border border-teal-100 bg-teal-50/50 p-4 md:p-5" aria-labelledby="flowtwin-plain-summary">
           <p className="eyebrow">Plain-English readout</p>
           <h3 id="flowtwin-plain-summary" className="font-display text-base font-bold">What changed against the baseline?</h3>
@@ -310,6 +370,15 @@ export default function FlowTwinPanel({ token }) {
           </div>
         </section>
 
+        {Number(result.context?.on_duty_doctors ?? 0) === 0 && (
+          <div role="status" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-950">
+            <strong>Roster capacity not verified.</strong> No doctor was confirmed on duty when this simulation was captured.
+            The saved baseline uses {result.context?.modelled_baseline_servers ?? result.baseline?.available_servers ?? 'an unknown number of'} modelled server(s);
+            the scenario uses {result.context?.modelled_scenario_servers ?? result.scenario?.available_servers ?? 'an unknown number of'}.
+            These counts are simulation capacity, not confirmation that clinicians are available.
+            Do not use the scenario to promise a real patient a waiting time.
+          </div>
+        )}
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><strong>Human review required.</strong> The simulator did not change queue records or clinical priorities. These projections depend on the service-time assumptions, arrival pattern and current staffing snapshot.</div>
         <p className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm text-stone-600"><strong>Interpreting wait metrics.</strong> Median and P90 waits estimate time from arrival until service can start. Jobs may remain queued after the scenario horizon ends, so these waits can exceed the selected horizon. They are not service-completion times or observed clinical waits.</p>
         <details className="flowtwin-assumptions rounded-xl border border-stone-200 p-4"><summary className="cursor-pointer font-semibold">Model assumptions and data sufficiency</summary><ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-stone-600">{(scenario?.assumptions || []).map(item => <li key={item}>{item}</li>)}</ul><p className="mt-3 text-xs text-stone-500">Observed service samples used: {scenario?.service_samples_used ?? 0}. The absence of sufficient history is reported instead of being represented as model confidence.</p></details>

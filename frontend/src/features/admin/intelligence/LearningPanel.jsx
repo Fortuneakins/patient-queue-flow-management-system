@@ -201,8 +201,8 @@ export default function LearningPanel({ token, onOpenTool }) {
                     A bounded median-error correction is learned only from earlier, in-horizon OPERATIONAL first-call outcomes. It adjusts individual waiting-visit forecasts used by the Truth Ledger and consent-gated SMS. Public aggregate tier estimates remain separate queue-workload projections because their hypothetical-new-visit target differs from an individual visit's observed wait. This correction is not a confidence interval or clinical validation.
                   </p>
                 </div>
-                <Badge tone={prediction.degraded ? 'red' : Number(prediction.wait_calibration?.global_samples || 0) >= Number(prediction.wait_calibration?.minimum_samples || 20) ? 'teal' : 'orange'}>
-                  {prediction.degraded ? 'Unavailable' : Number(prediction.wait_calibration?.global_samples || 0) >= Number(prediction.wait_calibration?.minimum_samples || 20) ? 'Calibration active' : 'Collecting evidence'}
+                <Badge tone={Number(prediction.wait_calibration?.global_samples || 0) >= Number(prediction.wait_calibration?.minimum_samples || 20) ? 'teal' : 'orange'}>
+                  {Number(prediction.wait_calibration?.global_samples || 0) >= Number(prediction.wait_calibration?.minimum_samples || 20) ? 'Calibration active' : 'Not calibrated'}
                 </Badge>
               </div>
               <p className="mt-2 text-xs text-stone-500">
