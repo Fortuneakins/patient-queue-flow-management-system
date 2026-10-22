@@ -13,9 +13,61 @@ function formatErrorDuration(value) {
   return `${days} d ${hours} h ${remainder} min (${minutes.toLocaleString(undefined, { maximumFractionDigits: 1 })} min)`;
 }
 
+function renderMaeComparison(baselineValue, appliedValue, sampleCount, emptyLabel) {
+  if (baselineValue === undefined || appliedValue === undefined) return <span>Unavailable</span>;
+  if (baselineValue === null || appliedValue === null) {
+    return <span className="text-stone-500">{emptyLabel} · n={Number(sampleCount || 0)}</span>;
+  }
+  const baseline = Number(baselineValue);
+  const applied = Number(appliedValue);
+  if (!Number.isFinite(baseline) || !Number.isFinite(applied)) return <span>Unavailable</span>;
+  const improvement = Number((baseline - applied).toFixed(1));
+  const change = improvement > 0
+    ? `Error reduced by ${formatErrorDuration(improvement)}`
+    : improvement < 0
+      ? `Error increased by ${formatErrorDuration(Math.abs(improvement))}`
+      : 'No MAE change';
+  const changeTone = improvement > 0 ? 'text-emerald-700' : improvement < 0 ? 'text-rose-700' : 'text-stone-500';
+  return (
+    <div className="min-w-[150px] space-y-1 text-xs">
+      <div className="text-stone-500">Baseline: <span className="font-medium text-stone-700">{formatErrorDuration(baseline)}</span></div>
+      <div className="font-semibold text-stone-900">Applied: {formatErrorDuration(applied)}</div>
+      <div className={changeTone}>{change}</div>
+      <div className="text-stone-500">n={Number(sampleCount || 0)} matched outcome(s)</div>
+    </div>
+  );
+}
+
+function describeTierServiceProfile(profile) {
+  if (!profile) return 'Service-time evidence not reported';
+  const minutes = Number(profile.service_minutes);
+  const value = Number.isFinite(minutes) ? minutes + ' min' : 'duration unavailable';
+  if (profile.service_model === 'TIER_HISTORY') {
+    return `Tier-specific median ${value} · n=${profile.tier_service_samples} completed visit(s)`;
+  }
+  if (profile.service_model === 'POOLED_HISTORY') {
+    return `Pooled clinic median ${value} · clinic n=${profile.pooled_service_samples}, tier n=${profile.tier_service_samples}`;
+  }
+  return `Default ${value} assumption · clinic n=${profile.pooled_service_samples || 0}`;
+}
+
+function describeWaitCalibration(profile) {
+  if (!profile) return 'Calibration evidence unavailable';
+  const offset = Number(profile.offset_minutes || 0);
+  const signed = offset > 0 ? '+' + offset : String(offset);
+  if (profile.source === 'TIER_OPERATIONAL_TRUTH') {
+    return `Tier-specific correction ${signed} min · n=${profile.samples_used} visit(s)`;
+  }
+  if (profile.source === 'POOLED_OPERATIONAL_TRUTH') {
+    return `Pooled clinic correction ${signed} min · n=${profile.samples_used} visit(s), tier n=${profile.tier_samples}`;
+  }
+  return `Inactive · ${profile.tier_samples || 0} tier-specific truth sample(s)`;
+}
+
 export default function LearningPanel({ token, onOpenTool }) {
   const [fairness, setFairness] = useState(null);
   const [truth, setTruth] = useState(null);
+  const [prediction, setPrediction] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -32,6 +84,9 @@ export default function LearningPanel({ token, onOpenTool }) {
     || item.operational_mean_absolute_error_minutes === undefined
     || item.within_horizon_mean_absolute_error_minutes === undefined
     || item.unclassified_mean_absolute_error_minutes === undefined
+    || item.baseline_mean_absolute_error_minutes === undefined
+    || item.operational_baseline_mean_absolute_error_minutes === undefined
+    || item.within_horizon_baseline_mean_absolute_error_minutes === undefined
   );
   const outOfHorizonForecasts = forecasts.filter(item =>
     Number(item.out_of_horizon_samples) > 0
@@ -45,34 +100,161 @@ export default function LearningPanel({ token, onOpenTool }) {
   const excludedCompletedCount = (fairness?.tiers || []).reduce((total, item) => total + Number(item.excluded_synthetic_sample_size || 0), 0);
   const unclassifiedWaitingCount = (fairness?.tiers || []).reduce((total, item) => total + Number(item.unclassified_waiting || 0), 0);
   const refresh = useCallback(async () => {
-    try {
-      const [fair, ledger] = await Promise.all([api.fairnessMetrics(token), api.forecastTruth(token, 20)]);
-      setFairness(fair); setTruth(ledger);
-    } catch (e) { setError(e.message); }
+    const [fairnessResult, ledgerResult, evidenceResult] = await Promise.allSettled([
+      api.fairnessMetrics(token),
+      api.forecastTruth(token, 20),
+      api.predictionEvidence(token)
+    ]);
+    const errors = [];
+    if (fairnessResult.status === 'fulfilled') setFairness(fairnessResult.value);
+    else errors.push('Fairness metrics unavailable: ' + (fairnessResult.reason?.message || 'request failed'));
+
+    if (ledgerResult.status === 'fulfilled') setTruth(ledgerResult.value);
+    else errors.push('Prediction truth history unavailable: ' + (ledgerResult.reason?.message || 'request failed'));
+
+    if (evidenceResult.status === 'fulfilled') setPrediction(evidenceResult.value);
+    else {
+      setPrediction({
+        '1': null, '2': null, '3': null, '4': null,
+        degraded: true,
+        estimate_quality: 'UNAVAILABLE',
+        model_version: 'unavailable',
+        warnings: ['Detailed prediction evidence is unavailable. Do not interpret missing estimates as zero-minute waits.']
+      });
+      errors.push('Detailed prediction evidence unavailable: ' + (evidenceResult.reason?.message || 'request failed'));
+    }
+    setError(errors.join(' '));
   }, [token]);
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    refresh();
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+
+    const interval = window.setInterval(refreshWhenVisible, 30000);
+    window.addEventListener('focus', refreshWhenVisible);
+    window.addEventListener('online', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshWhenVisible);
+      window.removeEventListener('online', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [refresh]);
   async function captureForecast() {
     setBusy(true); setError(''); setNotice('');
     try {
-      const prediction = await api.predictions();
-      if (prediction?.degraded) throw new Error('The analytics service is in degraded mode. No forecast was recorded because the estimate is not available.');
-      const estimates = {};
-      for (let tier = 1; tier <= 4; tier += 1) {
-        const value = Number(prediction[String(tier)]);
-        if (!Number.isFinite(value) || value < 0) throw new Error('The analytics service returned an invalid tier estimate.');
-        estimates[tier] = value;
-      }
-      const saved = await api.recordFlowForecast(token, { horizon_minutes: 60, tier_estimates: estimates, model_version: 'pqfms-analytics-current' });
-      setNotice('Forecast #' + saved.forecast_id + ' recorded with ' + saved.tracked_visits + ' waiting-visit sample(s).');
+      // The API captures its current predictor output itself; browser-supplied
+      // estimates or model-version strings are not accepted as ledger truth.
+      const saved = await api.recordFlowForecast(token, { horizon_minutes: 60 });
+      setNotice('Forecast #' + saved.forecast_id + ' recorded with ' + saved.tracked_visits + ' waiting-visit sample(s) using model ' + saved.model_version + '.');
       await refresh();
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }
+
   return (
     <div className="space-y-5">
       <Card className="p-5 md:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="eyebrow">Evidence-aware operational estimate</p>
+            <h2 className="font-display text-lg font-bold">Current queue workload projection</h2>
+            <p className="mt-1 max-w-3xl text-sm text-stone-500">
+              Estimates combine the recorded queue, the current roster and completed operational call-to-discharge timings. This is a workload proxy, not a guarantee for an individual patient, a diagnosis or a triage recommendation.
+            </p>
+          </div>
+          <Badge tone={prediction?.degraded ? 'red' : prediction?.estimate_quality === 'OBSERVATION_BASED' ? 'teal' : 'orange'}>
+            {prediction?.degraded ? 'Unavailable' : prediction?.estimate_quality === 'OBSERVATION_BASED' ? 'Observation-based' : prediction?.estimate_quality === 'LIMITED_OBSERVATIONS' ? 'Limited history' : 'Fallback assumption'}
+          </Badge>
+        </div>
+        {prediction ? (
+          <>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[1, 2, 3, 4].map(tier => {
+                const raw = prediction[String(tier)];
+                const profile = prediction.tier_service_profiles?.[String(tier)];
+                const available = raw !== null && raw !== undefined && Number.isFinite(Number(raw));
+                return <div key={tier} className="rounded-xl border border-stone-200 bg-stone-50 p-4">
+                  <span className="text-sm font-semibold text-stone-700">Tier {tier}</span>
+                  <p className="mt-2 font-display text-3xl font-bold tabular-nums">{available && !prediction.degraded ? Number(raw) : '—'}<span className="ml-1 text-sm font-medium text-stone-500">{available && !prediction.degraded ? 'min' : ''}</span></p>
+                  <p className="mt-2 text-xs leading-relaxed text-stone-600">{describeTierServiceProfile(profile)}</p>
+                </div>;
+              })}
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Completed timing samples</span><p className="mt-1 font-semibold tabular-nums">{prediction.service_history_samples ?? 0}</p></div>
+              <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Rostered doctors</span><p className="mt-1 font-semibold tabular-nums">{prediction.staffed_doctors ?? 'Unknown'}</p></div>
+              <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Planning buffer</span><p className="mt-1 text-sm font-semibold">{prediction.projection_buffer_percent == null ? 'Not reported' : prediction.projection_buffer_percent + '%'}</p><p className="mt-1 text-xs text-stone-500">Heuristic margin, not a confidence interval</p></div>
+              <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Model version</span><p className="mt-1 break-all text-sm font-semibold">{prediction.model_version || 'Not reported'}</p></div>
+              <div className="rounded-lg border border-stone-200 p-3"><span className="text-xs text-stone-500">Data provenance</span><p className="mt-1 text-sm font-semibold">{prediction.provenance_mode || 'Not reported'}</p></div>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-stone-600">{prediction.service_time_basis || 'Service-time basis not reported.'}</p>
+            <div className="mt-4 rounded-xl border border-stone-200 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-stone-900">Per-visit forecast calibration</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-stone-600">
+                    A bounded median-error correction is learned only from earlier, in-horizon OPERATIONAL first-call outcomes. It adjusts individual waiting-visit forecasts used by the Truth Ledger and consent-gated SMS. Public aggregate tier estimates remain separate queue-workload projections because their hypothetical-new-visit target differs from an individual visit's observed wait. This correction is not a confidence interval or clinical validation.
+                  </p>
+                </div>
+                <Badge tone={Number(prediction.wait_calibration?.global_samples || 0) >= Number(prediction.wait_calibration?.minimum_samples || 20) ? 'teal' : 'orange'}>
+                  {Number(prediction.wait_calibration?.global_samples || 0) >= Number(prediction.wait_calibration?.minimum_samples || 20) ? 'Calibration active' : 'Not calibrated'}
+                </Badge>
+              </div>
+              <p className="mt-2 text-xs text-stone-500">
+                Eligible prior visits: {prediction.wait_calibration?.global_samples ?? 0}; minimum required: {prediction.wait_calibration?.minimum_samples ?? 'Not reported'}; maximum correction: ±{prediction.wait_calibration?.maximum_absolute_offset_minutes ?? 'Not reported'} min.
+              </p>
+              <div
+                className="mt-3 h-2 overflow-hidden rounded-full bg-stone-200"
+                role="progressbar"
+                aria-label="Operational forecast calibration evidence"
+                aria-valuemin={0}
+                aria-valuemax={Number(prediction.wait_calibration?.minimum_samples || 20)}
+                aria-valuenow={Math.min(
+                  Number(prediction.wait_calibration?.global_samples || 0),
+                  Number(prediction.wait_calibration?.minimum_samples || 20)
+                )}
+              >
+                <div
+                  className="h-full rounded-full bg-teal-700 transition-[width] duration-500"
+                  style={{
+                    width: Math.min(
+                      100,
+                      Number(prediction.wait_calibration?.global_samples || 0)
+                        / Number(prediction.wait_calibration?.minimum_samples || 20) * 100
+                    ) + '%'
+                  }}
+                />
+              </div>
+              <p className="mt-1 text-xs text-stone-500">
+                {Math.min(Number(prediction.wait_calibration?.global_samples || 0), Number(prediction.wait_calibration?.minimum_samples || 20))} of {Number(prediction.wait_calibration?.minimum_samples || 20)} eligible operational outcomes collected.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                {[1, 2, 3, 4].map(tier => {
+                  const profile = prediction.wait_calibration?.tiers?.[String(tier)];
+                  return <div key={tier} className="rounded-lg bg-stone-50 p-3">
+                    <p className="text-xs font-semibold text-stone-700">Tier {tier}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-stone-600">{describeWaitCalibration(profile)}</p>
+                  </div>;
+                })}
+              </div>
+            </div>
+            {Array.isArray(prediction.warnings) && prediction.warnings.length > 0 && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-950">Model evidence warnings</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">{prediction.warnings.map((item, index) => <li key={index}>{item}</li>)}</ul>
+            </div>}
+            {Array.isArray(prediction.limitations) && prediction.limitations.length > 0 && <ul className="mt-3 list-disc space-y-1 pl-5 text-xs leading-relaxed text-stone-500">{prediction.limitations.map((item, i) => <li key={i}>{item}</li>)}</ul>}
+          </>
+        ) : <EmptyState title="Prediction evidence unavailable" message="The protected model endpoint did not provide current evidence. Do not treat missing estimates as zero-minute waits."/>}
+      </Card>
+
+      <Card className="p-5 md:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-display text-lg font-bold">Prediction Truth Ledger</h2><p className="mt-1 max-w-3xl text-sm text-stone-500">Record the current wait estimate and later compare it with the observed remaining time from forecast capture to the first consultation call. Metrics are descriptive operational checks, not clinical validation.</p></div><Button icon="chart" onClick={captureForecast} disabled={busy}>{busy ? 'Recording…' : 'Capture current forecast'}</Button></div>
-        <div className="prediction-truth-guidance mt-4 rounded-xl border p-4 text-sm">A forecast only becomes evaluable after a tracked visit reaches its observed first call. Small samples, incomplete timestamps and changing conditions should be considered before drawing conclusions.</div>
+        <div className="prediction-truth-guidance mt-4 rounded-xl border p-4 text-sm">A forecast only becomes evaluable after a tracked visit reaches its observed first call. Each baseline/applied MAE pair uses the same visits and the same provenance/horizon filter; n is shown for that exact subset. Lower applied MAE is evidence of improvement on those observations, not a guarantee of future performance. In OPERATIONAL mode, the backend also captures non-blocking forecast snapshots after successful queue changes. Only explicitly operational visits with eligible in-horizon call outcomes contribute to calibration; synthetic, demo and unclassified records do not.</div>
         {horizonBreakdownUnavailable && <div className="prediction-truth-warning mt-3 rounded-xl border p-4 text-sm" role="status">
           <p className="font-bold">Horizon breakdown unavailable</p>
           <p className="mt-1 leading-relaxed">The current API response does not include all horizon-aware fields. Missing counts are shown as unavailable, not zero. Refresh the backend service after updating the application, then refresh this panel before interpreting these metrics.</p>
@@ -82,7 +264,7 @@ export default function LearningPanel({ token, onOpenTool }) {
           <p className="mt-1 leading-relaxed">{operationalOutOfHorizonCount} classified operational observation(s), {unclassifiedOutOfHorizonCount} unclassified observation(s), and {excludedOutOfHorizonCount} excluded test/demo observation(s) exceeded the configured forecast horizon. All-sample error remains visible for auditability; only reviewed operational records contribute to operational and within-horizon accuracy. Test/demo outcomes remain visible for traceability but never count as operational accuracy.</p>
           {(unclassifiedOutOfHorizonCount > 0 || excludedOutOfHorizonCount > 0) && <div className="mt-3"><Button variant="secondary" onClick={() => onOpenTool?.('provenance')}>Review visit provenance</Button></div>}
         </div>}
-        {truth?.forecasts?.length ? <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[1160px] text-left text-sm"><thead className="border-b border-stone-200 text-xs uppercase tracking-wide text-stone-500"><tr><th className="p-3">Forecast</th><th className="p-3">Captured</th><th className="p-3">Horizon</th><th className="p-3">Tracked / observed</th><th className="p-3">Provenance split</th><th className="p-3">Horizon outcomes</th><th className="p-3">All-sample MAE</th><th className="p-3">Operational MAE</th><th className="p-3">Within-horizon operational MAE</th></tr></thead><tbody className="divide-y divide-stone-100">{truth.forecasts.map(item => <tr key={item.forecast_id}><td className="p-3 font-semibold">#{item.forecast_id}<div className="text-xs font-normal text-stone-500">{item.model_version}</div></td><td className="p-3 text-stone-600">{new Date(item.created_at).toLocaleString()}</td><td className="p-3">{Number(item.horizon_minutes).toLocaleString()} min</td><td className="p-3">{item.tracked_samples} tracked<div className="text-xs text-stone-500">{item.observed_samples} observed</div></td><td className="p-3 text-xs leading-relaxed"><div>Operational: {item.operational_observed_samples}</div><div>Unclassified: {item.unclassified_observed_samples}</div><div>Excluded test/demo tracked: {item.excluded_synthetic_samples}</div><div>Excluded test/demo observed: {item.excluded_synthetic_observed_samples}</div></td><td className="p-3 text-xs leading-relaxed"><div>Within (operational): {item.within_horizon_samples}</div><div>Outside (operational): {item.out_of_horizon_samples}</div><div>Outside (unclassified): {item.unclassified_out_of_horizon_samples}</div><div>Outside (test/demo): {item.excluded_synthetic_out_of_horizon_samples}</div></td><td className="p-3"><span className="font-semibold">{item.mean_absolute_error_minutes == null ? 'Pending observations' : formatErrorDuration(item.mean_absolute_error_minutes)}</span><div className="text-xs text-stone-500">Includes all observed provenance states</div></td><td className="p-3">{item.operational_mean_absolute_error_minutes == null ? 'No classified operational samples' : <span className="font-semibold">{formatErrorDuration(item.operational_mean_absolute_error_minutes)}</span>}</td><td className="p-3">{item.within_horizon_mean_absolute_error_minutes === undefined ? 'Unavailable' : item.within_horizon_mean_absolute_error_minutes === null ? (Number(item.operational_observed_samples) > 0 ? 'No in-horizon operational samples' : 'No classified operational samples') : <span className="font-semibold">{formatErrorDuration(item.within_horizon_mean_absolute_error_minutes)}</span>}</td></tr>)}</tbody></table></div> : <EmptyState title="No forecasts recorded" message="Capture a forecast to start building an evidence ledger. Predictions are not scored until actual call times are observed."/>}
+        {truth?.forecasts?.length ? <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[1500px] text-left text-sm"><thead className="border-b border-stone-200 text-xs uppercase tracking-wide text-stone-500"><tr><th className="p-3">Forecast</th><th className="p-3">Captured</th><th className="p-3">Horizon</th><th className="p-3">Tracked / observed</th><th className="p-3">Calibration saved</th><th className="p-3">Provenance split</th><th className="p-3">Horizon outcomes</th><th className="p-3">All-sample MAE: baseline vs applied</th><th className="p-3">Operational MAE: baseline vs applied</th><th className="p-3">In-horizon operational MAE: baseline vs applied</th></tr></thead><tbody className="divide-y divide-stone-100">{truth.forecasts.map(item => <tr key={item.forecast_id}><td className="p-3 font-semibold">#{item.forecast_id}<div className="text-xs font-normal text-stone-500">{item.model_version}</div></td><td className="p-3 text-stone-600">{new Date(item.created_at).toLocaleString()}</td><td className="p-3">{Number(item.horizon_minutes).toLocaleString()} min</td><td className="p-3">{item.tracked_samples} tracked<div className="text-xs text-stone-500">{item.observed_samples} observed</div></td><td className="p-3 text-xs leading-relaxed"><div>{item.calibrated_samples ?? '—'} visit(s) adjusted</div><div>Mean effective offset: {item.mean_applied_calibration_offset_minutes == null ? '—' : (Number(item.mean_applied_calibration_offset_minutes) > 0 ? '+' : '') + item.mean_applied_calibration_offset_minutes + ' min'}</div><div>Largest absolute offset: {item.max_abs_applied_calibration_offset_minutes == null ? '—' : item.max_abs_applied_calibration_offset_minutes + ' min'}</div></td><td className="p-3 text-xs leading-relaxed"><div>Operational: {item.operational_observed_samples}</div><div>Unclassified: {item.unclassified_observed_samples}</div><div>Excluded test/demo tracked: {item.excluded_synthetic_samples}</div><div>Excluded test/demo observed: {item.excluded_synthetic_observed_samples}</div></td><td className="p-3 text-xs leading-relaxed"><div>Within (operational): {item.within_horizon_samples}</div><div>Outside (operational): {item.out_of_horizon_samples}</div><div>Outside (unclassified): {item.unclassified_out_of_horizon_samples}</div><div>Outside (test/demo): {item.excluded_synthetic_out_of_horizon_samples}</div></td><td className="p-3">{renderMaeComparison(item.baseline_mean_absolute_error_minutes, item.mean_absolute_error_minutes, item.observed_samples, 'No observed outcomes')}</td><td className="p-3">{renderMaeComparison(item.operational_baseline_mean_absolute_error_minutes, item.operational_mean_absolute_error_minutes, item.operational_observed_samples, 'No classified operational outcomes')}</td><td className="p-3">{renderMaeComparison(item.within_horizon_baseline_mean_absolute_error_minutes, item.within_horizon_mean_absolute_error_minutes, item.within_horizon_samples, 'No in-horizon operational outcomes')}</td></tr>)}</tbody></table></div> : <EmptyState title="No forecasts recorded" message="Capture a forecast to start building an evidence ledger. Predictions are not scored until actual call times are observed."/>}
       </Card>
       <Card className="overflow-hidden">
         <div className="border-b border-stone-100 p-5"><h2 className="font-display font-bold">Patient Fairness Sentinel</h2><p className="mt-1 text-xs text-stone-500">Operational delay review by clinician-assigned tier over the last 30 days, plus currently overdue waiting visits.</p></div>

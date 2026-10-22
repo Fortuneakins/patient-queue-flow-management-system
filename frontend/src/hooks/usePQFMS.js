@@ -481,15 +481,36 @@ export function usePQFMS() {
   );
 
   useEffect(() => {
-    refreshPublic();
-    refreshPredictions();
+    let active = true;
+    let inFlight = false;
 
-    const interval = setInterval(() => {
-      refreshPublic();
-      refreshPredictions();
-    }, 30000);
+    const refreshVisibleLiveData = async () => {
+      if (!active || document.visibilityState !== 'visible' || inFlight) return;
+      inFlight = true;
+      try {
+        await Promise.allSettled([refreshPublic(), refreshPredictions()]);
+      } finally {
+        inFlight = false;
+      }
+    };
 
-    return () => clearInterval(interval);
+    const refreshOnResume = () => {
+      if (document.visibilityState === 'visible') void refreshVisibleLiveData();
+    };
+
+    void refreshVisibleLiveData();
+    const interval = window.setInterval(refreshOnResume, 15000);
+    window.addEventListener('focus', refreshOnResume);
+    window.addEventListener('online', refreshOnResume);
+    document.addEventListener('visibilitychange', refreshOnResume);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshOnResume);
+      window.removeEventListener('online', refreshOnResume);
+      document.removeEventListener('visibilitychange', refreshOnResume);
+    };
   }, [refreshPredictions, refreshPublic]);
 
   useEffect(() => {

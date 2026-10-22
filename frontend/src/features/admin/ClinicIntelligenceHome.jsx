@@ -143,8 +143,22 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
 
   useEffect(() => {
     refresh();
-    const interval = window.setInterval(refresh, 30_000);
-    return () => window.clearInterval(interval);
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+
+    const interval = window.setInterval(refreshWhenVisible, 30_000);
+    window.addEventListener('focus', refreshWhenVisible);
+    window.addEventListener('online', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshWhenVisible);
+      window.removeEventListener('online', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [refresh]);
 
   const overview = snapshot.overview;
@@ -171,23 +185,56 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
   const unclassifiedCompleted = overview?.data_quality ? count(overview.data_quality.unclassified_completed) : null;
   const estimator = snapshot.predictions;
   const estimateQualityLabels = {
-    OBSERVATION_BASED: 'Observation-based',
+    OBSERVED_TIMINGS: 'Observation-based',
     LIMITED_OBSERVATIONS: 'Limited sample',
-    DEFAULT_ASSUMPTION: 'Baseline assumption',
-    UNAVAILABLE_NO_STAFF: 'Unavailable'
+    FALLBACK_ASSUMPTION: 'Baseline assumption',
+    UNAVAILABLE: 'Unavailable'
   };
   const estimateQualityLabel = estimator
-    ? (estimateQualityLabels[estimator.estimate_quality] || 'Unknown quality')
+    ? (estimateQualityLabels[estimator.estimate_basis] || 'Quality not reported')
     : null;
-  const estimateQualityTone = !estimator || estimator.degraded
+  const estimateQualityTone = !estimator
+    || estimator.degraded
+    || estimator.estimate_basis === 'UNAVAILABLE'
     ? 'red'
-    : estimator.estimate_quality === 'OBSERVATION_BASED' ? 'teal' : 'amber';
+    : estimator.estimate_basis === 'OBSERVED_TIMINGS' ? 'teal' : 'amber';
+
+  const tierFour = estimator?.['4'];
   const routineTierEstimate = estimator
-    ? (estimator['4'] === null || estimator['4'] === undefined ? 'Unavailable' : `${count(estimator['4'])} min`)
+    ? (
+      estimator.degraded
+      || estimator.estimate_basis === 'UNAVAILABLE'
+      || tierFour === null
+      || tierFour === undefined
+      || !Number.isFinite(Number(tierFour))
+        ? 'Unavailable'
+        : `${Number(tierFour)} min`
+    )
     : null;
+
+  const operationalSampleWarning = estimator && Array.isArray(estimator.warnings)
+    ? estimator.warnings.find(item =>
+      typeof item === 'string'
+      && /operational service-time sample/i.test(item)
+    )
+    : null;
+
   const estimateEvidenceCaption = estimator
-    ? `${estimator.service_time_basis || 'Estimation basis unavailable'} · ${count(estimator.service_history_samples)} eligible samples`
-    : sourceIssues.includes('predictions') ? 'Wait estimator unavailable; do not interpret this as a zero-minute wait.' : 'Waiting for an estimator result.';
+    ? estimator.estimate_basis === 'FALLBACK_ASSUMPTION'
+      ? (
+        operationalSampleWarning
+        || 'Default service-time assumption; operational history is insufficient for a history-based estimate.'
+      )
+      : estimator.estimate_basis === 'LIMITED_OBSERVATIONS'
+        ? 'Limited observed service-time history; review sample counts and calibration in Safety and prediction truth.'
+        : estimator.estimate_basis === 'OBSERVED_TIMINGS'
+          ? 'Observed operational service-time history; forecast-error calibration is assessed separately.'
+          : estimator.estimate_basis === 'UNAVAILABLE'
+            ? 'Wait estimates are unavailable; do not interpret missing estimates as zero.'
+            : 'The forecast response did not report an estimation basis.'
+    : sourceIssues.includes('predictions')
+      ? 'Wait estimator unavailable; do not interpret this as a zero-minute wait.'
+      : 'Waiting for an estimator result.';
   const excludedTestDemo = overview?.data_quality ? count(overview.data_quality.excluded_test_demo_records) : null;
   const sourceLabels = {
     overview: 'operational overview',

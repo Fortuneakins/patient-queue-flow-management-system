@@ -42,9 +42,14 @@ if ($envText -match '(?m)^INTERNAL_SERVICE_TOKEN=(GENERATED_BY_SETUP_SCRIPT)?$')
 if (!(Test-Path frontend\.env.local)) {
 @"
 VITE_API_BASE_URL=http://localhost:5000
-VITE_ANALYTICS_BASE_URL=http://localhost:5001
 VITE_SOCKET_URL=http://localhost:5000
 "@ | Set-Content frontend\.env.local -Encoding utf8
+}
+
+# Remove the retired direct-browser analytics origin from existing local configuration.
+if (Test-Path frontend\.env.local) {
+  $frontendEnv = Get-Content frontend\.env.local | Where-Object { $_ -notmatch '^\s*VITE_ANALYTICS_BASE_URL=' }
+  Set-Content -Path frontend\.env.local -Value $frontendEnv -Encoding utf8
 }
 
 Write-Host 'Installing backend dependencies...' -ForegroundColor DarkCyan
