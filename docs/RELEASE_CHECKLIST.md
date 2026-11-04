@@ -83,3 +83,18 @@ Use this checklist immediately before creating the GitHub release that is refere
 - [ ] Complete Actual Result and Status for every test listed in the academic report.
 - [ ] Complete the five success-criterion outcomes in Section 9 of the report.
 - [ ] Ensure the report's screenshots, test totals, measured values, release tag and commit SHA all refer to the same release.
+
+
+## Final academic source freeze (4 November 2026)
+
+- [ ] Confirm the assessed code commit is `4855a7d368d047baa4c3753cced7a6bd5c8ce5fd` or a later commit with a fresh successful CI run.
+- [ ] Retain CI run 470 (`39592355041`) as evidence for the 4855a7d code commit; do not describe it as a manual browser acceptance run.
+- [ ] Keep the 22 October Rev 1.2 test counts as historical evidence only; do not add them to November test counts.
+- [ ] Add the Clinic Intelligence supplementary use-case, architecture/service and data-model diagrams to the final report where the full release scope is described.
+- [ ] Reconcile role/route claims with `backend/src/routes/intelligence.routes.js`; source inspection alone is not proof of exhaustive role-matrix execution.
+- [ ] Run and record the complete synthetic patient browser journey, role restrictions, public-display privacy, Clinic Intelligence low-evidence states, FlowTwin repeatability and failure paths.
+- [ ] Record actual results for NFR-05 load, NFR-06 Display Board latency and NFR-10 accessibility, or explicitly retain them as not measured.
+- [ ] Pin the final report to the exact tested code commit and list any subsequent documentation-only commits separately.
+- [ ] Do not publish a final tag or claim production readiness until all release gates appropriate to the academic prototype are reviewed. Real-clinic governance gates remain separate and open.
+
+See [FINAL_SUBMISSION_HANDOFF.md](FINAL_SUBMISSION_HANDOFF.md) for the assessed source identity, CI scope, manual acceptance plan and production boundary.
