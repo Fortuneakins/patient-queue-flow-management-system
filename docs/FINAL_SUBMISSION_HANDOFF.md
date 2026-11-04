@@ -1,86 +1,105 @@
-# PQFMS final submission handoff — source baseline and evidence boundaries
+# PQFMS final submission handoff — workflow integration and evidence boundaries
 
 **Prepared:** 4 November 2026  
 **Repository:** https://github.com/Fortuneakins/patient-queue-flow-management-system  
 **Assessed branch:** `feat/clinic-intelligence-operations-cockpit`  
-**Assessed source commit:** [`4855a7d368d047baa4c3753cced7a6bd5c8ce5fd`](https://github.com/Fortuneakins/patient-queue-flow-management-system/commit/4855a7d368d047baa4c3753cced7a6bd5c8ce5fd)  
-**Commit subject:** Auto-reset kiosk ticket confirmation after timeout  
-**CI evidence:** GitHub Actions workflow `PQFMS CI`, run [39592355041](https://github.com/Fortuneakins/patient-queue-flow-management-system/actions/runs/39592355041), run number 470, completed with conclusion `success` for the assessed commit.
+**Assessed code commit:** [`5aa61fa554450f0c82e9d89950e762608dcf5258`](https://github.com/Fortuneakins/patient-queue-flow-management-system/commit/5aa61fa554450f0c82e9d89950e762608dcf5258)  
+**Commit subject:** fix: make standard CareGraph completion idempotent  
+**CI evidence:** GitHub Actions workflow `PQFMS CI`, run [41846303445](https://github.com/Fortuneakins/patient-queue-flow-management-system/actions/runs/41846303445), run number 746, completed with conclusion **success** for the assessed code commit.
 
-## 1. Why this handoff exists
+## 1. Purpose and source boundary
 
-The October academic report revision 1.2 pinned an earlier commit on `feat/evidence-driven-intelligence-cockpit`. The project has since advanced. This handoff identifies the later repository state and separates verified source/CI facts from manual acceptance and production-readiness work that has not been demonstrated.
+This handoff supersedes the earlier source pin to commit `4855a7d` for the Revision 1.4 code baseline. It records the workflow-integrity changes made after the 4 November kiosk privacy-reset revision. Earlier October test results and screenshots remain historical evidence for the source revision to which they were originally attached. Do not combine historical local totals, current CI totals and unperformed manual acceptance checks into one unsupported claim.
 
-The branch is 271 commits ahead of `main` and 0 commits behind at the time of comparison. This does not mean it has been merged or released. Do not describe it as the main-branch release.
+The assessed source is the feature branch stated above. No final release tag, merge to `main`, hosted RMSH deployment, clinical validation or hospital acceptance is claimed.
 
-## 2. Source change visible in the pinned commit
+## 2. Implementation changes in the assessed source
 
-The pinned commit changes the kiosk confirmation view to clear the displayed ticket after 60 seconds, with timer cleanup when the component state changes/unmounts. The screen also explains the automatic reset. This is a privacy-oriented display behaviour; it is not evidence that the full patient lifecycle has been manually acceptance-tested.
+### 2.1 Queue lifecycle and CareGraph integration
 
-## 3. Implemented capability boundary
+The backend now synchronises the default `OPD_STANDARD` CareGraph pathway with the authoritative queue lifecycle:
 
-The repository README and implementation modules describe the following assessed capabilities:
+1. A newly checked-in visit receives a completed registration stage and a ready triage stage.
+2. A nurse triage priority update completes the triage stage and makes the next required consultation stage ready.
+3. A doctor call moves the consultation stage to in progress.
+4. A successful discharge completes consultation and discharge pathway stages.
 
-- Core OPD workflow: patient registration, kiosk/reception check-in, daily tickets, duplicate active-visit protection, triage, queue display, doctor call-to-room, consultation notes, discharge and visit history.
-- Staff administration, server-side role checks, shift scheduling and account lifecycle controls.
-- Queue-workload wait estimates with disclosed evidence basis and unavailable states.
-- CareGraph ordered pathway tracking and role-controlled stage progress.
-- Clinic resource registry and idempotent offline resource-status outbox; this is not offline clinical workflow.
-- FlowTwin seeded baseline-versus-scenario simulation and synthetic clinic laboratory.
-- Forecast-versus-observed wait review and delay monitoring; these are operational indicators, not clinical validation or automatic triage.
-- Append-only operational event history / Flight Recorder.
-- Synthetic-only Operational Continuity Lab.
-- Internal referral tracking and consent-gated operational SMS templates.
-- Data provenance classifications and administrator review.
+The synchronisation runs within the same PostgreSQL transaction as the queue transition. The helper uses row-level locking and required-predecessor checks. It records pathway transition events with `triggered_by: QUEUE_LIFECYCLE`. Completion is idempotent: a stage already completed through the CareGraph workspace is not rewritten or re-audited as a new completion, but the next eligible required stage can still be promoted. The automatic synchronisation applies only to the seeded `OPD_STANDARD` pathway. Custom pathways remain staff-managed.
 
-The intelligence route definitions enforce authentication/password readiness globally and then role-specific access. The route file is `backend/src/routes/intelligence.routes.js`; the implementation services include `intelligenceOverviewService.js`, `carePathwayService.js`, `resourceService.js`, `offlineSyncService.js`, `flowAnalyticsService.js`, `referralService.js`, `contactService.js`, `continuityService.js` and `dataProvenanceService.js`.
+This is operational process tracking. It does not prescribe clinical protocols, decide urgency, diagnose patients or replace a clinician's judgement.
 
-## 4. Automated verification — what the current evidence proves
+### 2.2 Triage-before-consultation guard
 
-The current pinned commit has a successful GitHub Actions run (run 470). The workflow file `.github/workflows/ci.yml` executes:
+A waiting visit cannot be called to a doctor until a triage priority has been assigned. The API enforces this condition and returns HTTP 409 for an untriaged call. The Doctor queue interface also disables the call action and explains that triage is awaited. The server-side guard remains authoritative; hiding or disabling a button is not treated as a security control.
 
-- Backend dependency installation, production dependency audit, migration of a fresh PostgreSQL schema, backend lint/unit verification and database-backed integration smoke tests.
-- Analytics runtime dependency audit and analytics pytest suite.
-- Frontend lint and production build.
-- Production Compose syntax and topology checks.
+### 2.3 Dependency audit remediation
+
+The backend lockfile was updated to patched transitive runtime packages after the CI production audit identified advisories affecting `body-parser`, `follow-redirects` and `qs`. The audit command remains enabled; it was not skipped or relaxed. The successful latest CI run confirms the configured backend production dependency audit passes for this source commit.
+
+## 3. Automated tests added or strengthened
+
+The database-backed acceptance suite now verifies:
+
+- Initial standard pathway state after check-in.
+- Triage completion and consultation readiness after nurse priority assignment.
+- HTTP 409 when a doctor attempts to call a waiting visit without a triage priority.
+- Consultation stage transition to `IN_PROGRESS` on doctor call.
+- Completion of consultation and discharge stages when queue discharge succeeds.
+- The final pathway state remains complete when a CareGraph stage has already been completed through the stage-management interface.
+- Existing concurrency handling, note immutability, role restrictions and workflow provenance assertions remain in the integration suites.
+
+## 4. CI verification record
+
+The assessed code commit `5aa61fa554450f0c82e9d89950e762608dcf5258` completed [PQFMS CI run 746](https://github.com/Fortuneakins/patient-queue-flow-management-system/actions/runs/41846303445) with conclusion **success**.
+
+The configured workflow covers:
+
+- Backend installation and production dependency audit.
+- Fresh PostgreSQL schema migration with the checksum-tracked migration ledger.
+- Backend lint and unit tests.
+- Database-backed backend integration tests.
+- Analytics runtime dependency audit and pytest suite.
+- Frontend dependency audit, lint and production build.
+- Production Compose syntax/topology validation.
 - API, analytics and frontend container image builds.
 - Nginx and Caddy configuration validation.
 
-A successful workflow means those configured CI steps completed successfully for this commit. It does **not** prove every test case in the academic report was individually executed, a clean Windows workstation setup was completed, a browser end-to-end acceptance suite passed, or a live clinic deployment was approved.
+The run log reports **58/58 backend unit tests passing** and **25/25 database-backed integration tests passing**. These are separate suite summaries; they are not a count of all manual test cases or a claim that browser-based user acceptance has been performed.
 
-## 5. Manual acceptance still required for academic demonstration
+## 5. Manual acceptance remains open
 
-Record actual results, date, environment, role, test data provenance and evidence file for each test. At minimum:
+The project owner has not yet performed the full workflow, full role-matrix checks or a complete demonstration rehearsal. These remain required before the submission can be described as manually accepted. Record the actual environment, role, synthetic test data, expected result, observed result, status and evidence file.
 
-1. Reception: register a synthetic patient, check in, verify daily ticket and duplicate active-visit rejection.
-2. Nurse: assign triage priority and verify queue ordering / CareGraph stage permissions.
-3. Doctor: call to room, record consultation notes, discharge and verify history visibility.
-4. Public display: verify ticket-only output and ensure names, identifiers and clinical notes are absent.
-5. Role boundary: attempt representative prohibited routes with each role and verify server-side rejection.
-6. Clinic Intelligence: inspect review prompts, rule/evidence explanation, data provenance state and unavailable/low-sample states.
-7. FlowTwin: repeat a fixed-seed scenario and confirm repeatable assumptions/results; verify no automatic queue/triage mutation.
-8. Failure paths: analytics unavailable, SMS disabled/failure, invalid stage transition and duplicate resource sync.
-9. Kiosk privacy: confirm the ticket confirmation screen resets after 60 seconds and timer is cancelled on unmount/new state.
+1. Reception: register a synthetic patient, perform kiosk or assisted check-in, verify ticket numbering and duplicate active-visit handling.
+2. Nurse: assign a priority, confirm queue ordering, verify the CareGraph triage stage and confirm stage-role enforcement.
+3. Doctor: confirm that an untriaged visit cannot be called; call a triaged visit, enter notes, discharge, and verify final queue/history/pathway state.
+4. Role matrix: test representative allowed and prohibited actions for Reception, Nurse, Doctor and Administrator, including backend API boundaries.
+5. Public display and kiosk: verify ticket-only display privacy and the 60-second kiosk confirmation reset.
+6. Clinic Intelligence and FlowTwin: inspect evidence/low-sample states, fixed-seed repeatability and the boundary that simulations do not mutate clinical queue priority.
+7. Failure conditions: test analytics unavailability, SMS disabled/failure, repeated actions, invalid stage transitions and duplicate resource-sync replay.
 
-Do not mark a manual test passed until it is actually run and captured.
+Do not mark these manual cases as passed based solely on a related automated integration assertion.
 
-## 6. Non-functional requirements requiring measured evidence
+## 6. Non-functional measurements still open
 
-The report's prior evidence register identifies NFR-05 load/concurrency, NFR-06 Display Board refresh latency and NFR-10 accessibility score as not fully measured. Keep them open until measurements are captured against this source revision. If the assessment environment does not permit measurement, retain the limitation and do not claim compliance.
+- **NFR-05:** load/concurrency and p95 response-time evidence remains to be measured and retained.
+- **NFR-06:** Display Board refresh latency remains to be measured with timestamped observations.
+- **NFR-10:** accessibility remains to be assessed with keyboard/focus and suitable automated checks.
+- Forecast accuracy remains unvalidated against a representative prospective operational dataset. Synthetic data must not be described as operational performance validation.
 
-## 7. Production-readiness boundary
+## 7. Production-readiness and clinical governance boundary
 
-The repository includes a production Compose scaffold and a detailed runbook. This is deployment packaging, not proof of deployment. The documented open gates include MFA or an approved compensating control, independent clinical/operational validation, privacy/legal review, independent security assessment, representative prospective analytics validation, encrypted backup/restore rehearsal, real infrastructure/TLS/database-grant verification and operational ownership. Do not process real patient data or claim RMSH deployment before these gates are resolved and formally approved.
+The repository includes production-oriented packaging and CI image/configuration checks. Those checks do not prove a hosted deployment. Before any real-clinic use, the documented open gates include MFA or an approved compensating control, independent security assessment, privacy/legal review, clinical and operational approval, representative analytics validation, encrypted backup/restore rehearsal, environment-specific TLS/database configuration and clear operational ownership. Do not enter real patient data or claim RMSH deployment without the responsible organisation's approval.
 
 ## 8. Release/report control
 
-- Keep the final academic report pinned to one exact full commit SHA.
-- Do not create a final release tag until the selected source commit has completed CI and manual acceptance evidence has been reviewed.
-- Do not claim this branch is merged into `main` based solely on ahead/behind comparison.
-- Preserve the 22 October test results as historical evidence; do not mix their test totals with later CI run results.
-- Update the report's scope diagrams, role claims, test evidence, limitations and rubric crosswalk to match the selected commit.
-- The final release checklist remains the authoritative go/no-go checklist: `docs/RELEASE_CHECKLIST.md`.
+- Pin the final academic report to the exact tested source commit `5aa61fa554450f0c82e9d89950e762608dcf5258`.
+- List any later documentation-only commits separately from the assessed code commit.
+- Do not create a final release tag until the manual acceptance evidence appropriate to the assessment has been completed and reviewed.
+- Do not claim this feature branch is merged into `main`.
+- Preserve the 22 October test results as historical; do not mix them with the November CI results.
+- Use `docs/RELEASE_CHECKLIST.md` as the go/no-go checklist and `docs/IMPLEMENTATION_TRACEABILITY.md` as the source map.
 
 ## 9. Assessor-facing statement
 
-PQFMS is an implemented academic OPD workflow prototype with a modular React/Express/PostgreSQL/Flask architecture and additional operational-planning capabilities. Its current pinned source commit passes the repository's configured CI workflow. The system has not been deployed at Robert Mangaliso Sobukwe Hospital, has not been clinically validated, and is not approved for live patient care. Synthetic simulation, operational review prompts and wait estimates support demonstration/planning only and must not make clinical decisions.
+PQFMS is an implemented academic outpatient queue and flow prototype with a React/Vite frontend, Express/Node.js API, PostgreSQL system of record and separate Flask analytics service. The assessed code source passes the repository's configured CI workflow, including backend unit/integration suites, analytics checks, frontend build and production packaging/configuration checks. The default queue lifecycle is integrated with CareGraph progression, and the API prevents a doctor call before a triage priority is assigned. Full manual browser acceptance by the project owner remains pending. PQFMS has not been deployed at Robert Mangaliso Sobukwe Hospital, has not been clinically validated and is not approved for live patient care.
