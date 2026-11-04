@@ -13,6 +13,8 @@ PQFMS is an academic software-development project for the Outpatient Department 
 - Doctor call-to-room, optional SMS notification, consultation notes and discharge
 - Patient visit history with Doctor-only consultation notes
 - Operational overview and administrator discharge log
+- Explainable Operational Pressure Analysis with queue-age bands, rostered workload ratios, room-capacity signals and a transparent 0–100 planning heuristic
+- Administrator Operational Action Register: convert live review prompts into deduplicated, assigned and status-controlled actions with append-only audit events
 - Staff account administration, permissions, deactivation and sign-in history
 - Staff shift scheduling with overlap protection
 - Configurable care pathways, ordered stages and role-controlled journey progress
@@ -30,6 +32,10 @@ PQFMS is an academic software-development project for the Outpatient Department 
 The default `OPD_STANDARD` pathway is synchronised with the authoritative queue lifecycle by the backend. A newly checked-in visit receives a completed registration stage and a ready triage stage. After a staff member assigns triage priority, the triage stage is completed and the consultation stage becomes ready. Calling a patient to the consultation marks that stage in progress, and a successful discharge completes the consultation and discharge stages. These updates run inside the same PostgreSQL transaction as the corresponding queue transition, with row-level locking and required-predecessor checks. Repeated completion is handled idempotently. Custom pathways remain staff-managed rather than being silently advanced by the standard queue lifecycle.
 
 A doctor cannot call a waiting visit before a triage priority has been assigned. The Doctor workspace disables the action and explains why; the API independently rejects the request with HTTP 409. This is a workflow-integrity rule, not an automated clinical diagnosis or a substitute for professional triage judgement.
+
+## Operational intelligence additions (4 November 2026)
+
+The Clinic Intelligence overview exposes aggregate queue-age bands, waiting visits per rostered doctor, on-duty nurse/reception counts, available room capacity and a versioned rule-based Operational Pressure Index. Its 0–100 score is an explicit planning heuristic (waiting load 35 points, overdue share 35, no-rostered-doctor condition 20, no available room capacity 10); it is not clinically calibrated, does not infer acuity and never changes triage priority. The administrator-only Operational Action Register converts a currently active server rule into a persistent action, prevents duplicate active actions for the same rule, supports staff ownership and controlled status transitions, and records creation/updates in Flight Recorder. Apply migration 009 before using the register. Automated CI does not replace manual browser acceptance or clinical/operational approval.
 
 ## Architecture
 
