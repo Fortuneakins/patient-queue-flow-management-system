@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../../services/api';
 import { Badge, Button, Card, EmptyState } from '../../components/ui';
 import Icon from '../../components/ui/Icon';
+import OperationalPressurePanel from './intelligence/OperationalPressurePanel';
 
 const initialSnapshot = {
   overview: null,
@@ -280,6 +281,8 @@ export default function ClinicIntelligenceHome({ token, onOpenTool }) {
           <MetricCard label="Routine-tier wait estimate" value={routineTierEstimate} caption="Planning approximation for a hypothetical tier 4 visit; not a personal guarantee or triage decision." icon="clock" tone={estimateQualityTone} />
         </div>
       </section>
+
+      <OperationalPressurePanel pressure={overview?.operational_pressure} ageBands={overview?.queue_age_bands} staffing={overview?.staffing} capacity={overview?.capacity} />
 
       <section aria-labelledby="signals-title" className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-2">

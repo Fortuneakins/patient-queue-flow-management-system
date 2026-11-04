@@ -12,6 +12,7 @@ import ReferralRelayPanel from './intelligence/ReferralRelayPanel';
 import AccessBridgePanel from './intelligence/AccessBridgePanel';
 import ContinuityLabPanel from './intelligence/ContinuityLabPanel';
 import DataProvenancePanel from './intelligence/DataProvenancePanel';
+import OperationalActionRegisterPanel from './intelligence/OperationalActionRegisterPanel';
 
 const homeSection = { id: 'home', label: 'Overview', icon: 'chart', desc: 'Live operational pulse, review prompts and guided next actions' };
 const sections = [
@@ -21,6 +22,7 @@ const sections = [
   { id: 'referrals', label: 'Referral Relay', icon: 'arrow', desc: 'Track internal referral acknowledgements and handovers' },
   { id: 'lab', label: 'Synthetic Lab', icon: 'activity', desc: 'Run repeatable synthetic clinic stress tests' },
   { id: 'continuity', label: 'Continuity Lab', icon: 'refresh', desc: 'Inspect synthetic downtime-recovery discrepancies' },
+  { id: 'actions', label: 'Operational Action Register', icon: 'checkCircle', desc: 'Assign, track and audit human follow-up actions' },
   { id: 'learning', label: 'Safety and prediction truth', icon: 'shield', desc: 'Review operational delays and observed forecast errors' },
   { id: 'events', label: 'Flight Recorder', icon: 'history', desc: 'Trace recorded operational events and state transitions' },
   { id: 'access', label: 'Access Bridge', icon: 'users', desc: 'Review contact consent and operational message controls' },
@@ -30,7 +32,7 @@ const sections = [
 const toolGroups = [
   { title: 'Run today’s clinic', ids: ['journeys', 'resources', 'referrals'] },
   { title: 'Plan and stress-test', ids: ['flow', 'lab', 'continuity'] },
-  { title: 'Prove and improve', ids: ['learning', 'events', 'access', 'provenance'] }
+  { title: 'Prove and improve', ids: ['actions', 'learning', 'events', 'access', 'provenance'] }
 ];
 
 function ToolSwitcher({ active, sections, onSelect }) {
@@ -208,6 +210,7 @@ export default function ClinicIntelligenceView({ token, currentUser }) {
   else if (active === 'referrals') panel = <ReferralRelayPanel token={token} canManage={true} />;
   else if (active === 'access') panel = <AccessBridgePanel token={token} />;
   else if (active === 'provenance') panel = <DataProvenancePanel token={token} />;
+  else if (active === 'actions') panel = <OperationalActionRegisterPanel token={token} />;
 
   return (
     <div className="clinic-intelligence-view space-y-4">

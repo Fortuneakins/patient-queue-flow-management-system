@@ -85,3 +85,16 @@ test('reports the configured delay threshold in evidence instead of assuming 60 
   assert.ok(flow.evidence.includes('Visits over 45 minutes: 2.'));
   assert.ok(flow.evidence.includes('Configured delay-review threshold: 45 minutes.'));
 });
+
+test('adds workload, backlog and room-capacity prompts without changing clinical priority', () => {
+  const result = buildClinicInsights({
+    waiting:12, in_consultation:2, overdue_waiting:8, oldest_wait_minutes:110,
+    on_duty_doctors:1, available_room_capacity:0, resource_issues:0,
+    unclassified_completed:0, unclassified_active:0, service_history_samples:10
+  });
+  assert.ok(result.insights.some(item => item.rule_id === 'CAPACITY-002'));
+  assert.ok(result.insights.some(item => item.rule_id === 'FLOW-002'));
+  assert.ok(result.insights.some(item => item.rule_id === 'RESOURCE-002'));
+  assert.ok(result.insights.every(item => item.human_review_required === true));
+  assert.ok(result.insights.every(item => !/change.*triage|assign.*priority/i.test(item.recommended_action)));
+});
