@@ -25,6 +25,12 @@ PQFMS is an academic software-development project for the Outpatient Department 
 - Server-side authentication, authorisation, bounded per-IP and per-account login throttling, request limits, secure headers and input validation
 - PostgreSQL-backed integrity constraints and concurrency protection
 
+### Queue-to-CareGraph lifecycle integrity
+
+The default `OPD_STANDARD` pathway is synchronised with the authoritative queue lifecycle by the backend. A newly checked-in visit receives a completed registration stage and a ready triage stage. After a staff member assigns triage priority, the triage stage is completed and the consultation stage becomes ready. Calling a patient to the consultation marks that stage in progress, and a successful discharge completes the consultation and discharge stages. These updates run inside the same PostgreSQL transaction as the corresponding queue transition, with row-level locking and required-predecessor checks. Repeated completion is handled idempotently. Custom pathways remain staff-managed rather than being silently advanced by the standard queue lifecycle.
+
+A doctor cannot call a waiting visit before a triage priority has been assigned. The Doctor workspace disables the action and explains why; the API independently rejects the request with HTTP 409. This is a workflow-integrity rule, not an automated clinical diagnosis or a substitute for professional triage judgement.
+
 ## Architecture
 
 React + Vite frontend → HTTPS reverse proxy → Express/Node.js REST API → PostgreSQL
