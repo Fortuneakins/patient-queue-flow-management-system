@@ -24,7 +24,7 @@ async function updateStandardPathway(client, queueId, stageCode, nextStatus, sta
      WHERE p.queue_id = $1 AND cp.pathway_code = 'OPD_STANDARD'
        AND s.stage_code = $2
        AND (($3 = 'IN_PROGRESS' AND p.status = 'READY')
-         OR ($3 = 'COMPLETED' AND p.status IN ('READY','IN_PROGRESS')))
+         OR ($3 = 'COMPLETED' AND p.status IN ('READY','IN_PROGRESS','COMPLETED')))
        AND NOT EXISTS (
          SELECT 1 FROM care_pathway_stages prior
          JOIN queue_pathway_progress prior_progress
@@ -38,21 +38,23 @@ async function updateStandardPathway(client, queueId, stageCode, nextStatus, sta
   const stage = result.rows[0];
   if (!stage) return false;
   const completed = nextStatus === 'COMPLETED';
-  await client.query(
-    `UPDATE queue_pathway_progress
-     SET status = $1::varchar,
-         started_at = CASE WHEN $1::varchar IN ('IN_PROGRESS','COMPLETED') THEN COALESCE(started_at,NOW()) ELSE started_at END,
-         completed_at = CASE WHEN $1::varchar = 'COMPLETED' THEN NOW() ELSE NULL END,
-         updated_by_staff_id = $2, updated_at = NOW()
-     WHERE progress_id = $3`,
-    [nextStatus, staffId, stage.progress_id]
-  );
-  await appendOperationalEvent(client, {
-    eventType: 'CARE_PATHWAY_STAGE_UPDATED', entityType: 'QUEUE_PATHWAY_STAGE',
-    entityId: stage.progress_id, actorStaffId: staffId,
-    fromState: stage.status, toState: nextStatus,
-    metadata: { queue_id: queueId, stage_code: stageCode, stage_name: stage.name, triggered_by: 'QUEUE_LIFECYCLE' }
-  });
+  if (stage.status !== nextStatus) {
+    await client.query(
+      `UPDATE queue_pathway_progress
+       SET status = $1::varchar,
+           started_at = CASE WHEN $1::varchar IN ('IN_PROGRESS','COMPLETED') THEN COALESCE(started_at,NOW()) ELSE started_at END,
+           completed_at = CASE WHEN $1::varchar = 'COMPLETED' THEN COALESCE(completed_at,NOW()) ELSE NULL END,
+           updated_by_staff_id = $2, updated_at = NOW()
+       WHERE progress_id = $3`,
+      [nextStatus, staffId, stage.progress_id]
+    );
+    await appendOperationalEvent(client, {
+      eventType: 'CARE_PATHWAY_STAGE_UPDATED', entityType: 'QUEUE_PATHWAY_STAGE',
+      entityId: stage.progress_id, actorStaffId: staffId,
+      fromState: stage.status, toState: nextStatus,
+      metadata: { queue_id: queueId, stage_code: stageCode, stage_name: stage.name, triggered_by: 'QUEUE_LIFECYCLE' }
+    });
+  }
   if (completed) {
     const next = await client.query(
       `SELECT p.progress_id, s.stage_code, s.name
@@ -237,7 +239,7 @@ async function callToRoom(queueId, staffId) {
       const check = await client.query('SELECT status, priority_level FROM queue_entries WHERE queue_id = $1', [queueId]);
       if (!check.rows[0]) throw Object.assign(new Error('Queue entry not found.'), { status: 404 });
       if (check.rows[0].status !== 'Waiting') throw Object.assign(new Error('Only a Waiting patient can be called to a room.'), { status: 409 });
-      if (check.rows[0].priority_level === null) throw Object.assign(new Error('Nurse triage must assign a priority tier before the consultation can begin.'), { status: 409 });
+      if (check.rows[0].priority_level === null) throw Object.assign(new Error('A triage priority must be assigned before the consultation can begin.'), { status: 409 });
       throw Object.assign(new Error('The visit is not ready to be called.'), { status: 409 });
     }
     await appendOperationalEvent(client, {

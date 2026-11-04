@@ -306,6 +306,11 @@ if (!dbConfigured) {
       method: 'PUT', headers: auth(tokens.doctor), body: JSON.stringify({})
     });
     assert.equal(dischargeResponse.response.status, 200, JSON.stringify(dischargeResponse.body));
+    const finalJourney = await request('/api/intelligence/journeys/' + queueId, { headers: auth(tokens.doctor) });
+    assert.equal(finalJourney.response.status, 200, JSON.stringify(finalJourney.body));
+    assert.ok(finalJourney.body.stages.every(stage => stage.status === 'COMPLETED'),
+      'queue discharge must leave every required standard pathway stage completed, including a stage previously completed by CareGraph');
+
     const preservedProvenance = await query(
       'SELECT data_provenance, data_provenance_source FROM queue_entries WHERE queue_id=$1',
       [queueId]

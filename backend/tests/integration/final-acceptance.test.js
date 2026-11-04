@@ -234,7 +234,7 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
         method: 'PUT', headers: auth(tokens.doctor), body: '{}'
       });
       assert.equal(untriagedCall.response.status, 409);
-      assert.match(untriagedCall.body.error, /triage must assign a priority tier/i);
+      assert.match(untriagedCall.body.error, /triage priority must be assigned/i);
 
       const calls = await Promise.all([
         request(`/api/queue/${testVisit.queue_id}/call`, { method: 'PUT', headers: auth(tokens.doctor), body: '{}' }),
