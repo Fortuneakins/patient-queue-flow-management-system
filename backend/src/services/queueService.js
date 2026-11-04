@@ -40,9 +40,9 @@ async function updateStandardPathway(client, queueId, stageCode, nextStatus, sta
   const completed = nextStatus === 'COMPLETED';
   await client.query(
     `UPDATE queue_pathway_progress
-     SET status = $1,
-         started_at = CASE WHEN $1 IN ('IN_PROGRESS','COMPLETED') THEN COALESCE(started_at,NOW()) ELSE started_at END,
-         completed_at = CASE WHEN $1 = 'COMPLETED' THEN NOW() ELSE NULL END,
+     SET status = $1::varchar,
+         started_at = CASE WHEN $1::varchar IN ('IN_PROGRESS','COMPLETED') THEN COALESCE(started_at,NOW()) ELSE started_at END,
+         completed_at = CASE WHEN $1::varchar = 'COMPLETED' THEN NOW() ELSE NULL END,
          updated_by_staff_id = $2, updated_at = NOW()
      WHERE progress_id = $3`,
     [nextStatus, staffId, stage.progress_id]

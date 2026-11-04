@@ -291,6 +291,12 @@ if (!dbConfigured) {
     assert.ok(events.body.some(event => event.event_type === 'FLOWTWIN_SIMULATION_RUN'));
     assert.ok(events.body.some(event => event.event_type === 'REFERRAL_CREATED'));
 
+    // The doctor-call transition must follow a nurse-assigned triage priority.
+    const triageForQueueLifecycle = await request('/api/queue/' + queueId + '/priority', {
+      method: 'PUT', headers: auth(tokens.nurse), body: JSON.stringify({ priority_level: 2 })
+    });
+    assert.equal(triageForQueueLifecycle.response.status, 200, JSON.stringify(triageForQueueLifecycle.body));
+
     // Normal workflow state changes must preserve the provenance assigned by server policy.
     const callResponse = await request('/api/queue/' + queueId + '/call', {
       method: 'PUT', headers: auth(tokens.doctor), body: JSON.stringify({})
