@@ -3,6 +3,7 @@ const { MODEL_VERSION } = require('../utils/flowSimulation');
 const env = require('../config/env');
 const { queueVisibilityPredicate } = require('../config/dataProvenancePolicy');
 const { buildClinicInsights } = require('./clinicInsightEngine');
+const { buildOperationalPressure } = require('./operationalPressure');
 const queueVisibility = queueVisibilityPredicate(env.DATA_PROVENANCE_MODE, 'q');
 
 function requiredText(value, label, min, max) {
@@ -13,7 +14,7 @@ function requiredText(value, label, min, max) {
 
 async function getOverview() {
   const generatedAt = new Date().toISOString();
-  const [counts, resources, samples, events, provenance, staffing] = await Promise.all([
+  const [counts, resources, samples, events, provenance, staffing, ageBands] = await Promise.all([
     query(
       "SELECT COUNT(*) FILTER (WHERE status = 'Waiting')::int AS waiting, " +
       "COUNT(*) FILTER (WHERE status = 'In-Consultation')::int AS in_consultation, " +
@@ -43,11 +44,22 @@ async function getOverview() {
       "FROM queue_entries"
     ),
     query(
-      "SELECT COUNT(DISTINCT s.staff_id)::int AS on_duty_doctors " +
+      "SELECT " +
+      "COUNT(DISTINCT s.staff_id) FILTER (WHERE cs.role='DOCTOR')::int AS on_duty_doctors, " +
+      "COUNT(DISTINCT s.staff_id) FILTER (WHERE cs.role='NURSE')::int AS on_duty_nurses, " +
+      "COUNT(DISTINCT s.staff_id) FILTER (WHERE cs.role='RECEPTION')::int AS on_duty_reception " +
       "FROM shifts s JOIN clinic_staff cs ON cs.staff_id=s.staff_id " +
-      "WHERE cs.role='DOCTOR' AND cs.is_active=TRUE " +
+      "WHERE cs.is_active=TRUE " +
       "AND s.shift_date=(NOW() AT TIME ZONE 'Africa/Johannesburg')::date " +
       "AND (NOW() AT TIME ZONE 'Africa/Johannesburg')::time BETWEEN s.start_time AND s.end_time"
+    ),
+    query(
+      "SELECT " +
+      "COUNT(*) FILTER (WHERE q.queued_at >= NOW() - INTERVAL '15 minutes')::int AS under_15, " +
+      "COUNT(*) FILTER (WHERE q.queued_at < NOW() - INTERVAL '15 minutes' AND q.queued_at >= NOW() - INTERVAL '30 minutes')::int AS minutes_15_29, " +
+      "COUNT(*) FILTER (WHERE q.queued_at < NOW() - INTERVAL '30 minutes' AND q.queued_at >= NOW() - INTERVAL '60 minutes')::int AS minutes_30_59, " +
+      "COUNT(*) FILTER (WHERE q.queued_at < NOW() - INTERVAL '60 minutes')::int AS over_60 " +
+      "FROM queue_entries q WHERE q.status='Waiting' AND " + queueVisibility
     )
   ]);
 
@@ -57,7 +69,24 @@ async function getOverview() {
     .filter(item => ['LIMITED', 'UNAVAILABLE'].includes(String(item.status).toUpperCase()))
     .reduce((sum, item) => sum + Number(item.resource_count || 0), 0);
   const provenanceRow = provenance.rows[0];
-  const staffedDoctors = Number(staffing.rows[0].on_duty_doctors);
+  const staffingRow = staffing.rows[0];
+  const staffedDoctors = Number(staffingRow.on_duty_doctors);
+  const roomRows = resourceRows.filter(item => item.resource_type === 'ROOM');
+  const availableRoomCapacity = roomRows.length
+    ? roomRows.filter(item => String(item.status).toUpperCase() === 'AVAILABLE')
+      .reduce((sum, item) => sum + Number(item.capacity || 0), 0)
+    : null;
+  const limitedRoomCapacity = roomRows
+    .filter(item => String(item.status).toUpperCase() === 'LIMITED')
+    .reduce((sum, item) => sum + Number(item.capacity || 0), 0);
+  const pressureResult = buildOperationalPressure({
+    waiting: countRow.waiting,
+    in_consultation: countRow.in_consultation,
+    overdue_waiting: countRow.overdue_waiting,
+    on_duty_doctors: staffedDoctors,
+    available_room_capacity: availableRoomCapacity
+  });
+  const ageBandRow = ageBands.rows[0] || {};
   const sampleCount = Number(samples.rows[0].sample_count);
   const insightSnapshot = {
     waiting: countRow.waiting,
@@ -69,6 +98,7 @@ async function getOverview() {
     unclassified_completed: Number(provenanceRow.unclassified_completed),
     unclassified_active: Number(provenanceRow.unclassified_active),
     service_history_samples: sampleCount,
+    available_room_capacity: availableRoomCapacity,
     delay_review_threshold_minutes: env.DELAY_REVIEW_THRESHOLD_MINUTES,
     generated_at: generatedAt
   };
@@ -83,7 +113,26 @@ async function getOverview() {
     model_version: MODEL_VERSION,
     delay_review_threshold_minutes: env.DELAY_REVIEW_THRESHOLD_MINUTES,
     generated_at: generatedAt,
-    staffing: { on_duty_doctors: staffedDoctors, source: 'ROSTERED_ACTIVE_SHIFTS' },
+    staffing: {
+      on_duty_doctors: staffedDoctors,
+      on_duty_nurses: Number(staffingRow.on_duty_nurses),
+      on_duty_reception: Number(staffingRow.on_duty_reception),
+      source: 'ROSTERED_ACTIVE_SHIFTS'
+    },
+    queue_age_bands: {
+      under_15: Number(ageBandRow.under_15 || 0),
+      minutes_15_29: Number(ageBandRow.minutes_15_29 || 0),
+      minutes_30_59: Number(ageBandRow.minutes_30_59 || 0),
+      over_60: Number(ageBandRow.over_60 || 0),
+      unit: 'waiting visits'
+    },
+    capacity: {
+      available_room_capacity: availableRoomCapacity,
+      limited_room_capacity: limitedRoomCapacity,
+      room_registry_configured: roomRows.length > 0,
+      waiting_per_rostered_doctor: pressureResult.waiting_per_doctor
+    },
+    operational_pressure: pressureResult,
     data_quality: {
       unclassified_completed: Number(provenanceRow.unclassified_completed),
       unclassified_active: Number(provenanceRow.unclassified_active),

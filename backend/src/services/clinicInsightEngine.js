@@ -1,4 +1,4 @@
-const MODEL_VERSION = 'clinic-insight-rules-1.0.0';
+const MODEL_VERSION = 'clinic-insight-rules-1.1.0';
 const MINIMUM_SERVICE_SAMPLES = 5;
 const SEVERITY_ORDER = Object.freeze({ CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 });
 
@@ -53,6 +53,64 @@ function buildClinicInsights(snapshot = {}) {
       ],
       recommended_action: 'Ask authorised clinical staff to review the operational context and roster. This is not a recommendation to change clinical priority.',
       tool: 'learning',
+      human_review_required: true
+    });
+  }
+
+
+  const waitingPerDoctor = doctors !== null && doctors > 0 ? waiting / doctors : null;
+  if (waitingPerDoctor !== null && waitingPerDoctor >= 6) {
+    insights.push({
+      id: 'staffing-workload-pressure',
+      rule_id: 'CAPACITY-002',
+      severity: waitingPerDoctor >= 10 ? 'HIGH' : 'MEDIUM',
+      title: 'Waiting workload is concentrated across the rostered doctors',
+      summary: 'The current waiting-to-rostered-doctor ratio has crossed the operational review threshold of six waiting visits per doctor.',
+      evidence: [
+        'Waiting visits: ' + waiting + '.',
+        'Rostered doctors on duty: ' + doctors + '.',
+        'Waiting visits per rostered doctor: ' + waitingPerDoctor.toFixed(1) + '.'
+      ],
+      recommended_action: 'Review current staff availability, room readiness and workload distribution with the shift coordinator. Do not change clinical priority based on this ratio.',
+      tool: 'resources',
+      human_review_required: true
+    });
+  }
+
+  const overdueShare = waiting > 0 ? overdue / waiting : 0;
+  if (waiting > 0 && overdue >= 3 && overdueShare >= 0.5) {
+    insights.push({
+      id: 'waiting-backlog-concentration',
+      rule_id: 'FLOW-002',
+      severity: 'HIGH',
+      title: 'A substantial share of the waiting queue has crossed the review threshold',
+      summary: 'At least half of the waiting queue and at least three visits have crossed the configured delay-review threshold.',
+      evidence: [
+        'Waiting visits: ' + waiting + '.',
+        'Visits beyond the configured threshold: ' + overdue + '.',
+        'Share of waiting queue beyond threshold: ' + (overdueShare * 100).toFixed(1) + '%.'
+      ],
+      recommended_action: 'Ask authorised clinical staff to review the oldest waits and current service constraints. The system does not reprioritise or call patients automatically.',
+      tool: 'learning',
+      human_review_required: true
+    });
+  }
+
+  if (snapshot.available_room_capacity !== null && snapshot.available_room_capacity !== undefined
+      && integer(snapshot.available_room_capacity) === 0 && waiting > 0) {
+    insights.push({
+      id: 'no-available-consultation-room-capacity',
+      rule_id: 'RESOURCE-002',
+      severity: 'HIGH',
+      title: 'No consultation-room capacity is recorded as available',
+      summary: 'The resource registry contains no available room capacity while visits are waiting.',
+      evidence: [
+        'Waiting visits: ' + waiting + '.',
+        'Available consultation-room capacity: 0.',
+        'Room status is based on the administrator-maintained resource registry.'
+      ],
+      recommended_action: 'Verify the room register against the actual clinic environment and escalate confirmed room constraints to the responsible coordinator.',
+      tool: 'resources',
       human_review_required: true
     });
   }
