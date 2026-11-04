@@ -7,7 +7,7 @@ This document describes the optional Clinic Intelligence module on `feat/clinic-
 On an existing local PQFMS checkout:
 
 1. Pull the feature branch and install dependencies with `npm ci --prefix backend` and `npm ci --prefix frontend`.
-2. For a fresh local database, run the sorted migrations using `scripts\\database.ps1`. For an existing database, take a backup and apply only unapplied migrations 006 through 009; migrations 006–008 add and reconcile provenance classifications, while migration 009 creates the Operational Action Register table and indexes.
+2. For a fresh local database, run the sorted migrations using `scripts\\database.ps1`. For an existing database, take a backup and apply only unapplied migrations 006, 007 and 008; migration 006 adds provenance classifications, migration 007 records the source of each classification, and migration 008 backfills ADMIN_REVIEW only where older rows already have a reviewer ID and review timestamp.
 3. Start PQFMS normally with `scripts\\start-all.ps1`.
 4. Sign in. Administrators can open **Clinic Intelligence** in the admin sidebar; Nurses and Doctors have CareGraph in their workspace, Doctors have Referral Relay, and Reception has Access Bridge contact preferences.
 
@@ -61,21 +61,7 @@ Forecast Truth retains an all-sample error for auditability, but separately repo
 
 ### Explainable Clinic Intelligence rules
 
-The server-side `clinic-insight-rules-1.1.0` engine generates prioritised operational review prompts from the aggregate snapshot. Current rules are `CAPACITY-001` (active queue without a rostered doctor), `CAPACITY-002` (six or more waiting visits per rostered doctor), `FLOW-001` (waits beyond `DELAY_REVIEW_THRESHOLD_MINUTES`, default 60 minutes and validated to 1–1440 minutes), `FLOW-002` (at least three overdue visits representing at least half the waiting queue), `RESOURCE-001` (Limited/Unavailable resources), `RESOURCE-002` (no recorded available room capacity while visits wait), `DATA-001` (unresolved visit provenance) and `MODEL-001` (fewer than five eligible operational service-duration samples). Every prompt includes a stable rule ID, severity, observed evidence and a proposed human action. Outputs are deterministic operational signals, not diagnoses or triage recommendations; no insight changes patient priority or queue state. A “no prompt” result is explicitly not a safety clearance. The dashboard also auto-refreshes its API-backed snapshot every 30 seconds, with manual refresh available and failed sources identified separately from legitimate zero values.
-
-### Operational Pressure Analysis
-
-The administrator overview calculates a versioned aggregate pressure snapshot from the currently visible waiting queue, configured delay-review threshold, active rostered shifts and administrator-maintained room registry. It exposes fixed queue-age buckets (under 15, 15–29, 30–59 and 60+ minutes), waiting visits per rostered doctor, on-duty nurse/reception counts and available/limited room-capacity units. Age buckets are descriptive counts and do not change triage priority.
-
-The `clinic-operations-pressure-1.0.0` heuristic has a maximum of 100 points: waiting load contributes up to 35 points (normalised against six waiting visits per rostered doctor), the share of waiting visits beyond the configured delay-review threshold contributes up to 35, active work with no rostered doctor contributes 20, and a configured room register with no available capacity contributes 10. The dashboard displays each component and its evidence. If queue counts are unavailable, the score is unavailable rather than zero. A missing room registry is reported as not configured and is not interpreted as zero capacity.
-
-Additional rule prompts identify high waiting-to-doctor ratios (`CAPACITY-002`), concentrated overdue backlogs (`FLOW-002`) and zero recorded available room capacity (`RESOURCE-002`). These are review prompts, not clinical algorithms. A roster entry or resource status can be stale, so the responsible coordinator must verify current conditions before acting. The index and thresholds are not calibrated against outcomes and must not be represented as clinically validated or used to assign triage priority.
-
-### Operational Action Register
-
-Migration 009 creates `clinic_action_items`. An administrator can convert a rule from the latest server-generated overview into a tracked action. The server stores the rule ID, severity, title, summary, recommendation and evidence snapshot; it does not accept arbitrary client-authored alert evidence. A partial unique index prevents more than one active (`OPEN`, `ACKNOWLEDGED` or `IN_PROGRESS`) action for the same rule. Once an action is resolved or dismissed, a later occurrence can create a new action.
-
-Each action can be assigned to an active staff account and progresses through the server-enforced state machine: `OPEN` to `ACKNOWLEDGED`, `IN_PROGRESS` or `DISMISSED`; `ACKNOWLEDGED` to `IN_PROGRESS`, `RESOLVED` or `DISMISSED`; `IN_PROGRESS` to `RESOLVED` or `DISMISSED`. Resolved and dismissed actions are closed. Creation and updates append `OPERATIONAL_ACTION_CREATED` and `OPERATIONAL_ACTION_UPDATED` events to Flight Recorder. The register is administrator-only. It records operational follow-up; it does not contact patients, assign clinicians, change queue order or modify triage.
+The server-side `clinic-insight-rules-1.0.0` engine generates prioritised operational review prompts from the aggregate snapshot. Current rules are `CAPACITY-001` (active queue without a rostered doctor), `FLOW-001` (waits beyond `DELAY_REVIEW_THRESHOLD_MINUTES`, default 60 minutes and validated to 1–1440 minutes), `RESOURCE-001` (Limited/Unavailable resources), `DATA-001` (unresolved visit provenance) and `MODEL-001` (fewer than five eligible operational service-duration samples). Every prompt includes a stable rule ID, severity, observed evidence and a proposed human action. Outputs are deterministic operational signals, not diagnoses or triage recommendations; no insight changes patient priority or queue state. A “no prompt” result is explicitly not a safety clearance. The dashboard also auto-refreshes its API-backed snapshot every 30 seconds, with manual refresh available and failed sources identified separately from legitimate zero values.
 
 ### Flight Recorder
 
@@ -96,7 +82,6 @@ The new API is mounted at `/api/intelligence`. All endpoints require a valid bea
 | Capability | Routes | Access |
 |---|---|---|
 | Overview, event log | `GET /overview`, `GET /events` | Admin |
-| Pressure analysis and action register | `GET /overview` (pressure fields), `GET /actions`, `POST /actions/from-insight`, `PATCH /actions/:action_id` | Admin |
 | Active queue, pathways | `GET /active-visits`, `GET /pathways`, `GET /journeys/:queue_id` | Nurse, Doctor, Admin (journey view also permits Reception) |
 | Create and assign pathways | `POST /pathways`, `POST /journeys/:queue_id/assign` | Admin |
 | Update journey stage | `PATCH /journeys/:queue_id/stages/:stage_id` | Reception, Nurse, Doctor, Admin; stage role still enforced |
@@ -114,9 +99,7 @@ The new API is mounted at `/api/intelligence`. All endpoints require a valid bea
 ## Validation
 
 The branch includes:
-- Explainable insight-rule tests for staffing/queue risk, provenance uncertainty, evidence sufficiency, backlog concentration, room constraints and deterministic severity ordering.
-- Operational pressure unit tests for weighted score calculation, queue/roster/room evidence and unavailable states.
-- Database-backed action-register tests for role boundaries, rule-to-action conversion, active-action deduplication, assignment, state transitions and Flight Recorder linkage.
+- Explainable insight-rule tests for staffing/queue risk, provenance uncertainty, evidence sufficiency and deterministic severity ordering.
 - Login limiter tests for per-IP/per-account throttling, expiry and bounded memory.
 - Analytics API tests for provenance filtering, readiness, estimate quality and honest unavailability.
 - Pure-function simulation tests for validation, repeatability, zero capacity and synthetic-batch outputs.

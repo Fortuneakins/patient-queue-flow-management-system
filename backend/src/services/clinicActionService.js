@@ -127,7 +127,7 @@ async function updateAction(actionIdInput, patch = {}, actorStaffId) {
     const nextOwner = hasOwner ? requestedOwner : current.owner_staff_id;
     await client.query(
       "UPDATE clinic_action_items SET status=$1, owner_staff_id=$2, updated_by_staff_id=$3, updated_at=NOW(), " +
-      "resolved_at=CASE WHEN $1='RESOLVED' THEN COALESCE(resolved_at,NOW()) ELSE resolved_at END " +
+      "resolved_at=CASE WHEN $1::varchar='RESOLVED' THEN COALESCE(resolved_at,NOW()) ELSE resolved_at END " +
       'WHERE action_id=$4',
       [nextStatus, nextOwner, actorStaffId, actionId]
     );

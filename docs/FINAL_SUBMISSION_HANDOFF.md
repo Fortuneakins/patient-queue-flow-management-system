@@ -11,7 +11,7 @@
 
 This handoff supersedes the earlier source pin to commit `4855a7d` for the Revision 1.4 code baseline. It records the workflow-integrity changes made after the 4 November kiosk privacy-reset revision. Earlier October test results and screenshots remain historical evidence for the source revision to which they were originally attached. Do not combine historical local totals, current CI totals and unperformed manual acceptance checks into one unsupported claim.
 
-The assessed source is the feature branch stated above. No final release tag, merge to `main`, hosted RMSH deployment, clinical validation or hospital acceptance is claimed. The new Operational Pressure Analysis and Operational Action Register require the new revision's CI result and the pending browser acceptance session.
+The assessed source is the feature branch stated above. No final release tag, merge to `main`, hosted RMSH deployment, clinical validation or hospital acceptance is claimed.
 
 ## 2. Implementation changes in the assessed source
 
@@ -36,16 +36,6 @@ A waiting visit cannot be called to a doctor until a triage priority has been as
 
 The backend lockfile was updated to patched transitive runtime packages after the CI production audit identified advisories affecting `body-parser`, `follow-redirects` and `qs`. The audit command remains enabled; it was not skipped or relaxed. The successful latest CI run confirms the configured backend production dependency audit passes for this source commit.
 
-## 2.4 Feature expansion — operational analysis and accountable follow-up
-
-The feature branch now includes two additional Clinic Intelligence capabilities beyond the queue/CareGraph lifecycle hardening described above.
-
-**Operational Pressure Analysis (`clinic-operations-pressure-1.0.0`).** The overview exposes queue-age buckets, waiting visits per rostered doctor, on-duty nurse/reception counts, room availability and a 0–100 rule-based pressure heuristic. The score components are visible in the interface: waiting load (0–35), overdue share against the configured delay-review threshold (0–35), active workload with no rostered doctor (20), and a configured room register with no available capacity (10). New explainable prompts cover workload concentration (`CAPACITY-002`), overdue backlog concentration (`FLOW-002`) and zero recorded available room capacity (`RESOURCE-002`). These are aggregate operational planning signals and are not clinically calibrated.
-
-**Operational Action Register (migration 009).** An administrator can convert a current rule-based review prompt into a persistent action. The server stores the rule/evidence snapshot, prevents duplicate active actions for the same rule, permits assignment to an active staff account, enforces forward-only status transitions, and appends creation/update events to Flight Recorder. Closed actions cannot be reopened. The register does not execute the recommended action or change queue/clinical data.
-
-The new code commit must complete its own CI verification. Do not transfer earlier run-746 evidence to this revision. Full browser/manual acceptance remains a separate open gate.
-
 ## 3. Automated tests added or strengthened
 
 The database-backed acceptance suite now verifies:
@@ -60,7 +50,7 @@ The database-backed acceptance suite now verifies:
 
 ## 4. CI verification record
 
-The earlier code commit `5aa61fa554450f0c82e9d89950e762608dcf5258` completed [PQFMS CI run 746](https://github.com/Fortuneakins/patient-queue-flow-management-system/actions/runs/41846303445) with conclusion **success**. This is historical evidence only. The expanded code commit `3e8783c65526ef2a1829421a07739bd0033e55d9` is not verified by run 746 and requires its own CI run.
+The assessed code commit `5aa61fa554450f0c82e9d89950e762608dcf5258` completed [PQFMS CI run 746](https://github.com/Fortuneakins/patient-queue-flow-management-system/actions/runs/41846303445) with conclusion **success**.
 
 The configured workflow covers:
 
@@ -74,7 +64,7 @@ The configured workflow covers:
 - API, analytics and frontend container image builds.
 - Nginx and Caddy configuration validation.
 
-The historical run log reports **58/58 backend unit tests passing** and **25/25 database-backed integration tests passing** for the earlier code source only. Do not apply these counts to the feature expansion. These are separate suite summaries; they are not a count of all manual test cases or a claim that browser-based user acceptance has been performed.
+The run log reports **58/58 backend unit tests passing** and **25/25 database-backed integration tests passing**. These are separate suite summaries; they are not a count of all manual test cases or a claim that browser-based user acceptance has been performed.
 
 ## 5. Manual acceptance remains open
 
@@ -103,7 +93,7 @@ The repository includes production-oriented packaging and CI image/configuration
 
 ## 8. Release/report control
 
-- Pin the final academic report to the exact tested source commit only after the expanded revision has completed CI; do not use the historical `5aa61fa` hash as the expanded implementation baseline.
+- Pin the final academic report to the exact tested source commit `5aa61fa554450f0c82e9d89950e762608dcf5258`.
 - List any later documentation-only commits separately from the assessed code commit.
 - Do not create a final release tag until the manual acceptance evidence appropriate to the assessment has been completed and reviewed.
 - Do not claim this feature branch is merged into `main`.

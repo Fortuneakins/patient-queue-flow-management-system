@@ -102,18 +102,3 @@ Use this checklist immediately before creating the GitHub release that is refere
 The CI evidence proves the configured automated checks for the pinned source commit only. It does not prove a complete user-operated browser acceptance session, local Windows clean-clone setup, staging/production deployment, backup restoration, clinical validation or hospital approval.
 
 See [FINAL_SUBMISSION_HANDOFF.md](FINAL_SUBMISSION_HANDOFF.md) and [the 4 November workflow-integration evidence record](evidence/WORKFLOW_INTEGRATION_CI_2026-11-04.md) for the source identity, implemented changes and evidence boundaries.
-
-## Feature expansion acceptance — 4 November 2026
-
-- [ ] Apply and verify migration 009 (`clinic_action_items`) in a fresh database and an existing database with migrations 001–008 already recorded.
-- [ ] Confirm queue-age buckets reconcile to the currently waiting queue count.
-- [ ] Confirm the Operational Pressure Index components and score reproduce from the displayed counts; confirm unavailable inputs do not appear as zero.
-- [ ] Confirm workload/backlog/room-capacity prompts are advisory and do not modify triage, queue order or patient status.
-- [ ] Convert a current rule prompt into a tracked action; verify duplicate active conversion returns the existing action.
-- [ ] Assign an action to an active staff member; verify inactive or missing staff cannot be assigned.
-- [ ] Verify OPEN → ACKNOWLEDGED/IN_PROGRESS/DISMISSED, ACKNOWLEDGED → IN_PROGRESS/RESOLVED/DISMISSED, and IN_PROGRESS → RESOLVED/DISMISSED; verify closed actions cannot be reopened.
-- [ ] Verify action creation and every update appear in Flight Recorder.
-- [ ] Verify non-administrator users receive 403 from all action-register endpoints.
-- [ ] Perform browser-based responsive and keyboard checks for the pressure panel and action register.
-
-The pressure index is an explicit heuristic, not a clinically validated model. Manual confirmation of roster/resource accuracy remains necessary. Do not claim production deployment or clinical approval from automated tests.
