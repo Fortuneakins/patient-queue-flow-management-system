@@ -85,16 +85,20 @@ Use this checklist immediately before creating the GitHub release that is refere
 - [ ] Ensure the report's screenshots, test totals, measured values, release tag and commit SHA all refer to the same release.
 
 
-## Final academic source freeze (4 November 2026)
+## Final academic source freeze — 4 November 2026 (Revision 1.4 baseline)
 
-- [ ] Confirm the assessed code commit is `4855a7d368d047baa4c3753cced7a6bd5c8ce5fd` or a later commit with a fresh successful CI run.
-- [ ] Retain CI run 470 (`39592355041`) as evidence for the 4855a7d code commit; do not describe it as a manual browser acceptance run.
-- [ ] Keep the 22 October Rev 1.2 test counts as historical evidence only; do not add them to November test counts.
-- [ ] Add the Clinic Intelligence supplementary use-case, architecture/service and data-model diagrams to the final report where the full release scope is described.
-- [ ] Reconcile role/route claims with `backend/src/routes/intelligence.routes.js`; source inspection alone is not proof of exhaustive role-matrix execution.
-- [ ] Run and record the complete synthetic patient browser journey, role restrictions, public-display privacy, Clinic Intelligence low-evidence states, FlowTwin repeatability and failure paths.
-- [ ] Record actual results for NFR-05 load, NFR-06 Display Board latency and NFR-10 accessibility, or explicitly retain them as not measured.
+- [ ] Confirm the assessed code commit is `5aa61fa554450f0c82e9d89950e762608dcf5258` on `feat/clinic-intelligence-operations-cockpit`; do not identify the branch as merged to `main`.
+- [x] Retain [PQFMS CI run 746 (41846303445)](https://github.com/Fortuneakins/patient-queue-flow-management-system/actions/runs/41846303445) as the successful automated verification record for the assessed code commit.
+- [x] Confirm backend production dependency audit passes after updating the vulnerable transitive `body-parser`, `follow-redirects` and `qs` packages in `backend/package-lock.json`.
+- [x] Confirm CI reports 58/58 backend unit tests and 25/25 database-backed integration tests passing for this code revision.
+- [x] Confirm the standard `OPD_STANDARD` CareGraph stages follow triage, consultation and discharge transitions from the queue lifecycle; verify idempotent completion and the untriaged-call rejection through the CI integration suite.
+- [ ] Run the full workflow in the actual browser: Reception registration/check-in → Nurse triage → Doctor consultation/notes → discharge/history.
+- [ ] Manually verify each role's allowed and prohibited UI actions and representative API routes; CI integration coverage is not a substitute for a lecturer-facing role demonstration.
+- [ ] Verify public Display Board privacy, kiosk 60-second reset, Clinic Intelligence low-evidence/unavailable states, FlowTwin fixed-seed repeatability and relevant failure paths.
+- [ ] Record actual results for NFR-05 load/concurrency, NFR-06 Display Board latency and NFR-10 accessibility, or explicitly retain these as not measured.
 - [ ] Pin the final report to the exact tested code commit and list any subsequent documentation-only commits separately.
-- [ ] Do not publish a final tag or claim production readiness until all release gates appropriate to the academic prototype are reviewed. Real-clinic governance gates remain separate and open.
+- [ ] Do not publish a final release tag or claim production readiness until the appropriate academic and operational release gates are reviewed. Real-clinic governance gates remain separate and open.
 
-See [FINAL_SUBMISSION_HANDOFF.md](FINAL_SUBMISSION_HANDOFF.md) for the assessed source identity, CI scope, manual acceptance plan and production boundary.
+The CI evidence proves the configured automated checks for the pinned source commit only. It does not prove a complete user-operated browser acceptance session, local Windows clean-clone setup, staging/production deployment, backup restoration, clinical validation or hospital approval.
+
+See [FINAL_SUBMISSION_HANDOFF.md](FINAL_SUBMISSION_HANDOFF.md) and [the 4 November workflow-integration evidence record](evidence/WORKFLOW_INTEGRATION_CI_2026-11-04.md) for the source identity, implemented changes and evidence boundaries.
