@@ -3,9 +3,9 @@
 **Prepared:** 4 November 2026  
 **Repository:** https://github.com/Fortuneakins/patient-queue-flow-management-system  
 **Assessed branch:** `feat/clinic-intelligence-operations-cockpit`  
-**Assessed code commit:** [`5aa61fa554450f0c82e9d89950e762608dcf5258`](https://github.com/Fortuneakins/patient-queue-flow-management-system/commit/5aa61fa554450f0c82e9d89950e762608dcf5258)  
-**Commit subject:** fix: make standard CareGraph completion idempotent  
-**CI evidence:** GitHub Actions workflow `PQFMS CI`, run [41846303445](https://github.com/Fortuneakins/patient-queue-flow-management-system/actions/runs/41846303445), run number 746, completed with conclusion **success** for the assessed code commit.
+**Assessed code commit:** [`e5816637196697e5d73171cb355b51bc9bf7e47d`](https://github.com/Fortuneakins/patient-queue-flow-management-system/commit/e5816637196697e5d73171cb355b51bc9bf7e47d)  
+**Commit subject:** fix: cast action status parameter in update query  
+**CI evidence:** GitHub Actions workflow `PQFMS CI`, run [41855479856](https://github.com/Fortuneakins/patient-queue-flow-management-system/actions/runs/41855479856), run number 763, completed with conclusion **success** for the assessed code commit. Run 762 (41855467114) also completed successfully for the same source SHA.
 
 ## 1. Purpose and source boundary
 
@@ -50,7 +50,7 @@ The database-backed acceptance suite now verifies:
 
 ## 4. CI verification record
 
-The assessed code commit `5aa61fa554450f0c82e9d89950e762608dcf5258` completed [PQFMS CI run 746](https://github.com/Fortuneakins/patient-queue-flow-management-system/actions/runs/41846303445) with conclusion **success**.
+The expanded assessed code commit `e5816637196697e5d73171cb355b51bc9bf7e47d` completed [PQFMS CI run 763](https://github.com/Fortuneakins/patient-queue-flow-management-system/actions/runs/41855479856) with conclusion **success**. A second run for the same commit, [run 762](https://github.com/Fortuneakins/patient-queue-flow-management-system/actions/runs/41855467114), also completed successfully. Earlier runs 746–761 are historical or failed intermediate expansion attempts and are not the evidence baseline for this revision.
 
 The configured workflow covers:
 
@@ -64,7 +64,7 @@ The configured workflow covers:
 - API, analytics and frontend container image builds.
 - Nginx and Caddy configuration validation.
 
-The run log reports **58/58 backend unit tests passing** and **25/25 database-backed integration tests passing**. These are separate suite summaries; they are not a count of all manual test cases or a claim that browser-based user acceptance has been performed.
+The run-763 log reports **62/62 backend unit tests passing**, **26/26 database-backed integration tests passing**, and **32 analytics tests passing**. Frontend dependency audit, lint and production build, backend/analytics dependency audits, fresh migration validation, production Compose checks, API/analytics/frontend image builds and Nginx/Caddy configuration checks also completed successfully. These are separate suite summaries; they are not a count of all manual test cases or a claim that browser-based user acceptance has been performed.
 
 ## 5. Manual acceptance remains open
 
@@ -76,6 +76,9 @@ The project owner has not yet performed the full workflow, full role-matrix chec
 4. Role matrix: test representative allowed and prohibited actions for Reception, Nurse, Doctor and Administrator, including backend API boundaries.
 5. Public display and kiosk: verify ticket-only display privacy and the 60-second kiosk confirmation reset.
 6. Clinic Intelligence and FlowTwin: inspect evidence/low-sample states, fixed-seed repeatability and the boundary that simulations do not mutate clinical queue priority.
+7. Operational Pressure Analysis: reconcile queue-age bands to the waiting queue, independently recompute the visible pressure components, check roster/resource records against the test setup and verify unavailable inputs remain unavailable.
+8. Operational Action Register: create an action from a current prompt, test duplicate conversion, assign/unassign active staff, exercise each allowed status transition, verify closed actions cannot reopen and inspect Flight Recorder evidence.
+9. Responsive and keyboard acceptance for the new pressure and action-register panels.
 7. Failure conditions: test analytics unavailability, SMS disabled/failure, repeated actions, invalid stage transitions and duplicate resource-sync replay.
 
 Do not mark these manual cases as passed based solely on a related automated integration assertion.
@@ -93,7 +96,7 @@ The repository includes production-oriented packaging and CI image/configuration
 
 ## 8. Release/report control
 
-- Pin the final academic report to the exact tested source commit `5aa61fa554450f0c82e9d89950e762608dcf5258`.
+- Pin the final academic report to the exact tested source commit `e5816637196697e5d73171cb355b51bc9bf7e47d`; later documentation-only commits must be identified separately.
 - List any later documentation-only commits separately from the assessed code commit.
 - Do not create a final release tag until the manual acceptance evidence appropriate to the assessment has been completed and reviewed.
 - Do not claim this feature branch is merged into `main`.
@@ -102,4 +105,4 @@ The repository includes production-oriented packaging and CI image/configuration
 
 ## 9. Assessor-facing statement
 
-PQFMS is an implemented academic outpatient queue and flow prototype with a React/Vite frontend, Express/Node.js API, PostgreSQL system of record and separate Flask analytics service. The assessed code source passes the repository's configured CI workflow, including backend unit/integration suites, analytics checks, frontend build and production packaging/configuration checks. The default queue lifecycle is integrated with CareGraph progression, and the API prevents a doctor call before a triage priority is assigned. Full manual browser acceptance by the project owner remains pending. PQFMS has not been deployed at Robert Mangaliso Sobukwe Hospital, has not been clinically validated and is not approved for live patient care.
+PQFMS is an implemented academic outpatient queue and flow prototype with a React/Vite frontend, Express/Node.js API, PostgreSQL system of record and separate Flask analytics service. The assessed code source passes the repository's configured CI workflow, including backend unit/integration suites, analytics checks, frontend build and production packaging/configuration checks. The default queue lifecycle is integrated with CareGraph progression, and the API prevents a doctor call before a triage priority is assigned. Clinic Intelligence also includes transparent aggregate Operational Pressure Analysis and a persistent, administrator-controlled Operational Action Register with audit events. Full manual browser acceptance by the project owner remains pending. PQFMS has not been deployed at Robert Mangaliso Sobukwe Hospital, has not been clinically validated and is not approved for live patient care.

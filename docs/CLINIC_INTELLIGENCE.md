@@ -1,6 +1,6 @@
 # Clinic Intelligence — implementation notes
 
-This document describes the optional Clinic Intelligence module on `feat/clinic-intelligence-platform`. It is an academic workflow-planning capability, not a deployed or clinically validated service.
+This document describes the optional Clinic Intelligence module on `feat/clinic-intelligence-operations-cockpit`. It is an academic workflow-planning capability, not a deployed or clinically validated service.
 
 ## Getting started
 
@@ -108,4 +108,4 @@ The branch includes:
 - Database-backed integration coverage for role boundaries, default journey assignment, ordered stage progress, resource status idempotency, simulation persistence, forecast/fairness queries, referral state transitions and consent-gated communications.
 - The existing backend, analytics and frontend checks in GitHub Actions.
 
-The feature is not considered verified until those checks complete successfully on the branch. External SMS requires credentials and can incur provider charges; the automated suite deliberately disables sending.
+The expanded code commit `e5816637196697e5d73171cb355b51bc9bf7e47d` passed the configured CI workflow (run 763): backend unit/integration suites, analytics tests and frontend checks completed successfully. This does not establish complete browser-based manual acceptance, clinical validation or real-clinic suitability. External SMS requires credentials and can incur provider charges; the automated suite deliberately disables sending.

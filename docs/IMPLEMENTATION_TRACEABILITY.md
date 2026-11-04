@@ -30,7 +30,7 @@ This document is a practical engineering companion to the final academic report.
 
 The final GitHub release must be tagged only after the final test run is complete. The academic report should then record the exact tag and commit SHA used for assessment. No credentials, local `.env` files, `node_modules`, caches or generated build artefacts belong in source control.
 
-## Clinic Intelligence implementation traceability (source inspected at 5aa61fa)
+## Clinic Intelligence implementation traceability (tested code commit: e581663; CI run 763 successful)
 
 | Capability | API / access boundary | Service / implementation | Data and evidence boundary |
 |---|---|---|---|
@@ -50,4 +50,4 @@ The final GitHub release must be tagged only after the final test run is complet
 
 ### Source and verification boundary
 
-The rows above are source mappings, not a declaration that every route/role combination has been manually exercised. The intelligence router applies authentication and password readiness globally, then role-specific middleware per route. The current CI run for source commit `5aa61fa554450f0c82e9d89950e762608dcf5258` is workflow run `41846303445` (run 746), conclusion `success`. It reports 58/58 backend unit tests and 25/25 database-backed integration tests passing; it also completes dependency audits, analytics tests, frontend lint/build, production container builds and reverse-proxy configuration validation. Consult [the final submission handoff](FINAL_SUBMISSION_HANDOFF.md) for the CI scope, manual acceptance list and production-readiness boundary. Keep NFR-05, NFR-06 and NFR-10 unverified until measured evidence is retained. CI does not replace the user's pending browser-based end-to-end workflow and role-matrix acceptance.
+The rows above are source mappings, not a declaration that every route/role combination has been manually exercised. The intelligence router applies authentication and password readiness globally, then role-specific middleware per route. The expanded source commit `e5816637196697e5d73171cb355b51bc9bf7e47d` completed GitHub Actions PQFMS CI run 763 (`41855479856`) successfully. The run log reports 62/62 backend unit tests, 26/26 database-backed integration tests and 32 analytics tests passing, alongside dependency audits, frontend lint/build, migration, production Compose, container image and reverse-proxy configuration checks. The earlier `5aa61fa` run-746 results are historical and must not be substituted for this expanded revision. These CI results do not cover full browser manual acceptance. Keep NFR-05, NFR-06 and NFR-10 unverified until measured evidence is retained. Consult [the final submission handoff](FINAL_SUBMISSION_HANDOFF.md) for the CI scope, manual acceptance list and production-readiness boundary. Keep NFR-05, NFR-06 and NFR-10 unverified until measured evidence is retained. CI does not replace the user's pending browser-based end-to-end workflow and role-matrix acceptance.

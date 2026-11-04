@@ -85,13 +85,15 @@ Use this checklist immediately before creating the GitHub release that is refere
 - [ ] Ensure the report's screenshots, test totals, measured values, release tag and commit SHA all refer to the same release.
 
 
-## Final academic source freeze — 4 November 2026 (Revision 1.4 baseline)
+## Final academic source freeze — 4 November 2026 (Revision 1.5 baseline)
 
-- [ ] Confirm the assessed code commit is `5aa61fa554450f0c82e9d89950e762608dcf5258` on `feat/clinic-intelligence-operations-cockpit`; do not identify the branch as merged to `main`.
-- [x] Retain [PQFMS CI run 746 (41846303445)](https://github.com/Fortuneakins/patient-queue-flow-management-system/actions/runs/41846303445) as the successful automated verification record for the assessed code commit.
+- [ ] Confirm the assessed code commit is `e5816637196697e5d73171cb355b51bc9bf7e47d` on `feat/clinic-intelligence-operations-cockpit`; do not identify the branch as merged to `main`.
+- [x] Retain [PQFMS CI run 763 (41855479856)](https://github.com/Fortuneakins/patient-queue-flow-management-system/actions/runs/41855479856) as the successful automated verification record for the assessed code commit; run 762 (41855467114) also passed for the same SHA.
 - [x] Confirm backend production dependency audit passes after updating the vulnerable transitive `body-parser`, `follow-redirects` and `qs` packages in `backend/package-lock.json`.
-- [x] Confirm CI reports 58/58 backend unit tests and 25/25 database-backed integration tests passing for this code revision.
+- [x] Confirm CI reports 62/62 backend unit tests, 26/26 database-backed integration tests and 32 analytics tests passing for this code revision.
 - [x] Confirm the standard `OPD_STANDARD` CareGraph stages follow triage, consultation and discharge transitions from the queue lifecycle; verify idempotent completion and the untriaged-call rejection through the CI integration suite.
+- [x] Confirm Operational Pressure Analysis and the action-register backend/UI are included in the tested commit; CI passes the new calculation tests and database-backed action conversion/assignment/state/audit test.
+- [x] Confirm fresh-schema CI applies migration 009 and the frontend production bundle builds with the new Clinic Intelligence panels.
 - [ ] Run the full workflow in the actual browser: Reception registration/check-in → Nurse triage → Doctor consultation/notes → discharge/history.
 - [ ] Manually verify each role's allowed and prohibited UI actions and representative API routes; CI integration coverage is not a substitute for a lecturer-facing role demonstration.
 - [ ] Verify public Display Board privacy, kiosk 60-second reset, Clinic Intelligence low-evidence/unavailable states, FlowTwin fixed-seed repeatability and relevant failure paths.
