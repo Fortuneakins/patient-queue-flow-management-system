@@ -29,3 +29,23 @@ This document is a practical engineering companion to the final academic report.
 ## Release integrity rule
 
 The final GitHub release must be tagged only after the final test run is complete. The academic report should then record the exact tag and commit SHA used for assessment. No credentials, local `.env` files, `node_modules`, caches or generated build artefacts belong in source control.
+
+## Clinic Intelligence implementation traceability (verified against 4855a7d)
+
+| Capability | API / access boundary | Service / implementation | Data and evidence boundary |
+|---|---|---|---|
+| Intelligence overview and operational event review | `GET /api/intelligence/overview`, `GET /events`; ADMIN | `intelligenceOverviewService.js`, `clinicInsightEngine.js`, `operationalEventService.js` | Aggregate review prompts include stable rule IDs, severity, evidence and suggested human action. Deterministic rules; not a generative/diagnostic AI. |
+| CareGraph pathways | `GET /pathways`, `POST /pathways`, `GET /journeys/:queue_id`, `POST /journeys/:queue_id/assign`, `PATCH /journeys/:queue_id/stages/:stage_id`; clinical/care-team roles with stage-role enforcement | `carePathwayService.js`, `backend/src/routes/intelligence.routes.js` | `care_pathways`, `care_pathway_stages`, `queue_pathway_progress`; ordered progression and role checks. Operational process tracking, not clinical protocol. |
+| Resource registry and status | `GET /resources`; clinical roles. Create/update routes ADMIN | `resourceService.js` | `clinic_resources`; status values AVAILABLE/LIMITED/UNAVAILABLE. Recorded status must be confirmed by responsible staff. |
+| Offline resource-status synchronisation | `POST /offline-sync`; ADMIN | `offlineSyncService.js` | `offline_sync_receipts`; UUID idempotency for resource status only. Not offline patient registration, triage or consultation. |
+| FlowTwin and synthetic lab | `POST/GET /simulations`, `GET /benchmarks`, `POST /synthetic-lab/run`; ADMIN | `flowAnalyticsService.js`, `backend/src/utils/flowSimulation.js` | `flow_simulations`; model version, seed, inputs, outputs and assumptions persisted. Simulation does not mutate clinical priority or automatically allocate staff. |
+| Forecast truth and delay review | `POST /forecasts`, `GET /forecasts/truth`, `GET /fairness`; ADMIN | `flowAnalyticsService.js`, `clinicInsightEngine.js` | `flow_forecasts`, `flow_forecast_samples`; operational diagnostics only, not proof of clinical accuracy/fairness. |
+| Data provenance | `GET /data-provenance/queue-records`, `PATCH /data-provenance/queue-records/:queue_id`; ADMIN | `dataProvenanceService.js`, `backend/src/config/dataProvenancePolicy.js` | Migrations 006–008; UNCLASSIFIED/OPERATIONAL/SYNTHETIC_TEST/DEMO and source metadata. Server policy is not identity/authenticity verification. |
+| Internal referrals | `GET /referrals`; clinical roles. Create/update ADMIN/DOCTOR | `referralService.js` | `care_referrals`; local tracking only, no external health-system exchange. |
+| Contact preferences / Access Bridge | Read: ADMIN/RECEPTION/NURSE/DOCTOR; update/send: ADMIN/RECEPTION, send additionally rate-limited | `contactService.js`, `backend/src/routes/intelligence.routes.js` | `patient_contact_preferences`; consent-gated SMS templates, English templates only; no voice/WhatsApp delivery. |
+| Synthetic Operational Continuity Lab | `POST /continuity/run`, `GET /continuity/runs`; ADMIN | `continuityService.js`, `backend/src/utils/continuityEngine.js` | `continuity_runs` and append-only operational events; synthetic benchmark only, not real paper-form ingestion/recovery. |
+| Kiosk ticket confirmation privacy reset | Kiosk browser workflow | `frontend/src/features/kiosk/KioskView.jsx` | Commit `4855a7d368d047baa4c3753cced7a6bd5c8ce5fd` starts a 60-second reset timer while a ticket is shown and cleans it up when the ticket state changes/unmounts. This is a UI privacy behaviour, not an end-to-end acceptance result. |
+
+### Source and verification boundary
+
+The rows above are source mappings, not a declaration that every route/role combination has been manually exercised. The intelligence router applies authentication and password readiness globally, then role-specific middleware per route. The current CI run for commit `4855a7d368d047baa4c3753cced7a6bd5c8ce5fd` is workflow run `39592355041` (run 470), conclusion `success`. Consult [the final submission handoff](FINAL_SUBMISSION_HANDOFF.md) for the CI scope, manual acceptance list and production-readiness boundary. Keep NFR-05, NFR-06 and NFR-10 unverified until measured evidence is retained.
