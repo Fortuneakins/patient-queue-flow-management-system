@@ -7,13 +7,13 @@
 The production Compose stack in `compose.production.yml` uses:
 
 - **Caddy** as the only public entry point, with automatic HTTPS certificates and persisted certificate state.
-- **Nginx** to serve the compiled React application and reverse-proxy same-origin requests to the API and analytics service.
+- **Nginx** to serve the compiled React application and reverse-proxy same-origin API and Socket.IO requests. It does not expose Flask analytics directly; Express calls analytics over the private Compose network with the internal service token.
 - **Node/Express API** for authentication, workflow validation, authorisation and PostgreSQL transactions.
 - **Flask analytics under Gunicorn**, not Flask's development server.
 - **Externally managed PostgreSQL with verified TLS**. The database is intentionally not exposed by Compose and the deployment stack does not seed demonstration data.
 - A dedicated, checksum-tracked migration command (`npm run db:migrate`) and one-time first-administrator bootstrap (`npm run bootstrap:admin`).
 
-The API and analytics services are on a private Compose network and are not published as host ports. The frontend uses same-origin `/api`, `/analytics` and `/socket.io` routes, so browser configuration does not need to embed internal hostnames or database credentials.
+The API and analytics services are on a private Compose network and are not published as host ports. The frontend uses same-origin `/api` and `/socket.io` routes. The browser never calls `/analytics` or an analytics host directly; the Express proxy adds service authentication and filters the public estimate response.
 
 ## 2. Production prerequisites
 
@@ -97,10 +97,17 @@ GRANT DELETE ON TABLE public.shifts, public.queue_pathway_progress TO pqfms_serv
 GRANT SELECT ON TABLE public.pqfms_schema_migrations TO pqfms_service;
 REVOKE INSERT, UPDATE, DELETE ON TABLE public.pqfms_schema_migrations FROM pqfms_service;
 
--- The analytics principal receives only the columns queried by the estimator.
-GRANT SELECT (status, priority_level, queued_at, called_at, discharged_at, data_provenance)
+-- The analytics principal receives only the columns needed for live queue/service
+-- estimates and bounded calibration from the Prediction Truth Ledger.
+GRANT SELECT (queue_id, status, priority_level, queued_at, called_at, discharged_at, data_provenance)
   ON TABLE public.queue_entries TO pqfms_analytics;
+GRANT SELECT (forecast_id, model_version, horizon_minutes, created_at)
+  ON TABLE public.flow_forecasts TO pqfms_analytics;
+GRANT SELECT (sample_id, forecast_id, queue_id, tier, baseline_wait_minutes, created_at)
+  ON TABLE public.flow_forecast_samples TO pqfms_analytics;
 ```
+
+The analytics role may read only the forecast/version/timestamps and per-visit predicted minutes needed to compute a bounded error correction. It cannot read patient identity, symptoms, consultation notes, staff records or contact preferences. Calibration excludes non-operational visits and forecasts outside their declared horizon; only aggregated median offsets are returned in the model metadata.
 
 Set `DB_USER/DB_PASSWORD` to the API runtime role, `MIGRATION_DB_USER/MIGRATION_DB_PASSWORD` to the migration owner, and `ANALYTICS_DB_USER/ANALYTICS_DB_PASSWORD` to the read-only analytics principal. The API container must never receive the migration-owner password. Do not start the API until grants are verified. On future releases, apply new migrations only with the migration role, then verify new table/sequence default privileges and extend analytics column grants only when required by an independently reviewed query change.
 
@@ -122,7 +129,7 @@ The runner serialises migrations with a PostgreSQL advisory lock, stores filenam
 
 Take a backup and verify it can be restored before baselining or applying schema changes. The migration runner will not guess the history of an existing database that has no migration ledger.
 
-For a previously reviewed database whose schema and source backfill already match migrations 001–008, the explicit baseline flow is:
+For a previously reviewed database whose schema and source backfill already match migrations 001–008, the explicit baseline flow is. **This repository currently has nine reviewed SQL files across eight numbered versions because both `007_data_provenance_source.sql` and `007_forecast_calibration_baseline.sql` use the `007` prefix.** The baseline manifest checks the exact filenames rather than assuming one file per number:
 
 Use the production Compose environment for the database operation. Only after a verified backup/restore rehearsal and manual confirmation that this database really matches migrations 001–008, run:
 
@@ -134,7 +141,7 @@ docker compose --env-file .env.production -f compose.production.yml run --rm -e 
 if ($LASTEXITCODE -ne 0) { throw 'Baseline failed. Stop and inspect the database before retrying.' }
 ```
 
-This procedure does not execute migrations 001–008; it checks schema markers and requires explicit confirmation before writing their checksums to the ledger. It also checks the migration-008 provenance-source backfill. The one-off job uses the configured production database endpoint, TLS settings and migration-owner credentials from `.env.production`; it does not use the developer's local `.env`. If any check fails, stop and compare the restored backup, schema and migration history. Do not force the baseline, delete the ledger, reset the database or run old migrations against retained data. If the source backfill has not been applied, apply migration 008 explicitly after backup and review before attempting the baseline.
+This procedure does not execute migrations 001–008; it checks the required tables, reviewed queue provenance/pathway columns, the baseline/offset columns and named constraints on `flow_forecast_samples`, the exact nine-file migration manifest, and the migration-008 provenance-source backfill. It requires explicit confirmation before writing the reviewed files’ checksums to the ledger. The one-off job uses the configured production database endpoint, TLS settings and migration-owner credentials from `.env.production`; it does not use the developer's local `.env`. If any check fails, stop and compare the restored backup, schema and migration history. Do not force the baseline, delete the ledger, reset the database or run old migrations against retained data. If the source backfill has not been applied, apply migration 008 explicitly after backup and review before attempting the baseline.
 
 For any database state other than a verified 001–008 schema, use a reviewed migration plan that records which scripts have truly been applied. Never baseline a schema just because the tables have familiar names.
 
@@ -145,11 +152,15 @@ The analytics role is created in step 4A. Do not try to create the same role aga
 ```sql
 GRANT CONNECT ON DATABASE pqfms TO pqfms_analytics;
 GRANT USAGE ON SCHEMA public TO pqfms_analytics;
-GRANT SELECT (status, priority_level, queued_at, called_at, discharged_at, data_provenance)
+GRANT SELECT (queue_id, status, priority_level, queued_at, called_at, discharged_at, data_provenance)
   ON TABLE public.queue_entries TO pqfms_analytics;
+GRANT SELECT (forecast_id, model_version, horizon_minutes, created_at)
+  ON TABLE public.flow_forecasts TO pqfms_analytics;
+GRANT SELECT (sample_id, forecast_id, queue_id, tier, baseline_wait_minutes, created_at)
+  ON TABLE public.flow_forecast_samples TO pqfms_analytics;
 ```
 
-Set a unique strong password for this role through the approved secret-management process (for example, `\\password pqfms_analytics` in an interactive `psql` session). If you use a database name other than `pqfms`, adjust the `GRANT CONNECT` statement. Put these values in `ANALYTICS_DB_USER` and `ANALYTICS_DB_PASSWORD` in the protected deployment environment. The production analytics service receives only the analytics principal and the API username for a startup check; it does not receive the API password. It reads only the columns used to estimate active queue workload and historical consultation duration. It has no write grant. If a future feature needs extra columns or tables, review and grant only the minimum additional permissions.
+Set a unique strong password for this role through the approved secret-management process (for example, `\\password pqfms_analytics` in an interactive `psql` session). If you use a database name other than `pqfms`, adjust the `GRANT CONNECT` statement. Put these values in `ANALYTICS_DB_USER` and `ANALYTICS_DB_PASSWORD` in the protected deployment environment. The production analytics service receives only the analytics principal and the API username for a startup check; it does not receive the API password. It reads only the queue identifiers, timing/provenance fields and forecast-truth columns needed for active queue estimates and bounded error calibration. It has no write grant and cannot read patient identity, symptoms, consultation notes, staff records or contact preferences. If a future feature needs extra columns or tables, review and grant only the minimum additional permissions.
 
 The API runtime identity has DML permissions but is not a schema owner. Keep migration-owner credentials out of both runtime services.
 
@@ -187,8 +198,7 @@ Use the deployment's public HTTPS hostname to check:
 
 - `/api/health/live` reports the API process is alive.
 - `/api/health/ready` reports database readiness.
-- `/analytics/api/health/live` reports the analytics process is alive.
-- `/analytics/api/health/ready` reports analytics database readiness and provenance mode.
+- The Compose analytics healthcheck calls `/api/health/ready` inside the private analytics container network. Flask health and prediction routes are not published through Nginx.
 - The public display board hides patient names, identification numbers and consultation notes.
 - A synthetic check-in, call, note, discharge and history lookup pass in the *separate staging environment*.
 - Every new check-in has its expected server-assigned provenance source; test/demo observations never count as operational model evidence.

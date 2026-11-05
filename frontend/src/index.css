@@ -807,3 +807,116 @@ button:disabled { cursor: not-allowed; }
 .app-root[data-theme="dark"] .border-emerald-200,
 .app-root[data-theme="dark"] .border-green-200 { border-color: #326c5b !important; }
 .app-root[data-theme="dark"] .border-red-200 { border-color: #78424a !important; }
+/* Clinic Intelligence: readable waiting-time estimate warnings */
+.estimate-card .form-message--warning {
+  align-items: flex-start;
+  gap: 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.estimate-card .form-message--warning > svg {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+}
+
+.estimate-warning-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.estimate-warning-copy strong {
+  display: block;
+  margin: 0 0 0.35rem;
+  font-size: 0.88rem;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.estimate-warning-copy p {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.estimate-warning-details {
+  margin-top: 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.estimate-warning-details summary {
+  cursor: pointer;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.estimate-warning-details summary:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.estimate-warning-details ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
+  font-weight: 400;
+}
+
+.estimate-warning-details li + li {
+  margin-top: 0.4rem;
+}
+
+@media (max-width: 480px) {
+  .estimate-card .form-message--warning {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+  }
+
+  .estimate-warning-copy strong {
+    font-size: 0.84rem;
+  }
+
+  .estimate-warning-copy p {
+    font-size: 0.78rem;
+  }
+}
+
+
+.estimate-context {
+  margin: 0.35rem 0 0;
+  max-width: 34rem;
+  color: var(--muted-soft);
+  font-size: 0.76rem;
+  font-weight: 400;
+  line-height: 1.55;
+}
+
+.estimate-heading {
+  align-items: flex-start;
+}
+
+.estimate-heading > .section-title-with-icon {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.estimate-refresh-note {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 480px) {
+  .estimate-heading {
+    flex-wrap: wrap;
+  }
+
+  .estimate-context {
+    font-size: 0.72rem;
+  }
+}

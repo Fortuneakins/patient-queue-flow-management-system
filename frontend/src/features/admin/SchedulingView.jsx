@@ -217,7 +217,7 @@ export default function SchedulingView({ staff, shifts, onCreateShift, onDeleteS
 
           <div className="scheduling-availability-note">
             <span className="scheduling-availability-note-icon" aria-hidden="true"><Icon name="info" size={16} /></span>
-            <p><strong>How waiting-time estimates work</strong> Doctor availability helps inform estimates. Estimates use scheduled doctors currently on duty and may fall back to the configured staffing default when no active doctor shift is found.</p>
+            <p><strong>How waiting-time estimates work</strong> Estimates use the verified doctor roster. If no doctor is confirmed as on duty, wait estimates are unavailable rather than assuming staffing capacity.</p>
           </div>
 
           {error && (
@@ -279,7 +279,7 @@ export default function SchedulingView({ staff, shifts, onCreateShift, onDeleteS
             <p className="scheduling-empty-copy">Create a shift for an active staff member and it will appear here, ready for a quick review.</p>
             <div className="scheduling-empty-hint">
               <Icon name="info" size={15} />
-              <span>Doctor availability helps inform waiting-time estimates; these use scheduled doctors currently on duty or the configured staffing fallback.</span>
+              <span>Wait estimates use verified staffing availability. Without a doctor confirmed as on duty, the system does not assume that service capacity is available.</span>
             </div>
           </div>
         )}

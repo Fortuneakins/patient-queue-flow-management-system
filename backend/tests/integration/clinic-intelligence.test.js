@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const http = require('node:http');
 
 const dbConfigured = Boolean(process.env.RUN_DB_TESTS && process.env.DB_NAME);
 if (!dbConfigured) {
@@ -12,8 +13,10 @@ if (!dbConfigured) {
   process.env.DATA_PROVENANCE_MODE ||= 'SYNTHETIC_TEST';
   process.env.SMS_ENABLED = 'false';
 
-  const { httpServer } = require('../../src/app');
-  const { query, pool } = require('../../src/db/pool');
+  let httpServer;
+  let query;
+  let pool;
+  let analyticsServer;
   let baseUrl;
   let listening = false;
   const patientIds = [];
@@ -40,6 +43,75 @@ if (!dbConfigured) {
   }
 
   test.before(async () => {
+    // This deterministic fixture preserves the production service-token
+    // contract without making CI depend on the real analytics database query.
+    analyticsServer = http.createServer(async (req, res) => {
+      const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
+      if (req.method !== 'GET' || pathname !== '/api/predict') {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Not found.' }));
+        return;
+      }
+      if (req.headers['x-internal-service-token'] !== process.env.INTERNAL_SERVICE_TOKEN) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Authentication required.' }));
+        return;
+      }
+      try {
+        // Use the same bounded visible queue snapshot shape as the predictor.
+        // Individual fixture predictions intentionally differ from tier summary
+        // estimates so the integration test can prove the ledger stores per-visit
+        // values rather than copying the tier-level summary into every row.
+        const snapshot = await query(
+          "WITH visible_queue AS (" +
+          "SELECT queue_id, status, COALESCE(priority_level,4)::int AS tier, queued_at " +
+          "FROM queue_entries WHERE status IN ('Waiting','In-Consultation') " +
+          "AND data_provenance <> 'DEMO' " +
+          "ORDER BY COALESCE(priority_level,4), queued_at, queue_id LIMIT 1000) " +
+          "SELECT queue_id, tier FROM visible_queue WHERE status='Waiting' ORDER BY tier, queue_id"
+        );
+        // A fixed synthetic correction makes baseline-versus-applied MAE testable.
+        // It is fixture data only, not a claim that production calibration is trained.
+        const visitEstimates = snapshot.rows.map(item => {
+          const baselineWait = ({ 1: 1, 2: 4, 3: 7, 4: 11 })[Number(item.tier)];
+          const calibrationOffset = 5;
+          return {
+            queue_id: Number(item.queue_id),
+            tier: Number(item.tier),
+            baseline_wait_minutes: baselineWait,
+            calibration_offset_minutes: calibrationOffset,
+            estimated_wait_minutes: baselineWait + calibrationOffset
+          };
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({
+          '1': 2, '2': 5, '3': 10, '4': 15,
+          model: 'queue-workload-estimate',
+          model_version: 'pqfms-ci-analytics-fixture-v1',
+          estimate_quality: 'OBSERVATION_BASED',
+          service_time_basis: 'deterministic integration-test timing fixture',
+          service_history_samples: 24,
+          staffed_doctors: 2,
+          waiting_visits: visitEstimates.length,
+          active_consultations: 0,
+          visit_estimates: visitEstimates,
+          degraded: false,
+          provenance_mode: 'SYNTHETIC_TEST',
+          limitations: ['Deterministic integration-test fixture; not clinical evidence.'],
+          generated_at: new Date().toISOString()
+        }));
+      } catch (_error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Analytics fixture failure.' }));
+      }
+    });
+    await new Promise(resolve => analyticsServer.listen(0, '127.0.0.1', resolve));
+    process.env.ANALYTICS_URL = 'http://127.0.0.1:' + analyticsServer.address().port;
+
+    // Import after assigning ANALYTICS_URL because the configuration module is
+    // evaluated once and the route/service dependencies retain that snapshot.
+    ({ httpServer } = require('../../src/app'));
+    ({ query, pool } = require('../../src/db/pool'));
     await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve));
     listening = true;
     baseUrl = 'http://127.0.0.1:' + httpServer.address().port;
@@ -60,7 +132,8 @@ if (!dbConfigured) {
     for (const simulationId of simulationIds) await query('DELETE FROM flow_simulations WHERE simulation_id=$1', [simulationId]);
     for (const forecastId of forecastIds) await query('DELETE FROM flow_forecasts WHERE forecast_id=$1', [forecastId]);
     if (listening) await new Promise(resolve => httpServer.close(resolve));
-    await pool.end();
+    if (analyticsServer?.listening) await new Promise(resolve => analyticsServer.close(resolve));
+    if (pool) await pool.end();
   });
 
   test('clinic intelligence enforces access, tracks journeys, simulates operations and respects contact consent', async t => {
@@ -77,6 +150,24 @@ if (!dbConfigured) {
       const admin = await request('/api/intelligence/overview', { headers: auth(tokens.admin) });
       assert.equal(admin.response.status, 200);
       assert.equal(admin.body.model_version, 'flowtwin-1.0.0');
+
+      const publicPrediction = await request('/api/analytics/predict');
+      assert.equal(publicPrediction.response.status, 200);
+      assert.equal(publicPrediction.body['1'], 2);
+      assert.equal(publicPrediction.body.estimate_basis, 'OBSERVED_TIMINGS');
+      assert.equal(Object.hasOwn(publicPrediction.body, 'model'), false);
+      assert.equal(Object.hasOwn(publicPrediction.body, 'staffed_doctors'), false);
+
+      const anonymousModel = await request('/api/analytics/model');
+      assert.equal(anonymousModel.response.status, 401);
+      const receptionModel = await request('/api/analytics/model', { headers: auth(tokens.reception) });
+      assert.equal(receptionModel.response.status, 403);
+      const adminModel = await request('/api/analytics/model', { headers: auth(tokens.admin) });
+      assert.equal(adminModel.response.status, 200);
+      assert.equal(adminModel.body.model_version, 'pqfms-ci-analytics-fixture-v1');
+      assert.equal(adminModel.body.staffed_doctors, 2);
+      assert.equal(adminModel.body.service_history_samples, 24);
+      assert.equal(Object.hasOwn(adminModel.body, 'visit_estimates'), false);
 
       const nursePathways = await request('/api/intelligence/pathways', { headers: auth(tokens.nurse) });
       assert.equal(nursePathways.response.status, 200);
@@ -219,10 +310,31 @@ if (!dbConfigured) {
 
     const forecast = await request('/api/intelligence/forecasts', {
       method: 'POST', headers: auth(tokens.admin),
-      body: JSON.stringify({ horizon_minutes: 60, tier_estimates: { 1: 5, 2: 10, 3: 15, 4: 20 } })
+      // Deliberately try to inject false values and a fabricated model label.
+      // The database ledger must capture the current server-side prediction.
+      body: JSON.stringify({
+        horizon_minutes: 60,
+        tier_estimates: { 1: 999, 2: 998, 3: 997, 4: 996 },
+        model_version: 'client-forged-model'
+      })
     });
     assert.equal(forecast.response.status, 201, JSON.stringify(forecast.body));
+    assert.equal(forecast.body.model_version, 'pqfms-ci-analytics-fixture-v1');
+    assert.deepEqual(forecast.body.tier_estimates, { 1: 2, 2: 5, 3: 10, 4: 15 });
     forecastIds.push(forecast.body.forecast_id);
+    const recordedSample = await query(
+      'SELECT predicted_wait_minutes, baseline_wait_minutes, calibration_offset_minutes FROM flow_forecast_samples WHERE forecast_id=$1 AND queue_id=$2',
+      [forecast.body.forecast_id, queueId]
+    );
+    assert.equal(recordedSample.rowCount, 1);
+    const recordedTier = await query('SELECT COALESCE(priority_level,4)::int AS tier FROM queue_entries WHERE queue_id=$1', [queueId]);
+    const perVisitExpected = ({ 1: 1, 2: 4, 3: 7, 4: 11 })[recordedTier.rows[0].tier];
+    assert.equal(Number(recordedSample.rows[0].predicted_wait_minutes), perVisitExpected + 5,
+      'truth ledger should persist the applied per-visit estimate, not the tier-level summary');
+    assert.equal(Number(recordedSample.rows[0].baseline_wait_minutes), perVisitExpected,
+      'baseline forecast should be persisted separately from the applied score');
+    assert.equal(Number(recordedSample.rows[0].calibration_offset_minutes), 5,
+      'fixture correction must be auditable independently from the baseline');
 
     // Model an observation that arrives after its declared horizon. The overall
     // MAE remains auditable, while the API must separately identify in-horizon
@@ -239,6 +351,9 @@ if (!dbConfigured) {
     assert.ok(evaluatedForecast, 'newly recorded forecast should appear in truth ledger');
     assert.ok(Number(evaluatedForecast.tracked_samples) >= 1);
     assert.ok(Number(evaluatedForecast.observed_samples) >= 1);
+    assert.ok(Number(evaluatedForecast.calibrated_samples) >= 1, 'the synthetic fixture should demonstrate applied corrections');
+    assert.equal(Number(evaluatedForecast.mean_applied_calibration_offset_minutes), 5);
+    assert.equal(Number(evaluatedForecast.max_abs_applied_calibration_offset_minutes), 5);
     assert.equal(Number(evaluatedForecast.within_horizon_samples), 0, 'synthetic fixtures must not count as verified operational accuracy');
     assert.equal(Number(evaluatedForecast.out_of_horizon_samples), 0, 'synthetic observations must not be represented as operational errors');
     assert.equal(Number(evaluatedForecast.unclassified_observed_samples), 0);
@@ -246,7 +361,22 @@ if (!dbConfigured) {
     assert.equal(Number(evaluatedForecast.excluded_synthetic_out_of_horizon_samples), 1, 'the 75-minute synthetic observation must remain explicitly outside the 60-minute horizon');
     assert.equal(Number(evaluatedForecast.unclassified_out_of_horizon_samples), 0);
     assert.equal(evaluatedForecast.within_horizon_mean_absolute_error_minutes, null);
-    assert.ok(Number(evaluatedForecast.mean_absolute_error_minutes) >= 0, 'all-sample MAE should remain available for audit');
+    assert.equal(evaluatedForecast.within_horizon_baseline_mean_absolute_error_minutes, null);
+    assert.equal(evaluatedForecast.operational_baseline_mean_absolute_error_minutes, null,
+      'synthetic outcomes must not be reported as operational baseline accuracy');
+
+    const pairedErrors = await query(
+      'SELECT ROUND(AVG(ABS(actual_wait_minutes - baseline_wait_minutes))::numeric,1) AS baseline_mae, ' +
+      'ROUND(AVG(ABS(actual_wait_minutes - predicted_wait_minutes))::numeric,1) AS applied_mae, ' +
+      'COUNT(actual_wait_minutes)::int AS observed_count FROM flow_forecast_samples ' +
+      'WHERE forecast_id=$1 AND actual_wait_minutes IS NOT NULL',
+      [forecast.body.forecast_id]
+    );
+    assert.ok(Number(pairedErrors.rows[0].observed_count) >= 1);
+    assert.equal(Number(evaluatedForecast.baseline_mean_absolute_error_minutes), Number(pairedErrors.rows[0].baseline_mae),
+      'baseline MAE should use the saved baseline over the same observed sample set');
+    assert.equal(Number(evaluatedForecast.mean_absolute_error_minutes), Number(pairedErrors.rows[0].applied_mae),
+      'applied MAE should use the saved applied estimate over the same observed sample set');
     const fairness = await request('/api/intelligence/fairness', { headers: auth(tokens.admin) });
     assert.equal(fairness.response.status, 200);
     assert.equal(fairness.body.tiers.length, 4);

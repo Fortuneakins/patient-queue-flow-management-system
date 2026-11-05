@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+import hmac
 import os
 from pathlib import Path
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 import psycopg2
 import requests
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-from .estimator import estimate_waits, estimate_metadata
+from .estimator import estimate_waits, estimate_metadata, estimate_current_visit_waits, calibrate_wait_estimates
 from .runtime_config import PROVENANCE_MODES, resolve_provenance_mode, validate_production_config
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -99,11 +100,11 @@ def db_rows() -> list[dict]:
         with conn.cursor() as cur:
             cur.execute(
                 f"""
-                SELECT status, priority_level, queued_at, called_at, data_provenance
+                SELECT status, priority_level, queued_at, called_at, data_provenance, queue_id
                 FROM queue_entries
                 WHERE status IN ('Waiting', 'In-Consultation')
                   AND {visibility}
-                ORDER BY COALESCE(priority_level, 4), queued_at ASC
+                ORDER BY COALESCE(priority_level, 4), queued_at ASC, queue_id ASC
                 LIMIT 1000
                 """
             )
@@ -114,6 +115,7 @@ def db_rows() -> list[dict]:
                     "queued_at": row[2].astimezone(timezone.utc) if row[2] else None,
                     "called_at": row[3].astimezone(timezone.utc) if row[3] else None,
                     "data_provenance": row[4],
+                    "queue_id": row[5],
                 }
                 for row in cur.fetchall()
             ]
@@ -139,6 +141,80 @@ def service_time_samples() -> list[float]:
                 """
             )
             return [float(row[0]) for row in cur.fetchall() if row[0] is not None]
+
+
+def tier_service_time_samples() -> list[dict]:
+    """Return recent operational duration observations with clinician-assigned tier."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COALESCE(priority_level, 4)::int AS tier,
+                       EXTRACT(EPOCH FROM (discharged_at - called_at)) / 60.0 AS service_minutes
+                FROM queue_entries
+                WHERE status = 'Discharged'
+                  AND data_provenance = 'OPERATIONAL'
+                  AND called_at IS NOT NULL
+                  AND discharged_at IS NOT NULL
+                  AND discharged_at > called_at
+                  AND discharged_at >= NOW() - INTERVAL '90 days'
+                  AND EXTRACT(EPOCH FROM (discharged_at - called_at)) / 60.0 BETWEEN 1 AND 240
+                ORDER BY discharged_at DESC
+                LIMIT 500
+                """
+            )
+            return [
+                {"tier": int(row[0] or 4), "service_minutes": float(row[1])}
+                for row in cur.fetchall()
+                if row[1] is not None
+            ]
+
+
+def forecast_calibration_observations() -> list[dict]:
+    """Read one recent, in-horizon operational truth observation per visit."""
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                WITH eligible AS (
+                    SELECT
+                        s.queue_id,
+                        s.tier,
+                        s.baseline_wait_minutes AS predicted_wait_minutes,
+                        s.created_at AS sample_created_at,
+                        EXTRACT(EPOCH FROM (q.called_at - s.created_at)) / 60.0 AS actual_wait_minutes,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY s.queue_id
+                            ORDER BY s.created_at DESC, s.sample_id DESC
+                        ) AS visit_rank
+                    FROM flow_forecast_samples s
+                    JOIN flow_forecasts f ON f.forecast_id = s.forecast_id
+                    JOIN queue_entries q ON q.queue_id = s.queue_id
+                    WHERE f.model_version = 'queue-workload-3.2.0'
+                      AND f.created_at >= NOW() - INTERVAL '90 days'
+                      AND s.created_at >= NOW() - INTERVAL '90 days'
+                      AND q.data_provenance = 'OPERATIONAL'
+                      AND q.called_at IS NOT NULL
+                      AND q.called_at >= s.created_at
+                      AND EXTRACT(EPOCH FROM (q.called_at - s.created_at)) / 60.0 BETWEEN 0 AND 720
+                      AND EXTRACT(EPOCH FROM (q.called_at - s.created_at)) / 60.0 <= f.horizon_minutes
+                )
+                SELECT tier, predicted_wait_minutes, actual_wait_minutes
+                FROM eligible
+                WHERE visit_rank = 1
+                ORDER BY sample_created_at DESC
+                LIMIT 2000
+                """
+            )
+            return [
+                {
+                    "tier": int(row[0] or 4),
+                    "predicted_wait_minutes": float(row[1]),
+                    "actual_wait_minutes": float(row[2]),
+                }
+                for row in cur.fetchall()
+                if row[1] is not None and row[2] is not None
+            ]
 
 
 def on_duty_count() -> int:
@@ -202,15 +278,34 @@ def ready():
 
 @app.get("/api/predict")
 def predict():
+    if not INTERNAL_SERVICE_TOKEN:
+        return jsonify({"error": "Analytics internal service token is not configured."}), 503
+    supplied_token = request.headers.get("X-Internal-Service-Token", "")
+    if not hmac.compare_digest(supplied_token, INTERNAL_SERVICE_TOKEN):
+        return jsonify({"error": "Authentication required."}), 401
+
     try:
         visits = db_rows()
         staff = on_duty_count()
-        service_samples = service_time_samples()
+        service_samples = tier_service_time_samples()
+        calibration_observations = forecast_calibration_observations()
+        wait_calibration = calibrate_wait_estimates(calibration_observations)
         estimates = estimate_waits(visits, staff, service_minutes=service_samples)
-        metadata = estimate_metadata(len(service_samples), staff, len(visits))
+        visit_estimates = estimate_current_visit_waits(
+            visits, staff, service_minutes=service_samples, calibration=wait_calibration
+        )
+        active_consultations = sum(1 for visit in visits if visit.get("status") == "In-Consultation")
+        metadata = estimate_metadata(
+            service_samples,
+            staff,
+            len(visits),
+            active_consultation_count=active_consultations,
+            wait_calibration=wait_calibration,
+        )
         return jsonify({
             **estimates,
             **metadata,
+            "visit_estimates": visit_estimates,
             "degraded": metadata["degraded"],
             "provenance_mode": DATA_PROVENANCE_MODE,
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -221,7 +316,7 @@ def predict():
         return jsonify({
             "1": None, "2": None, "3": None, "4": None,
             "model": "queue-workload-estimate",
-            "model_version": "queue-workload-2.0.0",
+            "model_version": "queue-workload-3.2.0",
             "estimate_quality": "UNAVAILABLE",
             "degraded": True,
             "reason": "The live estimate could not be calculated. Queue operations continue normally.",

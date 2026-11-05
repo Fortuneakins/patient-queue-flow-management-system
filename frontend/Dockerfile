@@ -7,10 +7,8 @@ COPY frontend/ ./
 
 # Empty API/socket base means same-origin paths served by the reverse proxy.
 ARG VITE_API_BASE_URL=
-ARG VITE_ANALYTICS_BASE_URL=/analytics
 ARG VITE_SOCKET_URL=
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
-    VITE_ANALYTICS_BASE_URL=$VITE_ANALYTICS_BASE_URL \
     VITE_SOCKET_URL=$VITE_SOCKET_URL
 RUN npm run build
 

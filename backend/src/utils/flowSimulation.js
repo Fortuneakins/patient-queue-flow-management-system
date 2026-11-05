@@ -22,6 +22,56 @@ function normalizeScenario(input = {}) {
   };
 }
 
+function calculateScenarioServers({
+  baselineServers,
+  additionalStations = 0,
+  stationLoss = 0,
+  roomCapacity = null
+} = {}) {
+  const baseline = Number(baselineServers);
+  const additional = Number(additionalStations);
+  const loss = Number(stationLoss);
+
+  if (
+    !Number.isSafeInteger(baseline) ||
+    baseline < 0 ||
+    baseline > 50 ||
+    !Number.isSafeInteger(additional) ||
+    additional < 0 ||
+    additional > 8 ||
+    !Number.isSafeInteger(loss) ||
+    loss < 0 ||
+    loss > 8
+  ) {
+    throw Object.assign(
+      new Error('Server capacity inputs are outside the supported limits.'),
+      { status: 400 }
+    );
+  }
+
+  const requestedServers = Math.max(
+    0,
+    Math.min(50, baseline + additional - loss)
+  );
+
+  let roomLimit = 50;
+
+  if (roomCapacity !== null && roomCapacity !== undefined) {
+    const capacity = Number(roomCapacity);
+
+    if (!Number.isSafeInteger(capacity) || capacity < 0) {
+      throw Object.assign(
+        new Error('roomCapacity must be a non-negative integer.'),
+        { status: 400 }
+      );
+    }
+
+    roomLimit = Math.min(50, capacity);
+  }
+
+  return Math.min(requestedServers, roomLimit);
+}
+
 function seededRandom(initialSeed) {
   let state = (Number(initialSeed) >>> 0) || 1;
   return function random() {
@@ -144,4 +194,11 @@ function runSyntheticLab(input = {}) {
   };
 }
 
-module.exports = { MODEL_VERSION, normalizeScenario, runClinicSimulation, runSyntheticLab, percentile };
+module.exports = {
+  MODEL_VERSION,
+  normalizeScenario,
+  calculateScenarioServers,
+  runClinicSimulation,
+  runSyntheticLab,
+  percentile
+};

@@ -1,7 +1,14 @@
 const { query, withTransaction } = require('../db/pool');
 const { appendOperationalEvent } = require('./operationalEventService');
-const { MODEL_VERSION, normalizeScenario, runClinicSimulation, runSyntheticLab } = require('../utils/flowSimulation');
+const {
+  MODEL_VERSION,
+  normalizeScenario,
+  calculateScenarioServers,
+  runClinicSimulation,
+  runSyntheticLab
+} = require('../utils/flowSimulation');
 const env = require('../config/env');
+const { getWaitPredictions } = require('./analyticsProxyService');
 const { queueVisibilityPredicate } = require('../config/dataProvenancePolicy');
 const queueVisibility = queueVisibilityPredicate(env.DATA_PROVENANCE_MODE, 'queue_entry');
 function httpError(message, status = 400) { return Object.assign(new Error(message), { status }); }
@@ -41,7 +48,10 @@ async function currentSnapshot() {
   if (Number(room.room_rows) > 0) servers = Math.min(servers, Number(room.room_capacity));
   return {
     waiting, in_consultation: activeConsultations, servers: Math.max(0, Math.min(50, servers)),
-    configured_servers: env.STAFFED_STATIONS, on_duty_doctors: doctors,
+    configured_servers: env.STAFFED_STATIONS,
+    on_duty_doctors: doctors,
+    staffing_basis: doctors > 0 ? 'VERIFIED_ON_DUTY_DOCTORS' : 'CONFIGURED_STAFFING_FALLBACK',
+    modelled_baseline_servers: Math.max(0, Math.min(50, servers)),
     room_capacity: Number(room.room_rows) > 0 ? Number(room.room_capacity) : null,
     mean_service_minutes: Number(meanService.toFixed(2)), service_durations: durations, service_samples: durations.length
   };
@@ -58,30 +68,83 @@ function compareResults(baseline, scenario) {
 }
 async function runScenario(input, actorStaffId) {
   const scenarioInput = normalizeScenario(input);
+  const pairedCapacityComparison = input.compare_capacity === true;
+
+  if (pairedCapacityComparison && scenarioInput.additional_stations < 1) {
+    throw httpError(
+      'A paired capacity comparison requires at least one hypothetical additional station.',
+      400
+    );
+  }
+
   const snapshot = await currentSnapshot();
   const shared = {
-    waiting: snapshot.waiting, in_consultation: snapshot.in_consultation,
-    mean_service_minutes: snapshot.mean_service_minutes, service_durations: snapshot.service_durations,
-    seed: scenarioInput.seed, horizon_minutes: scenarioInput.horizon_minutes
+    waiting: snapshot.waiting,
+    in_consultation: snapshot.in_consultation,
+    mean_service_minutes: snapshot.mean_service_minutes,
+    service_durations: snapshot.service_durations,
+    seed: scenarioInput.seed,
+    horizon_minutes: scenarioInput.horizon_minutes
   };
-  const baseline = runClinicSimulation({ ...shared, servers: snapshot.servers, extra_arrivals: 0, doctor_delay_minutes: 0 });
-  const scenarioServers = Math.max(0, Math.min(50, snapshot.servers + scenarioInput.additional_stations - scenarioInput.station_loss));
-  const scenario = runClinicSimulation({ ...shared, servers: scenarioServers, extra_arrivals: scenarioInput.extra_arrivals, doctor_delay_minutes: scenarioInput.doctor_delay_minutes });
+
+  // In paired mode, only hypothetical additional stations differ.
+  const baselineServers = pairedCapacityComparison
+    ? Math.max(0, Math.min(50, snapshot.servers - scenarioInput.station_loss))
+    : snapshot.servers;
+
+ const scenarioServers = calculateScenarioServers({
+  baselineServers: snapshot.servers,
+  additionalStations: scenarioInput.additional_stations,
+  stationLoss: scenarioInput.station_loss,
+  roomCapacity: snapshot.room_capacity
+});
+
+  const baseline = runClinicSimulation({
+    ...shared,
+    servers: baselineServers,
+    extra_arrivals: pairedCapacityComparison ? scenarioInput.extra_arrivals : 0,
+    doctor_delay_minutes: pairedCapacityComparison ? scenarioInput.doctor_delay_minutes : 0
+  });
+
+  const scenario = runClinicSimulation({
+    ...shared,
+    servers: scenarioServers,
+    extra_arrivals: scenarioInput.extra_arrivals,
+    doctor_delay_minutes: scenarioInput.doctor_delay_minutes
+  });
+  const comparisonMode = pairedCapacityComparison
+    ? 'PAIRED_CAPACITY'
+    : 'CURRENT_BASELINE';
+
   const output = {
-    model_version: MODEL_VERSION, baseline, scenario, comparison: compareResults(baseline, scenario),
-    context: { on_duty_doctors: snapshot.on_duty_doctors, configured_servers: snapshot.configured_servers, room_capacity: snapshot.room_capacity, historical_service_samples: snapshot.service_samples },
-    human_review_required: true, automatic_actions_taken: false
+    model_version: MODEL_VERSION,
+    comparison_mode: comparisonMode,
+    baseline,
+    scenario,
+    comparison: compareResults(baseline, scenario),
+    context: {
+      on_duty_doctors: snapshot.on_duty_doctors,
+      configured_servers: snapshot.configured_servers,
+      staffing_basis: snapshot.staffing_basis,
+      modelled_baseline_servers: baselineServers,
+      modelled_scenario_servers: scenarioServers,
+      room_capacity: snapshot.room_capacity,
+      historical_service_samples: snapshot.service_samples
+    },
+    human_review_required: true,
+    automatic_actions_taken: false
   };
   const name = String(input.name || 'FlowTwin scenario').trim().slice(0, 120) || 'FlowTwin scenario';
+  const persistedInput = { ...scenarioInput, comparison_mode: comparisonMode };
   const stored = await withTransaction(async client => {
     const result = await client.query(
       "INSERT INTO flow_simulations (simulation_kind,name,model_version,seed,input,output,created_by_staff_id) VALUES ('SCENARIO',$1,$2,$3,$4::jsonb,$5::jsonb,$6) RETURNING simulation_id,created_at",
-      [name, MODEL_VERSION, scenarioInput.seed, JSON.stringify(scenarioInput), JSON.stringify(output), actorStaffId]
+      [name, MODEL_VERSION, scenarioInput.seed, JSON.stringify(persistedInput), JSON.stringify(output), actorStaffId]
     );
     await appendOperationalEvent(client, { eventType: 'FLOWTWIN_SIMULATION_RUN', entityType: 'FLOW_SIMULATION', entityId: result.rows[0].simulation_id, actorStaffId, toState: 'COMPLETED', metadata: { name, horizon_minutes: scenarioInput.horizon_minutes, model_version: MODEL_VERSION } });
     return result.rows[0];
   });
-  return { ...stored, name, input: scenarioInput, ...output };
+  return { ...stored, name, input: persistedInput, ...output };
 }
 async function listSimulations(limit = 20) {
   const safeLimit = Math.max(1, Math.min(100, Number(limit) || 20));
@@ -110,38 +173,90 @@ async function runLab(input, actorStaffId) {
   });
   return { ...stored, ...persisted };
 }
-async function recordForecast(input, actorStaffId) {
+async function recordForecast(input = {}, actorStaffId) {
   const horizon = Number(input.horizon_minutes === undefined ? 60 : input.horizon_minutes);
   if (!Number.isInteger(horizon) || horizon < 1 || horizon > 1440) throw httpError('horizon_minutes must be an integer between 1 and 1440.');
-  const estimates = input.tier_estimates && typeof input.tier_estimates === 'object' && !Array.isArray(input.tier_estimates) ? input.tier_estimates : {};
+
+  // Capture the source of truth on the server. Browser-provided estimates and
+  // model labels are untrusted and must not contaminate the prediction ledger.
+  const prediction = await getWaitPredictions();
+  if (prediction.degraded) {
+    throw httpError('The analytics service is unavailable. No forecast was recorded.', 503);
+  }
   const tierEstimates = {};
   for (let tier = 1; tier <= 4; tier += 1) {
-    if (estimates[tier] === undefined) throw httpError('tier_estimates must contain predictions for tiers 1 to 4.');
-    tierEstimates[tier] = positiveMinutes(estimates[tier], 'Tier ' + tier + ' estimate');
+    const raw = prediction[String(tier)];
+    if (raw === null || raw === undefined) {
+      throw httpError('The analytics service returned an unavailable tier estimate. No forecast was recorded.', 503);
+    }
+    tierEstimates[tier] = positiveMinutes(raw, 'Tier ' + tier + ' estimate', 0, 720);
   }
-  const snapshot = await query(`SELECT queue_id, COALESCE(priority_level,4)::int AS tier FROM queue_entries queue_entry WHERE status = 'Waiting' AND ${queueVisibility} ORDER BY queued_at LIMIT 1000`);
+  if (!Array.isArray(prediction.visit_estimates) || prediction.visit_estimates.length > 1000) {
+    throw httpError('The analytics service did not return the required per-visit forecast snapshot. No forecast was recorded.', 503);
+  }
+  const modelVersion = String(prediction.model_version || 'unknown').slice(0, 40);
+  const perVisit = new Map(prediction.visit_estimates.map(item => [
+    Number(item.queue_id),
+    {
+      tier: Number(item.tier),
+      wait: positiveMinutes(item.estimated_wait_minutes, 'Visit estimate', 0, 720),
+      baselineWait: positiveMinutes(item.baseline_wait_minutes, 'Visit baseline estimate', 0, 720),
+      calibrationOffset: Number(item.calibration_offset_minutes)
+    }
+  ]));
+  for (const predictionRow of perVisit.values()) {
+    if (!Number.isFinite(predictionRow.calibrationOffset)
+      || predictionRow.calibrationOffset < -30
+      || predictionRow.calibrationOffset > 30) {
+      throw httpError('The analytics service returned an invalid calibration offset. No forecast was recorded.', 503);
+    }
+  }
+  const predictedQueueIds = [...perVisit.keys()];
+  const snapshot = predictedQueueIds.length
+    ? await query(
+      `SELECT queue_id, COALESCE(priority_level,4)::int AS tier FROM queue_entries queue_entry WHERE status = 'Waiting' AND ${queueVisibility} AND queue_id = ANY($1::int[]) ORDER BY COALESCE(priority_level,4), queued_at, queue_id LIMIT 1000`,
+      [predictedQueueIds]
+    )
+    : { rows: [], rowCount: 0 };
+  for (const item of snapshot.rows) {
+    const predicted = perVisit.get(Number(item.queue_id));
+    if (!predicted || predicted.tier !== Number(item.tier)) {
+      throw httpError('The analytics visit forecast does not match the current queue snapshot. No forecast was recorded.', 503);
+    }
+  }
+  const currentWaitingCount = Number.isSafeInteger(Number(prediction.waiting_visits))
+    ? Math.max(snapshot.rowCount, Number(prediction.waiting_visits))
+    : snapshot.rowCount;
   const stored = await withTransaction(async client => {
     const row = await client.query(
       'INSERT INTO flow_forecasts (model_version,horizon_minutes,tier_estimates,waiting_snapshot,created_by_staff_id) VALUES ($1,$2,$3::jsonb,$4,$5) RETURNING forecast_id,created_at',
-      [String(input.model_version || MODEL_VERSION).slice(0, 40), horizon, JSON.stringify(tierEstimates), snapshot.rowCount, actorStaffId]
+      [modelVersion, horizon, JSON.stringify(tierEstimates), currentWaitingCount, actorStaffId]
     );
     const forecast = row.rows[0];
     for (const item of snapshot.rows) {
+      const predicted = perVisit.get(Number(item.queue_id));
       await client.query(
-        'INSERT INTO flow_forecast_samples (forecast_id,queue_id,tier,predicted_wait_minutes) VALUES ($1,$2,$3,$4) ON CONFLICT (forecast_id,queue_id) DO NOTHING',
-        [forecast.forecast_id, item.queue_id, item.tier, tierEstimates[item.tier]]
+        'INSERT INTO flow_forecast_samples (forecast_id,queue_id,tier,predicted_wait_minutes,baseline_wait_minutes,calibration_offset_minutes) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (forecast_id,queue_id) DO NOTHING',
+        [forecast.forecast_id, item.queue_id, item.tier, predicted.wait, predicted.baselineWait, predicted.calibrationOffset]
       );
     }
     await appendOperationalEvent(client, { eventType: 'WAIT_FORECAST_RECORDED', entityType: 'FLOW_FORECAST', entityId: forecast.forecast_id, actorStaffId, toState: 'RECORDED', metadata: {
-      waiting_snapshot: snapshot.rowCount,
+      waiting_snapshot: currentWaitingCount,
+      tracked_visit_samples: snapshot.rowCount,
       horizon_minutes: horizon,
+      model_version: modelVersion,
+      estimate_quality: prediction.estimate_quality,
+      service_history_samples: prediction.service_history_samples,
       provenance_mode: env.DATA_PROVENANCE_MODE
     } });
     return forecast;
   });
   return {
-    ...stored, horizon_minutes: horizon, waiting_snapshot: snapshot.rowCount,
+    ...stored, horizon_minutes: horizon, waiting_snapshot: currentWaitingCount,
     tier_estimates: tierEstimates, tracked_visits: snapshot.rowCount,
+    model_version: modelVersion,
+    estimate_quality: prediction.estimate_quality,
+    service_history_samples: prediction.service_history_samples,
     provenance_mode: env.DATA_PROVENANCE_MODE
   };
 }
@@ -154,6 +269,9 @@ async function getForecastTruth(limit = 20) {
   const result = await query(
     'SELECT f.forecast_id,f.model_version,f.horizon_minutes,f.tier_estimates,f.waiting_snapshot,f.created_at, ' +
     'COUNT(s.sample_id)::int AS tracked_samples,COUNT(s.actual_wait_minutes)::int AS observed_samples, ' +
+    'COUNT(s.sample_id) FILTER (WHERE s.calibration_offset_minutes <> 0)::int AS calibrated_samples, ' +
+    'ROUND(AVG(s.calibration_offset_minutes) FILTER (WHERE s.sample_id IS NOT NULL)::numeric,1) AS mean_applied_calibration_offset_minutes, ' +
+    'ROUND(MAX(ABS(s.calibration_offset_minutes)) FILTER (WHERE s.sample_id IS NOT NULL)::numeric,1) AS max_abs_applied_calibration_offset_minutes, ' +
     'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NULL)::int AS pending_samples, ' +
     'COUNT(s.sample_id) FILTER (WHERE q.data_provenance = \'OPERATIONAL\')::int AS operational_tracked_samples, ' +
     'COUNT(s.actual_wait_minutes) FILTER (WHERE q.data_provenance = \'OPERATIONAL\')::int AS operational_observed_samples, ' +
@@ -164,8 +282,11 @@ async function getForecastTruth(limit = 20) {
     'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\' AND s.actual_wait_minutes <= f.horizon_minutes)::int AS within_horizon_samples, ' +
     'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\' AND s.actual_wait_minutes > f.horizon_minutes)::int AS out_of_horizon_samples, ' +
     'COUNT(s.sample_id) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND COALESCE(q.data_provenance,\'UNCLASSIFIED\') = \'UNCLASSIFIED\' AND s.actual_wait_minutes > f.horizon_minutes)::int AS unclassified_out_of_horizon_samples, ' +
+    'ROUND(AVG(ABS(s.actual_wait_minutes - s.baseline_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL)::numeric,1) AS baseline_mean_absolute_error_minutes, ' +
     'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL)::numeric,1) AS mean_absolute_error_minutes, ' +
+    'ROUND(AVG(ABS(s.actual_wait_minutes - s.baseline_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\')::numeric,1) AS operational_baseline_mean_absolute_error_minutes, ' +
     'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\')::numeric,1) AS operational_mean_absolute_error_minutes, ' +
+    'ROUND(AVG(ABS(s.actual_wait_minutes - s.baseline_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\' AND s.actual_wait_minutes <= f.horizon_minutes)::numeric,1) AS within_horizon_baseline_mean_absolute_error_minutes, ' +
     'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND q.data_provenance = \'OPERATIONAL\' AND s.actual_wait_minutes <= f.horizon_minutes)::numeric,1) AS within_horizon_mean_absolute_error_minutes, ' +
     'ROUND(AVG(ABS(s.actual_wait_minutes - s.predicted_wait_minutes)) FILTER (WHERE s.actual_wait_minutes IS NOT NULL AND COALESCE(q.data_provenance,\'UNCLASSIFIED\') = \'UNCLASSIFIED\')::numeric,1) AS unclassified_mean_absolute_error_minutes ' +
     'FROM flow_forecasts f LEFT JOIN flow_forecast_samples s ON s.forecast_id = f.forecast_id ' +

@@ -101,7 +101,6 @@ services:
       dockerfile: frontend/Dockerfile
       args:
         VITE_API_BASE_URL: ""
-        VITE_ANALYTICS_BASE_URL: /analytics
         VITE_SOCKET_URL: ""
     restart: unless-stopped
     expose:

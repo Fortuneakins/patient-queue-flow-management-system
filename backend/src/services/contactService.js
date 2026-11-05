@@ -2,6 +2,7 @@ const { query, withTransaction } = require('../db/pool');
 const { appendOperationalEvent } = require('./operationalEventService');
 const smsService = require('./smsService');
 const env = require('../config/env');
+const { getWaitPredictions } = require('./analyticsProxyService');
 
 const LANGUAGES = ['en','af','zu','xh','st','tn','nso','ts','ss','ve','nr'];
 const err = (message, status = 400) => Object.assign(new Error(message), { status });
@@ -53,27 +54,20 @@ async function updateContactPreferences(patientId, input, actorStaffId) {
 
 async function getCurrentWaitEstimate(patientId) {
   const active = await query(
-    "SELECT COALESCE(priority_level,4)::int AS tier FROM queue_entries WHERE patient_id=$1 AND status='Waiting' ORDER BY queued_at DESC LIMIT 1",
+    "SELECT queue_id, COALESCE(priority_level,4)::int AS tier FROM queue_entries WHERE patient_id=$1 AND status='Waiting' ORDER BY queued_at DESC LIMIT 1",
     [patientId]
   );
   if (!active.rows[0]) throw err('A current waiting visit is required for a wait estimate.', 409);
-  let response;
-  try {
-    response = await fetch(env.ANALYTICS_URL.replace(/\/$/, '') + '/api/predict', {
-      signal: AbortSignal.timeout(2000)
-    });
-  } catch (_error) {
-    throw err('The current wait estimate is unavailable. No estimate message was sent.', 503);
-  }
-  if (!response.ok) throw err('The current wait estimate is unavailable. No estimate message was sent.', 503);
-  let prediction;
-  try { prediction = await response.json(); }
-  catch (_error) { throw err('The current wait estimate is unavailable. No estimate message was sent.', 503); }
-  const wait = Number(prediction[String(active.rows[0].tier)]);
+  const prediction = await getWaitPredictions({ timeoutMs: 2000 });
+  const visitEstimate = Array.isArray(prediction.visit_estimates)
+    ? prediction.visit_estimates.find(item => Number(item.queue_id) === Number(active.rows[0].queue_id))
+    : null;
+  const rawWait = visitEstimate?.estimated_wait_minutes;
+  const wait = rawWait === null || rawWait === undefined ? Number.NaN : Number(rawWait);
   if (prediction.degraded || !Number.isFinite(wait) || wait < 0) {
-    throw err('The current wait estimate is unavailable. No estimate message was sent.', 503);
+    throw err('The current wait estimate for this visit is unavailable. No estimate message was sent.', 503);
   }
-  return Number(wait);
+  return wait;
 }
 
 async function sendAccessUpdate(patientId, input, actorStaffId) {

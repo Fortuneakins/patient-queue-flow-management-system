@@ -7,6 +7,20 @@ const migrationDirectory = path.resolve(__dirname, '../../db/migrations');
 const baselineRequested = process.argv.includes('--baseline-existing');
 const baselineConfirmation = 'YES_I_VERIFIED_MIGRATIONS_001_008';
 
+// The schema has eight numbered migration versions but nine reviewed SQL files:
+// both data-provenance source metadata and forecast-calibration baseline use 007.
+const REVIEWED_BASELINE_MIGRATIONS = [
+  '001_schema.sql',
+  '002_seed_reference_data.sql',
+  '003_clinic_intelligence.sql',
+  '004_patient_communications.sql',
+  '005_continuity_runs.sql',
+  '006_data_provenance.sql',
+  '007_data_provenance_source.sql',
+  '007_forecast_calibration_baseline.sql',
+  '008_backfill_reviewed_provenance_sources.sql'
+];
+
 function checksum(content) {
   return crypto.createHash('sha256').update(content, 'utf8').digest('hex');
 }
@@ -33,15 +47,28 @@ async function baselineExistingSchema(client, files) {
       to_regclass('public.clinic_resources') IS NOT NULL AS has_resources,
       to_regclass('public.flow_simulations') IS NOT NULL AS has_simulations,
       to_regclass('public.flow_forecasts') IS NOT NULL AS has_forecasts,
+      to_regclass('public.flow_forecast_samples') IS NOT NULL AS has_forecast_samples,
       to_regclass('public.patient_communications') IS NOT NULL AS has_communications,
       to_regclass('public.continuity_runs') IS NOT NULL AS has_continuity,
       (SELECT COUNT(*)::int FROM information_schema.columns
        WHERE table_schema='public' AND table_name='queue_entries'
-         AND column_name IN ('data_provenance','data_provenance_source','data_provenance_note','provenance_updated_by_staff_id','provenance_updated_at','care_pathway_id')) AS expected_queue_columns
+         AND column_name IN ('data_provenance','data_provenance_source','data_provenance_note','provenance_updated_by_staff_id','provenance_updated_at','care_pathway_id')) AS expected_queue_columns,
+      (SELECT COUNT(*)::int FROM information_schema.columns
+       WHERE table_schema='public' AND table_name='flow_forecast_samples'
+         AND column_name IN ('baseline_wait_minutes','calibration_offset_minutes')
+         AND data_type='numeric' AND is_nullable='NO') AS expected_forecast_sample_columns,
+      (SELECT COUNT(*)::int FROM pg_constraint
+       WHERE conrelid = to_regclass('public.flow_forecast_samples')
+         AND conname IN ('chk_forecast_baseline_wait_minutes','chk_forecast_calibration_offset_minutes')
+         AND contype='c') AS expected_forecast_sample_constraints
   `);
   const schema = result.rows[0];
   if (Number(schema.expected_queue_columns) !== 6) {
     throw new Error('Existing queue schema does not have all six reviewed provenance/pathway columns. Do not baseline this database.');
+  }
+  if (Number(schema.expected_forecast_sample_columns) !== 2
+    || Number(schema.expected_forecast_sample_constraints) !== 2) {
+    throw new Error('Existing forecast-sample schema does not have the required baseline/offset columns and named constraints from migration 007_forecast_calibration_baseline.sql. Do not baseline this database.');
   }
   const backfill = await client.query(`
     SELECT COUNT(*)::int AS unbackfilled_review_sources
@@ -52,7 +79,7 @@ async function baselineExistingSchema(client, files) {
   `);
   const requiredFlags = [
     'has_patients','has_staff','has_queue','has_events','has_pathways','has_resources',
-    'has_simulations','has_forecasts','has_communications','has_continuity'
+    'has_simulations','has_forecasts','has_forecast_samples','has_communications','has_continuity'
   ];
   const missing = requiredFlags.filter(key => !schema[key]);
   if (missing.length || Number(backfill.rows[0].unbackfilled_review_sources) !== 0) {
@@ -67,10 +94,20 @@ async function baselineExistingSchema(client, files) {
 
   // Only mark the schema version that this baseline procedure explicitly knows.
   // Future migrations must remain pending and execute normally.
-  const baselineFiles = files.filter(filename => Number(filename.slice(0, 3)) >= 1 && Number(filename.slice(0, 3)) <= 8);
-  if (baselineFiles.length !== 8) {
-    throw new Error('Safe baseline requires all eight reviewed migrations (001–008). Review and update the baseline procedure before continuing.');
+  const missingBaselineFiles = REVIEWED_BASELINE_MIGRATIONS.filter(filename => !files.includes(filename));
+  const unreviewedBaselineFiles = files.filter(filename => {
+    const version = Number(filename.slice(0, 3));
+    return version >= 1 && version <= 8 && !REVIEWED_BASELINE_MIGRATIONS.includes(filename);
+  });
+  if (missingBaselineFiles.length || unreviewedBaselineFiles.length) {
+    throw new Error(
+      'Safe baseline requires the exact nine reviewed migration files spanning numbered versions 001–008 (including both 007 files). Missing: ' +
+      (missingBaselineFiles.join(', ') || 'none') + '; unexpected: ' +
+      (unreviewedBaselineFiles.join(', ') || 'none') +
+      '. Review and update the baseline manifest before continuing.'
+    );
   }
+  const baselineFiles = REVIEWED_BASELINE_MIGRATIONS;
   await client.query('BEGIN');
   try {
     await client.query(`
@@ -93,7 +130,7 @@ async function baselineExistingSchema(client, files) {
     await client.query('ROLLBACK');
     throw error;
   }
-  console.log(`Baselined ${baselineFiles.length} reviewed migration files (001–008). No migration SQL was run.`);
+  console.log(`Baselined ${baselineFiles.length} reviewed migration files spanning numbered versions 001–008. No migration SQL was run.`);
 }
 
 async function main() {
