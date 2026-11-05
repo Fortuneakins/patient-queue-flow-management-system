@@ -9,8 +9,10 @@
     "dev": "node --watch src/server.js",
     "lint": "eslint .",
     "test": "node --test tests/unit/*.test.js",
-    "test:integration": "RUN_DB_TESTS=1 node --test tests/integration/*.test.js",
-    "verify": "npm run lint && npm test"
+    "test:integration": "node scripts/run-integration-tests.js",
+    "verify": "npm run lint && npm test",
+    "bootstrap:admin": "node scripts/bootstrap-admin.js",
+    "db:migrate": "node scripts/migrate.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -39,7 +39,16 @@ export default function QueueList({ queue, role, onPriority, onCall, onDischarge
                     </select>
                   </label>
                 )}
-                {role === 'DOCTOR' && item.status === 'Waiting' && <Button icon="arrow" onClick={() => onCall(item)}>Call to room</Button>}
+                {role === 'DOCTOR' && item.status === 'Waiting' && (
+                  <div className="flex flex-col items-start gap-1">
+                    <Button icon="arrow" disabled={!item.priority_level} onClick={() => onCall(item)}>Call to room</Button>
+                    {!item.priority_level && (
+                      <span role="note" className="text-xs text-amber-700">
+                        Awaiting nurse triage before consultation can begin.
+                      </span>
+                    )}
+                  </div>
+                )}
                 {role === 'DOCTOR' && item.status === 'In-Consultation' && <>
                   <Button variant="secondary" icon="check" onClick={() => onNotes(item)}>Consultation notes</Button>
                   <Button variant="success" icon="check" onClick={() => onDischarge(item)}>Discharge patient</Button>

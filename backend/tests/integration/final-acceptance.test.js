@@ -174,6 +174,16 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
     assert.ok(testVisit?.queue_id);
     assert.ok(secondVisitRow?.queue_id);
 
+    await t.test('check-in creates the standard CareGraph journey with a ready triage stage', async () => {
+      const journey = await request(`/api/intelligence/journeys/${testVisit.queue_id}`, { headers: auth(tokens.nurse) });
+      assert.equal(journey.response.status, 200);
+      const stages = Object.fromEntries(journey.body.stages.map(stage => [stage.stage_code, stage.status]));
+      assert.equal(stages.REGISTRATION, 'COMPLETED');
+      assert.equal(stages.TRIAGE, 'READY');
+      assert.equal(stages.CONSULTATION, 'PENDING');
+      assert.equal(stages.DISCHARGE, 'PENDING');
+    });
+
     await t.test('role boundaries are enforced by the API', async () => {
       const receptionQueue = await request('/api/queue', { headers: auth(tokens.reception) });
       assert.equal(receptionQueue.response.status, 403);
@@ -202,6 +212,12 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
       assert.equal(triaged.body.priority_level, 2);
       assert.equal(triaged.body.triaged_by_staff_id, nurse.staff_id);
       assert.ok(triaged.body.triaged_at);
+
+      const journey = await request(`/api/intelligence/journeys/${testVisit.queue_id}`, { headers: auth(tokens.nurse) });
+      assert.equal(journey.response.status, 200);
+      const stages = Object.fromEntries(journey.body.stages.map(stage => [stage.stage_code, stage.status]));
+      assert.equal(stages.TRIAGE, 'COMPLETED');
+      assert.equal(stages.CONSULTATION, 'READY');
     });
 
     await t.test('queue ordering respects effective tier then arrival time', async () => {
@@ -214,6 +230,12 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
     });
 
     await t.test('doctor lifecycle is concurrency-safe and isolates SMS failure', async () => {
+      const untriagedCall = await request(`/api/queue/${secondVisitRow.queue_id}/call`, {
+        method: 'PUT', headers: auth(tokens.doctor), body: '{}'
+      });
+      assert.equal(untriagedCall.response.status, 409);
+      assert.match(untriagedCall.body.error, /triage priority must be assigned/i);
+
       const calls = await Promise.all([
         request(`/api/queue/${testVisit.queue_id}/call`, { method: 'PUT', headers: auth(tokens.doctor), body: '{}' }),
         request(`/api/queue/${testVisit.queue_id}/call`, { method: 'PUT', headers: auth(tokens.doctor), body: '{}' })
@@ -225,6 +247,11 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
       assert.equal(success[0].body.status, 'In-Consultation');
       assert.equal(success[0].body.called_by_staff_id, doctor.staff_id);
       assert.ok(success[0].body.called_at);
+
+      const journeyInConsultation = await request(`/api/intelligence/journeys/${testVisit.queue_id}`, { headers: auth(tokens.doctor) });
+      assert.equal(journeyInConsultation.response.status, 200);
+      const inProgressStages = Object.fromEntries(journeyInConsultation.body.stages.map(stage => [stage.stage_code, stage.status]));
+      assert.equal(inProgressStages.CONSULTATION, 'IN_PROGRESS');
 
       const notes = await request(`/api/queue/${testVisit.queue_id}/notes`, {
         method: 'PUT', headers: auth(tokens.doctor), body: JSON.stringify({ doctor_notes: 'Integration consultation note.' })
@@ -238,6 +265,10 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
       assert.equal(discharged.body.status, 'Discharged');
       assert.equal(discharged.body.discharged_by_staff_id, doctor.staff_id);
       assert.ok(discharged.body.discharged_at);
+
+      const completedJourney = await request(`/api/intelligence/journeys/${testVisit.queue_id}`, { headers: auth(tokens.doctor) });
+      assert.equal(completedJourney.response.status, 200);
+      assert.ok(completedJourney.body.stages.every(stage => stage.status === 'COMPLETED'));
 
       const notesAfter = await request(`/api/queue/${testVisit.queue_id}/notes`, {
         method: 'PUT', headers: auth(tokens.doctor), body: JSON.stringify({ doctor_notes: 'tamper' })
@@ -302,14 +333,14 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
       assert.equal(after.response.status, 401);
     });
 
-    await t.test('permissions take effect on the next sign-in', async () => {
+    await t.test('role and permission changes take effect immediately without a new sign-in', async () => {
       const grant = await request(`/api/staff/${reception.staff_id}/permissions`, {
         method: 'PUT', headers: auth(tokens.admin), body: JSON.stringify({ permission: 'VIEW_STAFF_DIRECTORY', grant: true })
       });
       assert.equal(grant.response.status, 200);
 
       const oldToken = await request('/api/staff', { headers: auth(tokens.reception) });
-      assert.equal(oldToken.response.status, 403);
+      assert.equal(oldToken.response.status, 200, 'a current database grant should apply to the already-issued token');
 
       const refreshedReception = await login('reception_demo');
       const newToken = await request('/api/staff', { headers: auth(refreshedReception.token) });
@@ -321,7 +352,7 @@ assert.match(created[0].body.ticket_number, /^TKT-\d{4}$/);
       assert.equal(revoke.response.status, 200);
 
       const currentToken = await request('/api/staff', { headers: auth(refreshedReception.token) });
-      assert.equal(currentToken.response.status, 200);
+      assert.equal(currentToken.response.status, 403, 'revocation must take effect immediately for every still-valid token');
       const nextLogin = await login('reception_demo');
       const nextToken = await request('/api/staff', { headers: auth(nextLogin.token) });
       assert.equal(nextToken.response.status, 403);

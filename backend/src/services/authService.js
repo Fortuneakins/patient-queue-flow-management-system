@@ -2,7 +2,14 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { query } = require('../db/pool');
 const env = require('../config/env');
-const { normalizeRole, validatePassword, validateUsername, STAFF_ROLES } = require('../utils/validation');
+const {
+  normalizeRole,
+  normalizePhone,
+  validatePassword,
+  validateUsername,
+  passwordPolicyMessage,
+  STAFF_ROLES
+} = require('../utils/validation');
 
 async function hashPassword(password) {
   return bcrypt.hash(password, 12);
@@ -74,15 +81,26 @@ async function createStaff({ username, password, role, contact_no, employee_id }
   const normalizedUsername = String(username || '').trim();
   const normalizedRole = normalizeRole(role);
   if (!validateUsername(normalizedUsername)) throw Object.assign(new Error('Username must be 3–50 characters and use letters, numbers, dot, underscore or hyphen.'), { status: 400 });
-  if (!validatePassword(password)) throw Object.assign(new Error('Password must be at least 8 characters.'), { status: 400 });
+  if (!validatePassword(password)) throw Object.assign(new Error(passwordPolicyMessage()), { status: 400 });
   if (!STAFF_ROLES.has(normalizedRole)) throw Object.assign(new Error('Invalid staff role.'), { status: 400 });
+  const rawContact = String(contact_no ?? '').trim();
+  const normalizedContactNo = rawContact
+    ? normalizePhone(rawContact)
+    : null;
+
+  if (rawContact && !normalizedContactNo) {
+    throw Object.assign(
+      new Error('Enter a valid South African mobile number or E.164 number.'),
+      { status: 400 }
+    );
+  }
   const password_hash = await hashPassword(password);
   try {
     const result = await query(
       `INSERT INTO clinic_staff (username, password_hash, role, contact_no, employee_id, must_reset_password)
        VALUES ($1, $2, $3, $4, $5, true)
        RETURNING staff_id, username, role, is_active, must_reset_password, extra_permissions, contact_no, employee_id`,
-      [normalizedUsername, password_hash, normalizedRole, contact_no || null, employee_id || null]
+      [normalizedUsername, password_hash, normalizedRole, normalizedContactNo, employee_id || null]
     );
     return result.rows[0];
   } catch (error) {
@@ -92,7 +110,7 @@ async function createStaff({ username, password, role, contact_no, employee_id }
 }
 
 async function changePassword(staffId, currentPassword, newPassword) {
-  if (!validatePassword(newPassword)) throw Object.assign(new Error('New password must be at least 8 characters.'), { status: 400 });
+  if (!validatePassword(newPassword)) throw Object.assign(new Error(passwordPolicyMessage()), { status: 400 });
   const staffResult = await query('SELECT password_hash FROM clinic_staff WHERE staff_id = $1 AND is_active = true', [staffId]);
   if (!staffResult.rows[0]) throw Object.assign(new Error('Account not found.'), { status: 404 });
   if (!(await verifyPassword(currentPassword, staffResult.rows[0].password_hash))) throw Object.assign(new Error('Current password is incorrect.'), { status: 401 });

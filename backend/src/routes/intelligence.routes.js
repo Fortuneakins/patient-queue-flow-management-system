@@ -8,6 +8,8 @@ const flow = require('../services/flowAnalyticsService');
 const referrals = require('../services/referralService');
 const contacts = require('../services/contactService');
 const continuity = require('../services/continuityService');
+const provenance = require('../services/dataProvenanceService');
+const actions = require('../services/clinicActionService');
 const { createRateLimiter } = require('../utils/rateLimit');
 const router = express.Router();
 router.use(authenticate, requireReadyPassword);
@@ -20,6 +22,15 @@ const endpoint = (handler, status = 200) => async (req, res, next) => {
 };
 
 router.get('/overview', admin, endpoint(() => overview.getOverview()));
+
+router.get('/actions', admin, endpoint(req => actions.listActions({ status: req.query.status, limit: req.query.limit })));
+router.post('/actions/from-insight', admin, async (req, res, next) => {
+  try {
+    const result = await actions.createFromInsight(req.body?.rule_id, req.user.staff_id);
+    res.status(result.already_open ? 200 : 201).json(result);
+  } catch (error) { next(error); }
+});
+router.patch('/actions/:action_id', admin, endpoint(req => actions.updateAction(req.params.action_id, req.body || {}, req.user.staff_id)));
 router.post('/continuity/run', admin, endpoint(req => continuity.runSyntheticRecovery(req.body || {}, req.user.staff_id), 201));
 router.get('/continuity/runs', admin, endpoint(req => continuity.listRecoveryRuns(req.query.limit)));
 router.get('/events', admin, endpoint(req => overview.listEvents({ limit: req.query.limit, eventType: req.query.event_type })));
@@ -40,6 +51,8 @@ router.post('/synthetic-lab/run', admin, endpoint(req => flow.runLab(req.body ||
 router.post('/forecasts', admin, endpoint(req => flow.recordForecast(req.body || {}, req.user.staff_id), 201));
 router.get('/forecasts/truth', admin, endpoint(req => flow.getForecastTruth(req.query.limit)));
 router.get('/fairness', admin, endpoint(() => flow.fairnessMetrics()));
+router.get('/data-provenance/queue-records', admin, endpoint(req => provenance.listQueueProvenance({ limit: req.query.limit, provenance: req.query.provenance || null })));
+router.patch('/data-provenance/queue-records/:queue_id', admin, endpoint(req => provenance.updateQueueProvenance(req.params.queue_id, req.body || {}, req.user.staff_id)));
 router.get('/referrals', clinical, endpoint(req => referrals.listReferrals({ status: req.query.status, limit: req.query.limit })));
 router.post('/referrals', authorizeRoles('ADMIN','DOCTOR'), endpoint(req => referrals.createReferral(req.body || {}, req.user.staff_id), 201));
 router.patch('/referrals/:referral_id', authorizeRoles('ADMIN','DOCTOR'), endpoint(req => referrals.updateReferral(req.params.referral_id, req.body || {}, req.user.staff_id)));

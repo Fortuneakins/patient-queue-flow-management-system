@@ -21,9 +21,27 @@ const io = new Server(httpServer, {
 app.set('io', io);
 
 app.disable('x-powered-by');
-app.set('trust proxy', 1);
-app.use(cors({ origin: env.CORS_ORIGIN, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization', 'X-Internal-Service-Token'] }));
-app.use(express.json({ limit: '1mb' }));
+// Trust forwarded headers only when the deployment explicitly declares a
+// trusted reverse-proxy hop count. Never trust a proxy by default.
+if (env.TRUST_PROXY_HOPS !== false && env.TRUST_PROXY_HOPS !== 0) {
+  app.set('trust proxy', env.TRUST_PROXY_HOPS);
+} else {
+  app.set('trust proxy', false);
+}
+
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+  res.setHeader('Cache-Control', 'no-store');
+  // HSTS is applied once at the HTTPS edge (Caddy), not by this private HTTP service.
+  next();
+});
+
+app.use(cors({ origin: env.CORS_ORIGIN, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
+app.use(express.json({ limit: '1mb', strict: true }));
 
 io.on('connection', socket => {
   socket.emit('server_ready', { at: new Date().toISOString() });
